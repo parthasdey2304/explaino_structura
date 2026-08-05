@@ -9,41 +9,70 @@ import {
   orderBy,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import type { DrawingData, ExcalidrawElement, AppState } from "@/types";
-import { generateId, getTimestamp } from "./utils";
 
 const DRAWINGS_COLLECTION = "drawings";
 
-const defaultAppState: AppState = {
-  theme: "light",
-  viewBackgroundColor: "#ffffff",
-  gridSize: null,
-  zoom: { value: 1 },
-  scrollX: 0,
-  scrollY: 0,
-  currentItemStrokeColor: "#1e1e1e",
-  currentItemBackgroundColor: "transparent",
-  currentItemFillStyle: "solid",
-  currentItemStrokeWidth: 2,
-  currentItemStrokeStyle: "solid",
-  currentItemRoughness: 0,
-  currentItemOpacity: 100,
-  currentItemFontFamily: 1,
-  currentItemFontSize: 20,
-  currentItemTextAlign: "left",
-  currentItemStartArrowhead: null,
-  currentItemEndArrowhead: null,
-  currentItemRoundness: 3,
-};
+export interface SavedScene {
+  id: string;
+  name: string;
+  /** Excalidraw scene elements */
+  elements: unknown[];
+  /** Excalidraw app state (viewBackgroundColor, zoom, scroll, theme, etc.) */
+  appState: Record<string, unknown>;
+  /** Binary files (images) stored as dataURLs */
+  files: Record<string, { dataURL: string; mimeType: string }>;
+  createdAt: number;
+  updatedAt: number;
+}
 
+function generateId(): string {
+  return (
+    Date.now().toString(36) +
+    "-" +
+    Math.random().toString(36).substring(2, 10)
+  );
+}
+
+/**
+ * Convert any value (including Maps, Sets, functions) into a plain
+ * JSON-safe structure that Firestore can serialize. Explicitly strips
+ * live-collaboration state (`collaborators`) that isn't part of a scene.
+ */
+function sanitizeSceneAppState(appState: unknown): Record<string, unknown> {
+  if (!appState || typeof appState !== "object") {
+    return {};
+  }
+
+  // JSON round-trip guarantees only plain JSON data remains.
+  // Maps become {}, Sets become [], functions are dropped, dates become
+  // strings — all of which Firestore accepts.
+  try {
+    const cleaned = JSON.parse(JSON.stringify(appState)) as Record<
+      string,
+      unknown
+    >;
+    delete cleaned.collaborators;
+    return cleaned;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Save the current Excalidraw scene to Firestore.
+ * Returns the document ID of the saved drawing.
+ */
 export async function saveDrawing(
   drawingId: string | null,
-  elements: ExcalidrawElement[],
-  appState: AppState,
+  sceneData: {
+    elements: unknown[];
+    appState: Record<string, unknown>;
+    files: Record<string, { dataURL: string; mimeType: string }>;
+  },
   name: string = "Untitled"
 ): Promise<string> {
   if (!db) {
-    throw new Error("Firestore not initialized");
+    throw new Error("Firestore not initialized — add your config to .env.local");
   }
   const id = drawingId || generateId();
   const docRef = doc(db, DRAWINGS_COLLECTION, id);
@@ -51,55 +80,54 @@ export async function saveDrawing(
   const data: Record<string, unknown> = {
     id,
     name,
-    elements,
-    appState,
-    files: {},
-    updatedAt: getTimestamp(),
+    elements: sceneData.elements,
+    appState: sanitizeSceneAppState(sceneData.appState),
+    files: sceneData.files,
+    updatedAt: Date.now(),
   };
 
   if (!drawingId) {
-    data.createdAt = getTimestamp();
-    data.ownerId = "anonymous";
-    data.collaborators = [];
+    data.createdAt = Date.now();
   }
 
   await setDoc(docRef, data, { merge: true });
   return id;
 }
 
-export async function loadDrawing(
-  drawingId: string
-): Promise<DrawingData | null> {
+/** Load a drawing from Firestore by ID. Returns null if not found. */
+export async function loadDrawing(drawingId: string): Promise<SavedScene | null> {
   if (!db) {
-    throw new Error("Firestore not initialized");
+    throw new Error("Firestore not initialized — add your config to .env.local");
   }
   const docRef = doc(db, DRAWINGS_COLLECTION, drawingId);
   const docSnap = await getDoc(docRef);
 
   if (docSnap.exists()) {
-    return docSnap.data() as DrawingData;
+    return docSnap.data() as SavedScene;
   }
   return null;
 }
 
-export async function listDrawings(): Promise<DrawingData[]> {
+/** List all saved drawings, newest first. */
+export async function listDrawings(): Promise<SavedScene[]> {
   if (!db) {
-    throw new Error("Firestore not initialized");
+    throw new Error("Firestore not initialized — add your config to .env.local");
   }
   const q = query(
     collection(db, DRAWINGS_COLLECTION),
     orderBy("updatedAt", "desc")
   );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((doc) => doc.data() as DrawingData);
+  return snapshot.docs.map((doc) => doc.data() as SavedScene);
 }
 
+/** Delete a drawing from Firestore. */
 export async function deleteDrawing(drawingId: string): Promise<void> {
   if (!db) {
-    throw new Error("Firestore not initialized");
+    throw new Error("Firestore not initialized — add your config to .env.local");
   }
   const docRef = doc(db, DRAWINGS_COLLECTION, drawingId);
   await deleteDoc(docRef);
 }
 
-export { defaultAppState };
+export { generateId };

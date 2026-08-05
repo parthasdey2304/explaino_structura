@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
+import "@excalidraw/excalidraw/index.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Explaino — Whiteboard",
-  description: "An Excalidraw-style collaborative whiteboard — saved locally in your browser.",
+  description: "An Excalidraw-style whiteboard with your own database.",
 };
 
 export default function RootLayout({

@@ -2,15 +2,27 @@
 
 import dynamic from "next/dynamic";
 
-const ExcalidrawApp = dynamic(() => import("@/components/App"), {
-  ssr: false,
-  loading: () => (
-    <div className="loading-screen">
-      <span className="loading-screen__text">Loading canvas…</span>
-    </div>
-  ),
-});
+const ExcalidrawWrapper = dynamic(
+  () => import("@/components/ExcalidrawWrapper"),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        style={{
+          width: "100%",
+          height: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#fff",
+        }}
+      >
+        <span style={{ color: "#999", fontSize: 14 }}>Loading canvas…</span>
+      </div>
+    ),
+  }
+);
 
 export default function Home() {
-  return <ExcalidrawApp />;
+  return <ExcalidrawWrapper />;
 }
