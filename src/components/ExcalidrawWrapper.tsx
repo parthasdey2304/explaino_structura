@@ -268,7 +268,8 @@ export default function ExcalidrawWrapper() {
               className="excalidraw-button"
               style={{
                 height: "2rem",
-                padding: "0 0.75rem",
+                padding: "0 1.25rem",
+                minWidth: "5rem",
                 fontSize: "0.8rem",
                 borderRadius: "0.5rem",
                 background: "var(--color-surface-primary-container, #e0dfff)",
@@ -278,6 +279,7 @@ export default function ExcalidrawWrapper() {
                 fontWeight: 500,
                 display: "inline-flex",
                 alignItems: "center",
+                justifyContent: "center",
                 gap: 4,
               }}
               title="Save drawing to Firestore"
@@ -290,7 +292,8 @@ export default function ExcalidrawWrapper() {
               className="excalidraw-button"
               style={{
                 height: "2rem",
-                padding: "0 0.75rem",
+                padding: "0 1.25rem",
+                minWidth: "5rem",
                 fontSize: "0.8rem",
                 borderRadius: "0.5rem",
                 background: "var(--color-surface-primary-container, #e0dfff)",
@@ -300,6 +303,7 @@ export default function ExcalidrawWrapper() {
                 fontWeight: 500,
                 display: "inline-flex",
                 alignItems: "center",
+                justifyContent: "center",
                 gap: 4,
               }}
               title="Open code editor"
