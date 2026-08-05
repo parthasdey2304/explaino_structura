@@ -17,37 +17,40 @@ import {
 
 const MAX_HISTORY = 50;
 
+function getInitialState() {
+  const saved = loadFromLocalStorage();
+  if (saved) {
+    return {
+      elements: saved.elements || [],
+      appState: saved.appState || defaultAppState,
+      drawingName: saved.name || "Untitled",
+    };
+  }
+  return {
+    elements: [],
+    appState: defaultAppState,
+    drawingName: "Untitled",
+  };
+}
+
 export default function App() {
-  const [elements, setElements] = useState<ExcalidrawElement[]>([]);
+  const initial = getInitialState();
+  const [elements, setElements] = useState<ExcalidrawElement[]>(initial.elements);
   const [appState, setAppState] = useState<AppState>({
     ...defaultAppState,
+    ...initial.appState,
     viewBackgroundColor: "#ffffff",
   });
   const [activeTool, setActiveTool] = useState<ToolType>("freedraw");
   const [isLocked, setIsLocked] = useState(false);
-  const [history, setHistory] = useState<ExcalidrawElement[][]>([[]])
+  const [history, setHistory] = useState<ExcalidrawElement[][]>([initial.elements]);
   const [historyIndex, setHistoryIndex] = useState(0);
-  const [drawingName, setDrawingName] = useState("Untitled");
+  const [drawingName, setDrawingName] = useState(initial.drawingName);
   const [showSidebar, setShowSidebar] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
   const [showCodePanel, setShowCodePanel] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<string>("");
   const isRestoringHistory = useRef(false);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Auto-load from localStorage on mount
-  useEffect(() => {
-    const saved = loadFromLocalStorage();
-    if (saved) {
-      setElements(saved.elements || []);
-      if (saved.appState) {
-        setAppState((prev) => ({ ...prev, ...saved.appState }));
-      }
-      if (saved.name) setDrawingName(saved.name);
-      setHistory([saved.elements || []]);
-      setHistoryIndex(0);
-    }
-  }, []);
 
   // Auto-save to localStorage whenever elements or appState changes (debounced)
   useEffect(() => {
@@ -207,10 +210,6 @@ export default function App() {
       {/* Code side panel */}
       {showCodePanel && (
         <CodeEditorPanel onClose={() => setShowCodePanel(false)} />
-      )}
-
-      {saveStatus && (
-        <div className="save-toast">{saveStatus}</div>
       )}
     </div>
   );

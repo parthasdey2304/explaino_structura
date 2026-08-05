@@ -561,6 +561,32 @@ canvas {
   color: #dc3545;
 }
 
+.code-editor__output-badge--timeout {
+  background-color: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
+.code-editor__output-badge--loading {
+  background-color: rgba(105, 101, 219, 0.2);
+  color: #6965db;
+}
+
+.code-editor__exec-time {
+  font-size: 10px;
+  color: var(--color-gray-50);
+  margin-left: auto;
+}
+
+.code-editor__badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background-color: rgba(40, 167, 69, 0.15);
+  color: #28a745;
+  letter-spacing: 0.02em;
+}
+
 .code-editor__output-clear {
   background: none;
   border: none;

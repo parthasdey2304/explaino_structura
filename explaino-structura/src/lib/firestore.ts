@@ -15,6 +15,7 @@ import { generateId, getTimestamp } from "./utils";
 const DRAWINGS_COLLECTION = "drawings";
 
 const defaultAppState: AppState = {
+  theme: "light",
   viewBackgroundColor: "#ffffff",
   gridSize: null,
   zoom: { value: 1 },
