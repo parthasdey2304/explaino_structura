@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import type { ToolType } from "@/types";
+import MoreToolsMenu from "./MoreToolsMenu";
 
 interface ToolbarProps {
   activeTool: ToolType;
@@ -17,108 +18,123 @@ interface ToolbarProps {
 const tools: { type: ToolType; label: string; shortcut: string; icon: React.ReactNode }[] = [
   {
     type: "pan",
-    label: "Hand",
+    label: "Pan",
     shortcut: "H",
     icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M18 11V6a2 2 0 0 0-4 0v1" />
-        <path d="M14 10V4a2 2 0 0 0-4 0v2" />
-        <path d="M10 10.5V6a2 2 0 0 0-4 0v8" />
-        <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8 13.5v-8a1.5 1.5 0 0 1 3 0v6.5m0-6.5v-2a1.5 1.5 0 0 1 3 0v8.5m0-6.5a1.5 1.5 0 0 1 3 0v9.5m0-6.5a1.5 1.5 0 0 1 3 0v6.5a6 6 0 0 1-6 6h-2c-2.12 0-4.14-1-5.41-2.73l-4.2-5.74a2 2 0 0 1 2.82-2.82l2.79 2.79" />
       </svg>
     ),
   },
   {
     type: "selection",
-    label: "Selection",
-    shortcut: "V",
+    label: "Select",
+    shortcut: "1",
     icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" />
-        <path d="M13 13l6 6" />
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 6l4.153 11.793a0.365 .365 0 0 0 .331 .207a0.366 .366 0 0 0 .332 -.207l2.184 -4.793l4.787 -1.994a0.355 .355 0 0 0 .213 -.323a0.355 .355 0 0 0 -.213 -.323l-11.787 -4.36z" />
+        <path d="M13.5 13.5l4.5 4.5" />
       </svg>
     ),
   },
   {
     type: "rectangle",
     label: "Rectangle",
-    shortcut: "R",
+    shortcut: "2",
     icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2" />
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="4" width="16" height="16" rx="2"></rect>
       </svg>
     ),
   },
   {
     type: "diamond",
     label: "Diamond",
-    shortcut: "D",
+    shortcut: "3",
     icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 2l10 10-10 10L2 12z" />
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M10.5 20.4l-6.9 -6.9c-.781 -.781 -.781 -2.219 0 -3l6.9 -6.9c.781 -.781 2.219 -.781 3 0l6.9 6.9c.781 .781 .781 2.219 0 3l-6.9 6.9c-.781 .781 -2.219 .781 -3 0z" />
       </svg>
     ),
   },
   {
     type: "ellipse",
     label: "Ellipse",
-    shortcut: "O",
+    shortcut: "4",
     icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="9.5" />
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="9"></circle>
       </svg>
     ),
   },
   {
     type: "arrow",
     label: "Arrow",
-    shortcut: "A",
+    shortcut: "5",
     icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="4" y1="12" x2="20" y2="12" />
-        <polyline points="14 6 20 12 14 18" />
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="5" y1="12" x2="19" y2="12" />
+        <line x1="15" y1="16" x2="19" y2="12" />
+        <line x1="15" y1="8" x2="19" y2="12" />
       </svg>
     ),
   },
   {
     type: "line",
     label: "Line",
-    shortcut: "L",
+    shortcut: "6",
     icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="4" y1="20" x2="20" y2="4" />
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4.167 10h11.666" />
       </svg>
     ),
   },
   {
     type: "freedraw",
     label: "Draw",
-    shortcut: "P",
+    shortcut: "7",
     icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+        <path clipRule="evenodd" d="m7.643 15.69 7.774-7.773a2.357 2.357 0 1 0-3.334-3.334L4.31 12.357a3.333 3.333 0 0 0-.977 2.357v1.953h1.953c.884 0 1.732-.352 2.357-.977Z" />
+        <path d="m11.25 5.417 3.333 3.333" />
       </svg>
     ),
   },
   {
     type: "text",
     label: "Text",
-    shortcut: "T",
+    shortcut: "8",
     icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="4 7 4 4 20 4 20 7" />
-        <line x1="12" y1="4" x2="12" y2="20" />
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="4" y1="20" x2="7" y2="20" />
+        <line x1="14" y1="20" x2="21" y2="20" />
+        <line x1="6.9" y1="15" x2="13.8" y2="15" />
+        <line x1="10.2" y1="6.3" x2="16" y2="20" />
+        <polyline points="5 20 11 4 13 4 20 20"></polyline>
+      </svg>
+    ),
+  },
+  {
+    type: "image",
+    label: "Image",
+    shortcut: "9",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12.5 6.667h.01" />
+        <path d="M4.91 2.625h10.18a2.284 2.284 0 0 1 2.285 2.284v10.182a2.284 2.284 0 0 1-2.284 2.284H4.909a2.284 2.284 0 0 1-2.284-2.284V4.909a2.284 2.284 0 0 1 2.284-2.284Z" />
+        <path d="m3.333 12.5 3.334-3.333c.773-.745 1.726-.745 2.5 0l4.166 4.166" />
+        <path d="m11.667 11.667.833-.834c.774-.744 1.726-.744 2.5 0l1.667 1.667" />
       </svg>
     ),
   },
   {
     type: "eraser",
     label: "Eraser",
-    shortcut: "E",
+    shortcut: "0",
     icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-        <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" />
-        <path d="M22 21H7" />
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M19 20h-10.5l-4.21 -4.3a1 1 0 0 1 0 -1.41l10 -10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41l-9.2 9.3" />
+        <path d="M18 13.3l-6.3 -6.3" />
       </svg>
     ),
   },
@@ -134,15 +150,38 @@ export default function Toolbar({
   isLocked,
   setIsLocked,
 }: ToolbarProps) {
+  const [showMoreTools, setShowMoreTools] = useState(false);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.ctrlKey || e.metaKey) return;
+      
       const key = e.key.toUpperCase();
+      
+      // Handle Shift+X
+      if (e.shiftKey && key === "X") {
+        setActiveTool("magic");
+        return;
+      }
+      
       if (key === "Q") {
         setIsLocked((prev) => !prev);
         return;
       }
+      if (key === "K") {
+        setActiveTool("laser");
+        return;
+      }
+      if (key === "B") {
+        setActiveTool("bucket");
+        return;
+      }
+      if (key === "F") {
+        setActiveTool("frame");
+        return;
+      }
+
       const tool = tools.find((t) => t.shortcut === key);
       if (tool) setActiveTool(tool.type);
     };
@@ -178,7 +217,7 @@ export default function Toolbar({
             title="Keep selected tool active after drawing (Q)"
             id="lock-button"
           >
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
               {isLocked ? (
                 <>
                   <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -212,13 +251,26 @@ export default function Toolbar({
           <div className="toolbar-separator" />
 
           {/* More options */}
-          <button className="tool-icon-btn" title="More tools" id="more-tools-button">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <circle cx="12" cy="5" r="1.2" fill="currentColor" />
-              <circle cx="12" cy="12" r="1.2" fill="currentColor" />
-              <circle cx="12" cy="19" r="1.2" fill="currentColor" />
-            </svg>
-          </button>
+          <div style={{ position: "relative" }}>
+            <button 
+              className={`tool-icon-btn${showMoreTools || ["laser", "bucket", "frame", "magic", "lasso", "embed"].includes(activeTool) ? " active" : ""}`}
+              title="More tools" 
+              id="more-tools-button"
+              onClick={() => setShowMoreTools(!showMoreTools)}
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <circle cx="12" cy="5" r="1.2" fill="currentColor" />
+                <circle cx="12" cy="12" r="1.2" fill="currentColor" />
+                <circle cx="12" cy="19" r="1.2" fill="currentColor" />
+              </svg>
+            </button>
+            <MoreToolsMenu 
+              isOpen={showMoreTools} 
+              onClose={() => setShowMoreTools(false)} 
+              activeTool={activeTool} 
+              setActiveTool={setActiveTool} 
+            />
+          </div>
         </div>
       </div>
 

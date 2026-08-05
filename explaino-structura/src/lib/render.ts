@@ -323,8 +323,9 @@ export function renderGrid(
   gridSize: number = 20
 ) {
   ctx.save();
-  ctx.strokeStyle = "#e5e5e5";
-  ctx.lineWidth = 0.5;
+  const isDark = typeof document !== "undefined" && document.body.classList.contains("dark");
+  ctx.strokeStyle = isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)";
+  ctx.lineWidth = 1;
 
   const effectiveGrid = gridSize * zoom;
   if (effectiveGrid < 5) {

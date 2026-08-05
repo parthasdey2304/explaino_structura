@@ -104,7 +104,13 @@ export type ToolType =
   | 'diamond'
   | 'eraser'
   | 'pan'
-  | 'laser';
+  | 'laser'
+  | 'image'
+  | 'frame'
+  | 'lasso'
+  | 'bucket'
+  | 'magic'
+  | 'embed';
 
 export interface PointerCoords {
   x: number;

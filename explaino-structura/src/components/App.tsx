@@ -182,6 +182,7 @@ export default function App() {
         appState={appState}
         setAppState={setAppState}
         isOpen={showSidebar}
+        activeTool={activeTool}
       />
 
       <Canvas

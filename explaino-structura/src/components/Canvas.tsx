@@ -58,6 +58,7 @@ export default function Canvas({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const laserTrailRef = useRef<{ x: number; y: number; time: number }[]>([]);
 
   // Always use live refs for coordinate conversion — never stale closure values
   const screenToCanvas = useCallback(
@@ -104,6 +105,37 @@ export default function Canvas({
       const el = elements.find((e) => e.id === id);
       if (el && !el.isDeleted) {
         renderSelectionBound(ctx, el, appState.scrollX, appState.scrollY, appState.zoom.value);
+      }
+    }
+    
+    // Render laser trail
+    const now = Date.now();
+    const trail = laserTrailRef.current;
+    if (trail.length > 0) {
+      laserTrailRef.current = trail.filter(p => now - p.time < 1000);
+      const activeTrail = laserTrailRef.current;
+      if (activeTrail.length > 1) {
+        ctx.save();
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.translate(appState.scrollX, appState.scrollY);
+        ctx.scale(appState.zoom.value, appState.zoom.value);
+        
+        ctx.beginPath();
+        for (let i = 0; i < activeTrail.length - 1; i++) {
+          const pt1 = activeTrail[i];
+          const pt2 = activeTrail[i+1];
+          const age = now - pt2.time;
+          const opacity = Math.max(0, 1 - (age / 1000));
+          
+          ctx.beginPath();
+          ctx.moveTo(pt1.x, pt1.y);
+          ctx.lineTo(pt2.x, pt2.y);
+          ctx.strokeStyle = `rgba(255, 0, 0, ${opacity})`;
+          ctx.lineWidth = 4 / appState.zoom.value;
+          ctx.stroke();
+        }
+        ctx.restore();
       }
     }
   }, [elements, appState, selectedIds]);
@@ -264,6 +296,12 @@ export default function Canvas({
         return;
       }
 
+      if (activeTool === "laser") {
+        isDrawing.current = true;
+        laserTrailRef.current = [{ x: pos.x, y: pos.y, time: Date.now() }];
+        return;
+      }
+
       // Drawing tools — record the canvas-space start position
       isDrawing.current = true;
       dragStart.current = { canvasX: pos.x, canvasY: pos.y };
@@ -298,6 +336,11 @@ export default function Canvas({
 
       // Always compute current canvas position using live refs (no stale closure)
       const pos = screenToCanvas(e.clientX, e.clientY);
+
+      if (activeTool === "laser") {
+        laserTrailRef.current.push({ x: pos.x, y: pos.y, time: Date.now() });
+        return;
+      }
 
       if (activeTool === "selection" && selectedIds.length > 0) {
         setElements((prev) =>
