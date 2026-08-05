@@ -7,33 +7,33 @@
 /* ── CSS Variables ────────────────────────────────────────── */
 :root {
   /* Brand / Primary */
-  --color-primary:                  #6965db;
-  --color-primary-darker:           #5b57d1;
-  --color-primary-light:            #e3e2fe;
-  --color-primary-hover:            #5753d0;
+  --color-primary: #6965db;
+  --color-primary-darker: #5b57d1;
+  --color-primary-light: #e3e2fe;
+  --color-primary-hover: #5753d0;
 
   /* Surfaces */
-  --default-bg-color:               #ffffff;
-  --island-bg-color:                #ffffff;
-  --color-surface-high:             #f1f0ff;
-  --color-surface-mid:              #f6f6f9;
-  --color-surface-low:              #ececf4;
-  --color-surface-lowest:           #ffffff;
-  --color-on-surface:               #1b1b1f;
-  --color-on-primary-container:     #030064;
-  --color-surface-primary-container:#e0dfff;
-  --color-border-outline-variant:   #c5c5d0;
+  --default-bg-color: #ffffff;
+  --island-bg-color: #ffffff;
+  --color-surface-high: #f1f0ff;
+  --color-surface-mid: #f6f6f9;
+  --color-surface-low: #ececf4;
+  --color-surface-lowest: #ffffff;
+  --color-on-surface: #1b1b1f;
+  --color-on-primary-container: #030064;
+  --color-surface-primary-container: #e0dfff;
+  --color-border-outline-variant: #c5c5d0;
 
   /* Grays */
-  --color-gray-10:  #f5f5f5;
-  --color-gray-20:  #ebebeb;
-  --color-gray-30:  #d6d6d6;
-  --color-gray-40:  #b8b8b8;
-  --color-gray-50:  #999999;
-  --color-gray-60:  #7a7a7a;
-  --color-gray-70:  #5c5c5c;
-  --color-gray-80:  #3d3d3d;
-  --color-gray-90:  #1e1e1e;
+  --color-gray-10: #f5f5f5;
+  --color-gray-20: #ebebeb;
+  --color-gray-30: #d6d6d6;
+  --color-gray-40: #b8b8b8;
+  --color-gray-50: #999999;
+  --color-gray-60: #7a7a7a;
+  --color-gray-70: #5c5c5c;
+  --color-gray-80: #3d3d3d;
+  --color-gray-90: #1e1e1e;
 
   /* Borders & radius */
   --border-radius-sm: 0.25rem;
@@ -52,8 +52,8 @@
 
   /* Layout */
   --toolbar-height: 64px;
-  --toolbar-gap:    11px;
-  --sidebar-width:  212px;
+  --toolbar-gap: 11px;
+  --sidebar-width: 212px;
 }
 
 /* ── Dark Theme ───────────────────────────────────────────── */
@@ -65,7 +65,7 @@
   --color-surface-low: #26262a;
   --color-surface-lowest: #121212;
   --color-on-surface: #e0e0e0;
-  
+
   --color-gray-10: #1e1e1e;
   --color-gray-20: #3d3d3d;
   --color-gray-30: #5c5c5c;
@@ -75,18 +75,26 @@
   --color-gray-70: #d6d6d6;
   --color-gray-80: #ebebeb;
   --color-gray-90: #f5f5f5;
-  
+
   --color-border-outline-variant: #43434a;
 }
 
+/* ── Hide Excalidraw Library Button ───────────────────────── */
+.excalidraw .layer-ui__library-button {
+  display: none !important;
+}
+
 /* ── Reset ────────────────────────────────────────────────── */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   width: 100%;
   height: 100%;
   overflow: hidden;
@@ -135,7 +143,8 @@ canvas {
 }
 
 .tool-icon-btn svg {
-  transform: scale(1.15); /* Make SVGs slightly bigger */
+  transform: scale(1.15);
+  /* Make SVGs slightly bigger */
 }
 
 .tool-icon-btn:hover {
@@ -146,7 +155,8 @@ canvas {
 .tool-icon-btn--checked {
   background-color: var(--color-surface-primary-container);
   color: var(--color-on-primary-container);
-  border-radius: 0.75rem; /* Pill-like shape for active tools */
+  border-radius: 0.75rem;
+  /* Pill-like shape for active tools */
 }
 
 .tool-icon-btn.active svg,
@@ -382,7 +392,8 @@ canvas {
   right: 12px;
   bottom: 44px;
   z-index: 40;
-  width: 760px;
+  width: 50vw;
+  min-width: 320px;
   max-width: calc(100vw - 24px);
   display: flex;
   flex-direction: column;
@@ -477,7 +488,8 @@ canvas {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background-color: #1e1e1e; /* Dark theme for code editor */
+  background-color: #1e1e1e;
+  /* Dark theme for code editor */
   color: #d4d4d4;
 }
 
@@ -1106,6 +1118,7 @@ canvas {
 /* Excalidraw-style mobile: toolbar at bottom, reduced options, drawer sidebars */
 
 @media (max-width: 768px) {
+
   /* Hide desktop top toolbar elements */
   .toolbar-hamburger,
   .toolbar-center,
@@ -1131,7 +1144,7 @@ canvas {
     z-index: 60;
     transform: translateY(100%);
     transition: transform 0.25s ease;
-    box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15);
     background: var(--island-bg-color);
     border-top: 1px solid var(--color-surface-high);
   }
@@ -1149,7 +1162,7 @@ canvas {
     z-index: 100;
     background: var(--island-bg-color);
     border-top: 1px solid var(--color-surface-high);
-    box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12);
     padding: 8px 12px 12px;
     display: flex;
     flex-direction: column;
@@ -1242,7 +1255,7 @@ canvas {
     transform: translateX(100%);
     transition: transform 0.25s ease;
     border-radius: 0;
-    box-shadow: -4px 0 24px rgba(0,0,0,0.15);
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
   }
 
   .code-editor-panel.open {
@@ -1304,7 +1317,7 @@ canvas {
   .code-editor-panel {
     width: 520px;
   }
-  
+
   .toolbar-center .toolbar-island {
     gap: 4px;
     padding: 6px 8px;
@@ -1353,7 +1366,7 @@ canvas {
   .left-sidebar {
     max-height: 50vh;
   }
-  
+
   .mobile-toolbar {
     padding: 6px 8px 8px;
   }

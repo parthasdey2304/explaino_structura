@@ -163,6 +163,7 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
     };
   });
   const { tree, tabs, activeFileId } = ws;
+  const [isExplorerOpen, setIsExplorerOpen] = useState(true);
 
   const [output, setOutput] = useState("");
   const [runStatus, setRunStatus] = useState<RunStatus>("idle");
@@ -384,10 +385,18 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
       {/* Header */}
       <div className="code-editor__header">
         <div className="code-editor__header-left">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="16 18 22 12 16 6" />
-            <polyline points="8 6 2 12 8 18" />
-          </svg>
+          <button 
+            type="button" 
+            className="tool-icon-btn" 
+            onClick={() => setIsExplorerOpen(!isExplorerOpen)} 
+            style={{ width: "24px", height: "24px", padding: 0 }}
+            title="Toggle Explorer"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <line x1="9" y1="3" x2="9" y2="21" />
+            </svg>
+          </button>
           <span className="code-editor__title">Code Editor</span>
           <span className="code-editor__badge">No API Key</span>
         </div>
@@ -445,12 +454,14 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
       {/* Body: explorer + editor + output */}
       <div className="code-editor__body">
         <div className="code-editor__main">
-          <FileExplorer
-            tree={tree}
-            activeFileId={activeFileId}
-            onOpenFile={openFile}
-            onTreeChange={(next) => setWs((prev) => ({ ...prev, tree: next }))}
-          />
+          {isExplorerOpen && (
+            <FileExplorer
+              tree={tree}
+              activeFileId={activeFileId}
+              onOpenFile={openFile}
+              onTreeChange={(next) => setWs((prev) => ({ ...prev, tree: next }))}
+            />
+          )}
 
           <div className="code-editor__right">
             {/* Tabs */}

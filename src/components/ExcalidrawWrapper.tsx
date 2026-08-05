@@ -79,10 +79,7 @@ export default function ExcalidrawWrapper() {
     return "light";
   });
 
-  // Mobile responsive state
-  const [isMobile, setIsMobile] = useState(false);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [mobileCodePanelOpen, setMobileCodePanelOpen] = useState(false);
+  // Removed unused mobile state
 
   const drawingIdRef = useRef<string | null>(null);
   const nameRef = useRef<string>("Untitled");
@@ -274,13 +271,7 @@ export default function ExcalidrawWrapper() {
     localStorage.setItem("explaino-theme", theme);
   }, [theme]);
 
-  // Detect mobile viewport
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth <= 768);
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
+  // Mobile responsive listener removed (handled by CSS now)
 
   // Keep ref in sync with showCodePanel state
   useEffect(() => {
@@ -324,11 +315,7 @@ export default function ExcalidrawWrapper() {
                 if (!showCodePanel && excalidrawAPI.current) {
                   excalidrawAPI.current.updateScene({ appState: { showLibrary: false } as unknown as AppState });
                 }
-                if (isMobile) {
-                  setMobileCodePanelOpen(true);
-                } else {
-                  setShowCodePanel(!showCodePanel);
-                }
+                setShowCodePanel(!showCodePanel);
               }}
               className="excalidraw-button"
               style={{
@@ -350,6 +337,7 @@ export default function ExcalidrawWrapper() {
               title="Open code editor"
             >
               <Code size={16} strokeWidth={2.2} />
+              <span style={{ marginLeft: 4 }}>Code</span>
             </button>
             <button
               type="button"
@@ -383,158 +371,9 @@ export default function ExcalidrawWrapper() {
       />
       )}
 
-      {/* Mobile bottom toolbar */}
-      {isMobile && (
-        <div className="mobile-toolbar" role="toolbar" aria-label="Mobile tools">
-          <div className="mobile-toolbar__main">
-            <div className="mobile-toolbar__tools">
-              <button
-                type="button"
-                className="mobile-toolbar__tool-btn"
-                title="Selection"
-                onClick={() => excalidrawAPI.current?.updateScene({ appState: { activeTool: { type: "selection", customType: null } as unknown as AppState["activeTool"] } })}
-              >
-                <LayoutDashboard size={22} strokeWidth={2.2} />
-              </button>
-              <button
-                type="button"
-                className="mobile-toolbar__tool-btn"
-                title="Rectangle"
-                onClick={() => excalidrawAPI.current?.updateScene({ appState: { activeTool: { type: "rectangle", customType: null } as unknown as AppState["activeTool"] } })}
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
-              </button>
-              <button
-                type="button"
-                className="mobile-toolbar__tool-btn"
-                title="Ellipse"
-                onClick={() => excalidrawAPI.current?.updateScene({ appState: { activeTool: { type: "ellipse", customType: null } as unknown as AppState["activeTool"] } })}
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="12" rx="9" ry="9"/></svg>
-              </button>
-              <button
-                type="button"
-                className="mobile-toolbar__tool-btn"
-                title="Arrow"
-                onClick={() => excalidrawAPI.current?.updateScene({ appState: { activeTool: { type: "arrow", customType: null } as unknown as AppState["activeTool"] } })}
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="3" x2="21" y2="21"/><path d="M16 21l5-5-5-5"/></svg>
-              </button>
-              <button
-                type="button"
-                className="mobile-toolbar__tool-btn"
-                title="Line"
-                onClick={() => excalidrawAPI.current?.updateScene({ appState: { activeTool: { type: "line", customType: null } as unknown as AppState["activeTool"] } })}
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="3" x2="21" y2="21"/></svg>
-              </button>
-              <button
-                type="button"
-                className="mobile-toolbar__tool-btn"
-                title="Text"
-                onClick={() => excalidrawAPI.current?.updateScene({ appState: { activeTool: { type: "text", customType: null } as unknown as AppState["activeTool"] } })}
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h10"/></svg>
-              </button>
-              <button
-                type="button"
-                className="mobile-toolbar__tool-btn"
-                title="Draw"
-                onClick={() => excalidrawAPI.current?.updateScene({ appState: { activeTool: { type: "freedraw", customType: null } as unknown as AppState["activeTool"] } })}
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4H7.5"/><path d="M11 21.95V12a2.828 2.828 0 1 0-5.657 0"/><path d="M7 17l-4 4h16l-4-4"/></svg>
-              </button>
-              <button
-                type="button"
-                className="mobile-toolbar__tool-btn"
-                title="Eraser"
-                onClick={() => excalidrawAPI.current?.updateScene({ appState: { activeTool: { type: "eraser", customType: null } as unknown as AppState["activeTool"] } })}
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 20H7"/><path d="M16 4a2 2 0 0 1 2 2v12"/><path d="M12 4a2 2 0 0 1 2 2v8"/><path d="M8 4a2 2 0 0 1 2 2v4"/></svg>
-              </button>
-            </div>
-            <div className="mobile-toolbar__actions">
-              <button
-                type="button"
-                className="mobile-toolbar__action-btn"
-                title="Library"
-                onClick={() => setMobileSidebarOpen(true)}
-              >
-                <Menu size={22} strokeWidth={2.2} />
-              </button>
-              <button
-                type="button"
-                className="mobile-toolbar__action-btn"
-                title="Code"
-                onClick={() => setMobileCodePanelOpen(true)}
-              >
-                <Code size={22} strokeWidth={2.2} />
-              </button>
-              <button
-                type="button"
-                className="mobile-toolbar__action-btn"
-                title="Theme"
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              >
-                {theme === "dark" ? <Sun size={22} strokeWidth={2.2} /> : <Moon size={22} strokeWidth={2.2} />}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Mobile sidebar drawer */}
-      {isMobile && mobileSidebarOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black/30"
-          onClick={() => setMobileSidebarOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-      {isMobile && (
-        <div className={`left-sidebar ${mobileSidebarOpen ? "open" : ""}`}>
-          <div className="flex items-center justify-between mb-4">
-            <span className="sidebar-section-label">Library</span>
-            <button
-              type="button"
-              className="tool-icon-btn"
-              onClick={() => setMobileSidebarOpen(false)}
-              aria-label="Close"
-            >
-              <X size={22} strokeWidth={2.2} />
-            </button>
-          </div>
-          <div style={{ flex: 1, overflow: "auto" }}>
-            {/* Excalidraw's built-in library will render here when triggered */}
-          </div>
-        </div>
-      )}
-
-      {/* Code Editor Panel - Desktop */}
-      {!isMobile && showCodePanel && (
+      {/* Code Editor Panel */}
+      {showCodePanel && (
         <CodeEditorPanel onClose={() => setShowCodePanel(false)} />
-      )}
-
-      {/* Code Editor Panel - Mobile Drawer */}
-      {isMobile && (
-        <div className={`code-editor-panel ${mobileCodePanelOpen ? "open" : ""}`}>
-          <div className="code-editor__header">
-            <div className="code-editor__header-left">
-              <span className="code-editor__title">Code Editor</span>
-            </div>
-            <div className="code-editor__header-right">
-              <button
-                type="button"
-                className="tool-icon-btn"
-                onClick={() => setMobileCodePanelOpen(false)}
-                aria-label="Close code editor"
-              >
-                <X size={20} strokeWidth={2.2} />
-              </button>
-            </div>
-          </div>
-          <CodeEditorPanel onClose={() => setMobileCodePanelOpen(false)} />
-        </div>
       )}
 
       {saveStatus && (
