@@ -1,12 +1,15 @@
 "use client";
 
 import React from "react";
+import type { AppState } from "@/types";
 
 interface HamburgerMenuProps {
   isOpen: boolean;
   onClose: () => void;
   onNewDrawing: () => void;
   onExportPNG: () => void;
+  appState: AppState;
+  setAppState: React.Dispatch<React.SetStateAction<AppState>>;
 }
 
 export default function HamburgerMenu({
@@ -14,17 +17,31 @@ export default function HamburgerMenu({
   onClose,
   onNewDrawing,
   onExportPNG,
+  appState,
+  setAppState,
 }: HamburgerMenuProps) {
   if (!isOpen) return null;
 
+  const toggleTheme = () => {
+    setAppState((prev) => ({
+      ...prev,
+      theme: prev.theme === "dark" ? "light" : "dark",
+    }));
+  };
+
   const menuItems = [
-    {
-      label: "Export image…",
-      shortcut: "Ctrl+Shift+E",
-      action: onExportPNG,
-    },
+    { label: "Open...", action: () => alert("Open functionality coming soon!") },
+    { label: "Save to...", action: () => alert("Save functionality coming soon!") },
+    { label: "Export image...", shortcut: "Ctrl+Shift+E", action: onExportPNG },
     { divider: true },
+    { label: "Help", action: () => alert("Help documentation coming soon!") },
     { label: "Reset the canvas", action: onNewDrawing },
+    { divider: true },
+    {
+      label: appState.theme === "dark" ? "Light mode" : "Dark mode",
+      shortcut: "Alt+Shift+D",
+      action: toggleTheme,
+    },
     { divider: true },
     {
       label: "GitHub",

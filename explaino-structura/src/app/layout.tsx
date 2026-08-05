@@ -12,7 +12,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" style={{ height: "100%" }}>
+    <html lang="en" style={{ height: "100%" }} suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -21,7 +21,9 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body style={{ height: "100%", overflow: "hidden" }}>{children}</body>
+      <body style={{ height: "100%", overflow: "hidden" }} suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }

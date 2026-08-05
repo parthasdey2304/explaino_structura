@@ -47,6 +47,7 @@ export function clearLocalStorage(): void {
 }
 
 export const defaultAppState: AppState = {
+  theme: "light",
   viewBackgroundColor: "#ffffff",
   gridSize: null,
   zoom: { value: 1 },

@@ -51,6 +51,7 @@ export interface ExcalidrawElement {
 }
 
 export interface AppState {
+  theme: "light" | "dark";
   viewBackgroundColor: string;
   gridSize: number | null;
   zoom: {

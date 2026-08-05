@@ -51,9 +51,32 @@
     0px 1px 3px rgba(0, 0, 0, 0.08);
 
   /* Layout */
-  --toolbar-height: 48px;
+  --toolbar-height: 64px;
   --toolbar-gap:    11px;
   --sidebar-width:  212px;
+}
+
+/* ── Dark Theme ───────────────────────────────────────────── */
+.theme-dark {
+  --default-bg-color: #121212;
+  --island-bg-color: #232329;
+  --color-surface-high: #313138;
+  --color-surface-mid: #2c2c31;
+  --color-surface-low: #26262a;
+  --color-surface-lowest: #121212;
+  --color-on-surface: #e0e0e0;
+  
+  --color-gray-10: #1e1e1e;
+  --color-gray-20: #3d3d3d;
+  --color-gray-30: #5c5c5c;
+  --color-gray-40: #7a7a7a;
+  --color-gray-50: #999999;
+  --color-gray-60: #b8b8b8;
+  --color-gray-70: #d6d6d6;
+  --color-gray-80: #ebebeb;
+  --color-gray-90: #f5f5f5;
+  
+  --color-border-outline-variant: #43434a;
 }
 
 /* ── Reset ────────────────────────────────────────────────── */
@@ -90,12 +113,13 @@ canvas {
   border-radius: var(--border-radius-lg);
   position: relative;
   box-sizing: border-box;
+  color: var(--color-on-surface);
 }
 
 /* ── Tool Icon Button ─────────────────────────────────────── */
 .tool-icon-btn {
-  width: 2rem;
-  height: 2rem;
+  width: 2.5rem;
+  height: 2.5rem;
   border-radius: var(--border-radius-lg);
   display: flex;
   align-items: center;
@@ -110,6 +134,10 @@ canvas {
   flex-shrink: 0;
 }
 
+.tool-icon-btn svg {
+  transform: scale(1.15); /* Make SVGs slightly bigger */
+}
+
 .tool-icon-btn:hover {
   background-color: var(--color-surface-high);
 }
@@ -118,6 +146,7 @@ canvas {
 .tool-icon-btn--checked {
   background-color: var(--color-surface-primary-container);
   color: var(--color-on-primary-container);
+  border-radius: 0.75rem; /* Pill-like shape for active tools */
 }
 
 .tool-icon-btn.active svg,
@@ -133,9 +162,9 @@ canvas {
 /* ── Toolbar Shortcut Badge ───────────────────────────────── */
 .tool-shortcut-badge {
   position: absolute;
-  bottom: 2px;
-  right: 3px;
-  font-size: 8px;
+  bottom: 4px;
+  right: 5px;
+  font-size: 9px;
   font-weight: 600;
   opacity: 0.45;
   line-height: 1;
@@ -148,10 +177,10 @@ canvas {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 2rem;
-  padding: 0 0.875rem;
+  height: 2.5rem;
+  padding: 0 1.25rem;
   border-radius: var(--border-radius-lg);
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   border: 1px solid var(--color-surface-high);
@@ -209,8 +238,8 @@ canvas {
 .toolbar-island {
   display: flex;
   align-items: center;
-  padding: 3px;
-  gap: 2px;
+  padding: 6px 12px;
+  gap: 8px;
 }
 
 /* Right-side controls */
@@ -227,9 +256,9 @@ canvas {
 /* Separator line inside toolbar */
 .toolbar-separator {
   width: 1px;
-  height: 18px;
+  height: 24px;
   background-color: var(--color-surface-high);
-  margin: auto 1px;
+  margin: auto 4px;
   flex-shrink: 0;
 }
 
@@ -240,19 +269,19 @@ canvas {
   left: 12px;
   z-index: 40;
   width: var(--sidebar-width);
-  padding: 14px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
 .sidebar-section-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--color-gray-60);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 8px;
+  text-transform: capitalize;
+  letter-spacing: 0.02em;
+  margin-bottom: 10px;
 }
 
 /* ── Hamburger Menu Dropdown ──────────────────────────────── */
@@ -345,55 +374,218 @@ canvas {
   color: var(--color-primary);
 }
 
-/* ── Code Panel ───────────────────────────────────────────── */
-.code-panel {
+/* ── Code Editor Panel ───────────────────────────────────────────── */
+.code-editor-panel {
   position: fixed;
   top: var(--toolbar-height);
   right: 12px;
   bottom: 60px;
   z-index: 40;
-  width: 340px;
+  width: 480px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   box-shadow: var(--shadow-popover);
 }
 
-.code-panel__header {
+.code-editor__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
   border-bottom: 1px solid var(--color-surface-high);
   flex-shrink: 0;
+  background-color: var(--island-bg-color);
 }
 
-.code-panel__title {
+.code-editor__header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.code-editor__title {
   font-size: 13px;
   font-weight: 600;
   color: var(--color-on-surface);
 }
 
-.code-panel__body {
-  flex: 1;
-  overflow: auto;
-  padding: 14px;
-  background-color: var(--color-surface-mid);
+.code-editor__header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.code-panel__pre {
-  font-size: 11px;
-  font-family: "Fira Code", "Cascadia Code", "Consolas", monospace;
-  color: var(--color-on-surface);
-  white-space: pre-wrap;
-  line-height: 1.65;
-}
-
-.code-panel__empty {
+.code-editor__lang-select {
+  padding: 4px 8px;
+  border: 1px solid var(--color-gray-30);
+  border-radius: var(--border-radius-sm);
   font-size: 12px;
-  color: var(--color-gray-50);
-  text-align: center;
-  margin-top: 32px;
+  outline: none;
+  background: var(--island-bg-color);
+  color: var(--color-on-surface);
+  cursor: pointer;
+}
+
+.code-editor__lang-select:focus {
+  border-color: var(--color-primary);
+}
+
+.code-editor__run-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background-color: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.code-editor__run-btn:hover:not(:disabled) {
+  background-color: var(--color-primary-hover);
+}
+
+.code-editor__run-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.code-editor__spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.code-editor__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: #1e1e1e; /* Dark theme for code editor */
+  color: #d4d4d4;
+}
+
+.code-editor__editor-wrap {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  border-bottom: 1px solid #333;
+}
+
+.code-editor__line-numbers {
+  padding: 12px 8px;
+  background-color: #1e1e1e;
+  border-right: 1px solid #333;
+  color: #858585;
+  font-family: "Fira Code", "Cascadia Code", "Consolas", monospace;
+  font-size: 13px;
+  text-align: right;
+  overflow: hidden;
+  user-select: none;
+  min-width: 40px;
+}
+
+.code-editor__line-num {
+  line-height: 1.5;
+}
+
+.code-editor__textarea {
+  flex: 1;
+  padding: 12px;
+  background-color: transparent;
+  color: inherit;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: "Fira Code", "Cascadia Code", "Consolas", monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre;
+  overflow: auto;
+}
+
+.code-editor__output {
+  height: 180px;
+  display: flex;
+  flex-direction: column;
+  background-color: #1e1e1e;
+  border-top: 1px solid #333;
+}
+
+.code-editor__output-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background-color: #252526;
+  border-bottom: 1px solid #333;
+}
+
+.code-editor__output-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #cccccc;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.code-editor__output-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.code-editor__output-badge--success {
+  background-color: rgba(40, 167, 69, 0.2);
+  color: #28a745;
+}
+
+.code-editor__output-badge--error {
+  background-color: rgba(220, 53, 69, 0.2);
+  color: #dc3545;
+}
+
+.code-editor__output-clear {
+  background: none;
+  border: none;
+  color: #cccccc;
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.code-editor__output-clear:hover {
+  color: white;
+}
+
+.code-editor__output-pre {
+  flex: 1;
+  padding: 12px;
+  margin: 0;
+  overflow: auto;
+  font-family: "Fira Code", "Cascadia Code", "Consolas", monospace;
+  font-size: 12px;
+  color: #cccccc;
+  white-space: pre-wrap;
+}
+
+.code-editor__output-pre--error {
+  color: #f48771;
 }
 
 /* ── Save Toast ───────────────────────────────────────────── */

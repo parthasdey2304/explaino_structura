@@ -39,8 +39,19 @@ export default function Canvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const isDrawing = useRef(false);
   const isPanning = useRef(false);
-  const dragStart = useRef<PointerCoords | null>(null);
-  const lastMousePos = useRef<PointerCoords | null>(null);
+
+  // Keep live refs for state values used inside pointer handlers
+  // This prevents stale closure bugs where scroll/zoom values are out-of-date
+  const scrollXRef = useRef(appState.scrollX);
+  const scrollYRef = useRef(appState.scrollY);
+  const zoomRef = useRef(appState.zoom.value);
+  useEffect(() => {
+    scrollXRef.current = appState.scrollX;
+    scrollYRef.current = appState.scrollY;
+    zoomRef.current = appState.zoom.value;
+  }, [appState.scrollX, appState.scrollY, appState.zoom.value]);
+
+  const dragStart = useRef<{ canvasX: number; canvasY: number } | null>(null);
   const currentElementId = useRef<string | null>(null);
   const dragOffsets = useRef<Map<string, { x: number; y: number }>>(new Map());
   const panStart = useRef<{ scrollX: number; scrollY: number; x: number; y: number } | null>(null);
@@ -48,17 +59,18 @@ export default function Canvas({
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Always use live refs for coordinate conversion — never stale closure values
   const screenToCanvas = useCallback(
     (clientX: number, clientY: number): PointerCoords => {
       const canvas = canvasRef.current;
       if (!canvas) return { x: clientX, y: clientY };
       const rect = canvas.getBoundingClientRect();
       return {
-        x: (clientX - rect.left - appState.scrollX) / appState.zoom.value,
-        y: (clientY - rect.top - appState.scrollY) / appState.zoom.value,
+        x: (clientX - rect.left - scrollXRef.current) / zoomRef.current,
+        y: (clientY - rect.top - scrollYRef.current) / zoomRef.current,
       };
     },
-    [appState.scrollX, appState.scrollY, appState.zoom.value]
+    [] // intentionally empty — reads from refs, not state
   );
 
   const render = useCallback(() => {
@@ -78,7 +90,11 @@ export default function Canvas({
     }
 
     ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = appState.viewBackgroundColor;
+    
+    const bgColor = appState.theme === "dark" && appState.viewBackgroundColor === "#ffffff"
+      ? "#121212"
+      : appState.viewBackgroundColor;
+    ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, width, height);
 
     renderGrid(ctx, width, height, appState.scrollX, appState.scrollY, appState.zoom.value);
@@ -105,6 +121,47 @@ export default function Canvas({
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [render]);
+
+  // Prevent browser default pinch-zoom and Ctrl+Scroll page zoom
+  // Must be non-passive to call preventDefault()
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (e.ctrlKey || e.metaKey) {
+        // Pinch / Ctrl+scroll → zoom toward cursor
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        setAppState((prev) => {
+          const newZoom = Math.min(10, Math.max(0.1, prev.zoom.value * delta));
+          const ratio = newZoom / prev.zoom.value;
+          return {
+            ...prev,
+            zoom: { value: newZoom },
+            scrollX: mouseX - (mouseX - prev.scrollX) * ratio,
+            scrollY: mouseY - (mouseY - prev.scrollY) * ratio,
+          };
+        });
+      } else {
+        // Regular scroll → pan
+        setAppState((prev) => ({
+          ...prev,
+          scrollX: prev.scrollX - e.deltaX,
+          scrollY: prev.scrollY - e.deltaY,
+        }));
+      }
+    };
+
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", onWheel);
+  }, [setAppState]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -135,14 +192,12 @@ export default function Canvas({
       canvas.setPointerCapture(e.pointerId);
 
       const pos = screenToCanvas(e.clientX, e.clientY);
-      lastMousePos.current = { x: e.clientX, y: e.clientY };
-      dragStart.current = pos;
 
       if (activeTool === "pan" || e.button === 1 || (e.button === 0 && e.altKey)) {
         isPanning.current = true;
         panStart.current = {
-          scrollX: appState.scrollX,
-          scrollY: appState.scrollY,
+          scrollX: scrollXRef.current,
+          scrollY: scrollYRef.current,
           x: e.clientX,
           y: e.clientY,
         };
@@ -209,7 +264,9 @@ export default function Canvas({
         return;
       }
 
+      // Drawing tools — record the canvas-space start position
       isDrawing.current = true;
+      dragStart.current = { canvasX: pos.x, canvasY: pos.y };
       const newElement = createNewElement(
         activeTool as "rectangle" | "ellipse" | "diamond" | "line" | "arrow" | "freedraw",
         pos.x,
@@ -239,6 +296,7 @@ export default function Canvas({
 
       if (!isDrawing.current) return;
 
+      // Always compute current canvas position using live refs (no stale closure)
       const pos = screenToCanvas(e.clientX, e.clientY);
 
       if (activeTool === "selection" && selectedIds.length > 0) {
@@ -266,9 +324,8 @@ export default function Canvas({
         return;
       }
 
-      if (!currentElementId.current) return;
+      if (!currentElementId.current || !dragStart.current) return;
       const start = dragStart.current;
-      if (!start) return;
 
       setElements((prev) =>
         prev.map((el) => {
@@ -284,32 +341,33 @@ export default function Canvas({
           }
 
           if (el.type === "line" || el.type === "arrow") {
+            // End point is relative to the element's origin (start point)
             return updateElementPoints(el, [
-              el.points![0],
-              [pos.x - el.x, pos.y - el.y],
+              [0, 0],
+              [pos.x - start.canvasX, pos.y - start.canvasY],
             ]);
           }
 
-          const width = pos.x - start.x;
-          const height = pos.y - start.y;
+          const width = pos.x - start.canvasX;
+          const height = pos.y - start.canvasY;
 
           if (width < 0 && height < 0) {
             return updateElementSize(
               updateElementPosition(el, pos.x, pos.y),
-              start.x - pos.x,
-              start.y - pos.y
+              start.canvasX - pos.x,
+              start.canvasY - pos.y
             );
           } else if (width < 0) {
             return updateElementSize(
               updateElementPosition(el, pos.x, el.y),
-              start.x - pos.x,
+              start.canvasX - pos.x,
               height
             );
           } else if (height < 0) {
             return updateElementSize(
               updateElementPosition(el, el.x, pos.y),
               width,
-              start.y - pos.y
+              start.canvasY - pos.y
             );
           }
 
@@ -342,38 +400,6 @@ export default function Canvas({
       );
     },
     [setElements]
-  );
-
-  const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? 0.9 : 1.1;
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const rect = canvas.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-
-        setAppState((prev) => {
-          const newZoom = Math.min(10, Math.max(0.1, prev.zoom.value * delta));
-          const ratio = newZoom / prev.zoom.value;
-          return {
-            ...prev,
-            zoom: { value: newZoom },
-            scrollX: mouseX - (mouseX - prev.scrollX) * ratio,
-            scrollY: mouseY - (mouseY - prev.scrollY) * ratio,
-          };
-        });
-      } else {
-        setAppState((prev) => ({
-          ...prev,
-          scrollX: prev.scrollX - e.deltaX,
-          scrollY: prev.scrollY - e.deltaY,
-        }));
-      }
-    },
-    [setAppState]
   );
 
   useEffect(() => {
@@ -411,28 +437,31 @@ export default function Canvas({
     : null;
 
   return (
-    <div ref={containerRef} className="relative w-full h-full overflow-hidden">
+    <div ref={containerRef} style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
       <canvas
         ref={canvasRef}
-        className="w-full h-full"
-        style={{ cursor: getCursorStyle() }}
+        style={{ display: "block", width: "100%", height: "100%", cursor: getCursorStyle() }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onWheel={handleWheel}
         onContextMenu={(e) => e.preventDefault()}
       />
       {editingElement && editingElement.type === "text" && (
         <textarea
           ref={textareaRef}
-          className="absolute bg-transparent border-none outline-none resize-none overflow-hidden"
           style={{
+            position: "absolute",
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            resize: "none",
+            overflow: "hidden",
             left: editingElement.x * appState.zoom.value + appState.scrollX,
             top: editingElement.y * appState.zoom.value + appState.scrollY,
             fontSize: (editingElement.fontSize || 20) * appState.zoom.value,
             color: editingElement.strokeColor,
             fontFamily: "Virgil, Segoe UI Emoji, sans-serif",
-            lineHeight: 1.25,
+            lineHeight: "1.25",
             minWidth: 100,
             minHeight: 30,
           }}
