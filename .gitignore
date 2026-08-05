@@ -46,6 +46,11 @@ web_modules/
 
 # TypeScript cache
 *.tsbuildinfo
+next-env.d.ts
+
+# Next.js auto-generated agent files
+AGENTS.md
+CLAUDE.md
 
 # Optional npm cache directory
 .npm
