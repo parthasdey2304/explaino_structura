@@ -36,9 +36,8 @@ export default function MoreToolsMenu({ isOpen, onClose, activeTool, setActiveTo
       className="more-tools-menu"
       style={{
         position: "absolute",
-        top: "60px",
-        left: "50%",
-        transform: "translateX(100px)",
+        top: "calc(100% + 12px)",
+        right: 0,
         backgroundColor: "var(--island-bg-color)",
         border: "1px solid var(--border-color)",
         borderRadius: "8px",
