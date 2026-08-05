@@ -1,124 +1,294 @@
 "use client";
 
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { EditorView, basicSetup } from "codemirror";
+import { Compartment, EditorState } from "@codemirror/state";
 import {
-  executeJavaScript,
-} from "@/lib/executors/javascript";
+  HighlightStyle,
+  syntaxHighlighting,
+} from "@codemirror/language";
+import { tags } from "@lezer/highlight";
+import { javascript } from "@codemirror/lang-javascript";
+import { python } from "@codemirror/lang-python";
+import { html } from "@codemirror/lang-html";
+import { cpp } from "@codemirror/lang-cpp";
+import { java } from "@codemirror/lang-java";
+import { X } from "lucide-react";
+import { dartLang } from "@/lib/dartMode";
+import type { Extension } from "@codemirror/state";
+import type { WorkspaceFile, WorkspaceNode } from "@/lib/workspace";
 import {
-  executePython,
-  isPyodideLoaded,
-} from "@/lib/executors/python";
-import {
-  executeHTML,
-} from "@/lib/executors/html";
+  loadWorkspace,
+  saveWorkspace,
+  flattenFiles,
+  updateFileContent,
+  setFileLanguage,
+} from "@/lib/workspace";
+import { executeJavaScript } from "@/lib/executors/javascript";
+import { executePython, isPyodideLoaded } from "@/lib/executors/python";
+import { executeHTML } from "@/lib/executors/html";
+import { executeC, executeCpp, isClangLoaded } from "@/lib/executors/clang";
+import { executeJava } from "@/lib/executors/java";
+import { executeDart } from "@/lib/executors/dart";
+import FileExplorer from "./FileExplorer";
 
 const LANGUAGES = [
-  { label: "JavaScript", value: "javascript" as const },
-  { label: "Python", value: "python" as const },
-  { label: "HTML", value: "html" as const },
+  { label: "JavaScript", value: "javascript" },
+  { label: "Python", value: "python" },
+  { label: "HTML", value: "html" },
+  { label: "C", value: "c" },
+  { label: "C++", value: "cpp" },
+  { label: "Java", value: "java" },
+  { label: "Dart", value: "dart" },
+  { label: "Plain Text", value: "text" },
 ];
 
-const STARTER_CODE: Record<string, string> = {
-  javascript: `// JavaScript — runs in browser, no API needed
-function greet(name) {
-  return \`Hello, \${name}!\`;
-}
-
-console.log(greet("Explaino"));
-console.log("2 + 2 =", 2 + 2);
-
-// Canvas demo
-const canvas = document.getElementById("c");
-if (canvas) {
-  canvas.width = 200;
-  canvas.height = 100;
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#6965db";
-  ctx.fillRect(10, 10, 180, 80);
-  ctx.fillStyle = "#fff";
-  ctx.font = "bold 20px sans-serif";
-  ctx.fillText("Hello!", 60, 55);
-}
-`,
-  python: `# Python 3 — runs via Pyodide (WebAssembly), no API needed
-def greet(name):
-    return f"Hello, {name}!"
-
-print(greet("Explaino"))
-
-# Math demo
-import math
-print(f"Pi = {math.pi:.4f}")
-print(f"sqrt(144) = {math.sqrt(144)}")
-
-# List comprehension
-squares = [x**2 for x in range(1, 11)]
-print(f"Squares: {squares}")
-`,
-  html: `<!-- HTML — renders in sandboxed iframe, no API needed -->
-<div style="padding: 20px; font-family: sans-serif;">
-  <h2 style="color: #6965db;">Hello from Explaino!</h2>
-  <p>This HTML runs entirely in your browser.</p>
-  <button onclick="this.textContent='Clicked!'" 
-    style="padding: 8px 16px; background: #6965db; color: white; 
-           border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">
-    Click me
-  </button>
-  <div style="margin-top: 16px; padding: 12px; background: #f0f0ff; border-radius: 8px;">
-    <strong>No API key required.</strong> Everything runs locally.
-  </div>
-</div>
-`,
+const FILE_ICON_COLORS: Record<string, string> = {
+  javascript: "#f1e05a",
+  python: "#3572A5",
+  html: "#e34c26",
+  c: "#555555",
+  cpp: "#f34b7d",
+  java: "#b07219",
+  dart: "#00B4AB",
 };
 
+// ── CodeMirror theme (VS Code-like dark, tinted to the app) ──────────────
+const cmTheme = EditorView.theme(
+  {
+    "&": {
+      height: "100%",
+      fontSize: "13px",
+      backgroundColor: "#1e1e1e",
+      color: "#d4d4d4",
+    },
+    ".cm-scroller": {
+      fontFamily: '"Fira Code", "Cascadia Code", "Consolas", monospace',
+      lineHeight: "1.5",
+    },
+    ".cm-content": {
+      padding: "10px 0",
+      caretColor: "#aeafad",
+    },
+    ".cm-gutters": {
+      backgroundColor: "#1e1e1e",
+      color: "#858585",
+      borderRight: "1px solid #333",
+    },
+    ".cm-lineNumbers .cm-gutterElement": {
+      padding: "0 8px 0 8px",
+      minWidth: "28px",
+    },
+    ".cm-activeLine": { backgroundColor: "rgba(255,255,255,0.045)" },
+    ".cm-activeLineGutter": {
+      backgroundColor: "rgba(255,255,255,0.045)",
+      color: "#d4d4d4",
+    },
+    ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
+      backgroundColor: "#264f78",
+    },
+    "&.cm-focused .cm-cursor": { borderLeftColor: "#aeafad" },
+    ".cm-matchingBracket": {
+      backgroundColor: "#3a3d41",
+      outline: "1px solid #9a9a9a",
+    },
+    ".cm-foldPlaceholder": {
+      backgroundColor: "#333",
+      border: "none",
+      color: "#ccc",
+    },
+  },
+  { dark: true }
+);
+
+const cmHighlight = HighlightStyle.define([
+  { tag: tags.comment, color: "#6a9955" },
+  { tag: tags.keyword, color: "#569cd6" },
+  { tag: tags.string, color: "#ce9178" },
+  { tag: tags.number, color: "#b5cea8" },
+  { tag: tags.typeName, color: "#4ec9b0" },
+  { tag: tags.definition(tags.variableName), color: "#9cdcfe" },
+  { tag: tags.propertyName, color: "#9cdcfe" },
+  { tag: tags.operator, color: "#d4d4d4" },
+  { tag: tags.bool, color: "#569cd6" },
+  { tag: tags.null, color: "#569cd6" },
+]);
+
+function langExtension(language: string): Extension {
+  switch (language) {
+    case "javascript":
+      return javascript();
+    case "python":
+      return python();
+    case "html":
+      return html();
+    case "c":
+    case "cpp":
+      return cpp();
+    case "java":
+      return java();
+    case "dart":
+      return dartLang;
+    default:
+      return [];
+  }
+}
+
 type RunStatus = "idle" | "running" | "loading" | "done" | "error" | "timeout";
+
+interface PanelState {
+  tree: WorkspaceNode[];
+  tabs: string[];
+  activeFileId: string | null;
+}
 
 interface CodeEditorPanelProps {
   onClose: () => void;
 }
 
 export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
-  const [selectedLang, setSelectedLang] = useState(LANGUAGES[0]);
-  const [code, setCode] = useState(STARTER_CODE["javascript"]);
+  const [ws, setWs] = useState<PanelState>(() => {
+    const tree = loadWorkspace();
+    const first = flattenFiles(tree)[0];
+    return {
+      tree,
+      tabs: first ? [first.id] : [],
+      activeFileId: first?.id ?? null,
+    };
+  });
+  const { tree, tabs, activeFileId } = ws;
+
   const [output, setOutput] = useState("");
   const [runStatus, setRunStatus] = useState<RunStatus>("idle");
-  const lineCount = code.split("\n").length;
   const [execTime, setExecTime] = useState(0);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const lineNumbersRef = useRef<HTMLDivElement>(null);
 
-  const handleScroll = () => {
-    if (textareaRef.current && lineNumbersRef.current) {
-      lineNumbersRef.current.scrollTop = textareaRef.current.scrollTop;
-    }
-  };
+  const editorHostRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<EditorView | null>(null);
+  const langCompartmentRef = useRef<Compartment | null>(null);
+  const activeFileIdRef = useRef<string | null>(activeFileId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const onDocChangeRef = useRef<(doc: string) => void>(() => {});
 
-  const handleLangChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const lang = LANGUAGES.find((l) => l.value === e.target.value);
-    if (lang) {
-      setSelectedLang(lang);
-      setCode(STARTER_CODE[lang.value] || "");
-      setOutput("");
-      setRunStatus("idle");
-      setExecTime(0);
-    }
-  };
+  const files = useMemo(() => flattenFiles(tree), [tree]);
+  const activeFile = useMemo(
+    () => files.find((f) => f.id === activeFileId) ?? null,
+    [files, activeFileId]
+  );
 
-  const handleTabKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Tab") {
-      e.preventDefault();
-      const ta = textareaRef.current!;
-      const start = ta.selectionStart;
-      const end = ta.selectionEnd;
-      const newCode = code.substring(0, start) + "  " + code.substring(end);
-      setCode(newCode);
-      requestAnimationFrame(() => {
-        ta.selectionStart = ta.selectionEnd = start + 2;
+  // Persist the workspace to the browser cache only.
+  useEffect(() => {
+    saveWorkspace(tree);
+  }, [tree]);
+
+  // ── CodeMirror wiring ──────────────────────────────────────────────────
+  useEffect(() => {
+    const host = editorHostRef.current;
+    if (!host) return;
+
+    const langCompartment = new Compartment();
+    langCompartmentRef.current = langCompartment;
+
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: "",
+        extensions: [
+          cmTheme,
+          basicSetup,
+          syntaxHighlighting(cmHighlight),
+          EditorView.lineWrapping,
+          langCompartment.of([]),
+          EditorView.updateListener.of((update) => {
+            if (update.docChanged) {
+              onDocChangeRef.current(update.state.doc.toString());
+            }
+          }),
+        ],
+      }),
+      parent: host,
+    });
+    viewRef.current = view;
+    return () => {
+      view.destroy();
+      viewRef.current = null;
+    };
+  }, []);
+
+  // Keep the doc-change handler pointing at the latest tree updater.
+  useEffect(() => {
+    onDocChangeRef.current = (doc: string) => {
+      const id = activeFileIdRef.current;
+      if (!id) return;
+      setWs((prev) => ({
+        ...prev,
+        tree: updateFileContent(prev.tree, id, doc),
+      }));
+    };
+  }, []);
+
+  // Rebuild editor state when switching files or languages.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !activeFile) return;
+    activeFileIdRef.current = activeFile.id;
+    const compartment = langCompartmentRef.current;
+    view.dispatch({
+      changes: {
+        from: 0,
+        to: view.state.doc.length,
+        insert: activeFile.content,
+      },
+      effects: compartment
+        ? compartment.reconfigure(langExtension(activeFile.language))
+        : undefined,
+    });
+  }, [activeFile?.id, activeFile?.language]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const openFile = useCallback((id: string) => {
+    setWs((prev) => ({
+      ...prev,
+      activeFileId: id,
+      tabs: prev.tabs.includes(id) ? prev.tabs : [...prev.tabs, id],
+    }));
+    setOutput("");
+    setRunStatus("idle");
+    setExecTime(0);
+  }, []);
+
+  const closeTab = useCallback(
+    (id: string) => {
+      setWs((prev) => {
+        const idx = prev.tabs.indexOf(id);
+        const nextTabs = prev.tabs.filter((t) => t !== id);
+        let activeId = prev.activeFileId;
+        if (activeId === id) {
+          activeId = nextTabs[idx] ?? nextTabs[idx - 1] ?? null;
+        }
+        return { ...prev, tabs: nextTabs, activeFileId: activeId };
       });
-    }
-  };
+    },
+    []
+  );
 
+  const changeLanguage = useCallback((language: string) => {
+    setWs((prev) => {
+      if (!prev.activeFileId) return prev;
+      return {
+        ...prev,
+        tree: setFileLanguage(prev.tree, prev.activeFileId, language),
+      };
+    });
+  }, []);
+
+  // ── Run code ───────────────────────────────────────────────────────────
   const runCode = useCallback(async () => {
+    if (!activeFile) return;
+    const { content: code, language } = activeFile;
     setRunStatus("running");
     setOutput("");
     setExecTime(0);
@@ -133,7 +303,7 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
     try {
       let result;
 
-      switch (selectedLang.value) {
+      switch (language) {
         case "javascript":
           result = await executeJavaScript(code);
           break;
@@ -150,8 +320,34 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
           result = await executeHTML(code);
           break;
 
+        case "c":
+          if (!isClangLoaded()) {
+            setRunStatus("loading");
+            setOutput("Loading C/C++ compiler (~100MB, first time only)...");
+          }
+          result = await executeC(code);
+          break;
+
+        case "cpp":
+          if (!isClangLoaded()) {
+            setRunStatus("loading");
+            setOutput("Loading C/C++ compiler (~100MB, first time only)...");
+          }
+          result = await executeCpp(code);
+          break;
+
+        case "java":
+          result = await executeJava(code);
+          break;
+
+        case "dart":
+          result = await executeDart(code);
+          break;
+
         default:
-          setOutput("Unsupported language");
+          setOutput(
+            `"${language}" files can't be run. Create a file with a runnable extension (.js, .py, .html, .c, .cpp, .java, .dart).`
+          );
           setRunStatus("error");
           return;
       }
@@ -164,7 +360,7 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
       setOutput(`✗ Execution failed: ${msg}`);
       setRunStatus("error");
     }
-  }, [code, selectedLang, setExecTime]);
+  }, [activeFile]);
 
   // Ctrl+Enter to run
   useEffect(() => {
@@ -177,6 +373,11 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [runCode]);
+
+  const languageLabel =
+    LANGUAGES.find((l) => l.value === activeFile?.language)?.label ??
+    activeFile?.language ??
+    "—";
 
   return (
     <div className="code-editor-panel excalidraw-island">
@@ -192,10 +393,11 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
         </div>
         <div className="code-editor__header-right">
           <select
-            value={selectedLang.value}
-            onChange={handleLangChange}
+            value={activeFile?.language ?? ""}
+            onChange={(e) => changeLanguage(e.target.value)}
             className="code-editor__lang-select"
             id="language-select"
+            disabled={!activeFile}
           >
             {LANGUAGES.map((l) => (
               <option key={l.value} value={l.value}>
@@ -206,7 +408,7 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
 
           <button
             onClick={runCode}
-            disabled={runStatus === "running" || runStatus === "loading"}
+            disabled={runStatus === "running" || runStatus === "loading" || !activeFile}
             className={`code-editor__run-btn${runStatus === "running" || runStatus === "loading" ? " code-editor__run-btn--loading" : ""}`}
             id="run-code-button"
             title="Run code (Ctrl+Enter)"
@@ -240,69 +442,106 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
         </div>
       </div>
 
-      {/* Editor area with line numbers */}
+      {/* Body: explorer + editor + output */}
       <div className="code-editor__body">
-        <div className="code-editor__editor-wrap">
-          <div className="code-editor__line-numbers" ref={lineNumbersRef} aria-hidden="true">
-            {Array.from({ length: lineCount }, (_, i) => (
-              <div key={i + 1} className="code-editor__line-num">
-                {i + 1}
-              </div>
-            ))}
-          </div>
-
-          <textarea
-            ref={textareaRef}
-            className="code-editor__textarea"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            onKeyDown={handleTabKey}
-            onScroll={handleScroll}
-            spellCheck={false}
-            autoCapitalize="none"
-            autoComplete="off"
-            autoCorrect="off"
-            id="code-textarea"
+        <div className="code-editor__main">
+          <FileExplorer
+            tree={tree}
+            activeFileId={activeFileId}
+            onOpenFile={openFile}
+            onTreeChange={(next) => setWs((prev) => ({ ...prev, tree: next }))}
           />
-        </div>
 
-        {/* Output panel */}
-        <div className="code-editor__output">
-          <div className="code-editor__output-header">
-            <span className="code-editor__output-label">Output</span>
-            {runStatus === "done" && (
-              <span className="code-editor__output-badge code-editor__output-badge--success">✓ OK</span>
-            )}
-            {runStatus === "error" && (
-              <span className="code-editor__output-badge code-editor__output-badge--error">✗ Error</span>
-            )}
-            {runStatus === "timeout" && (
-              <span className="code-editor__output-badge code-editor__output-badge--timeout">⏱ Timeout</span>
-            )}
-            {runStatus === "loading" && (
-              <span className="code-editor__output-badge code-editor__output-badge--loading">⏳ Loading</span>
-            )}
-            {execTime > 0 && (
-              <span className="code-editor__exec-time">{execTime.toFixed(0)}ms</span>
-            )}
-            {output && (
-              <button
-                onClick={() => { setOutput(""); setRunStatus("idle"); setExecTime(0); }}
-                className="code-editor__output-clear"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-          <pre
-            className={`code-editor__output-pre${runStatus === "error" || runStatus === "timeout" ? " code-editor__output-pre--error" : ""}`}
-          >
-            {output || (
-              <span style={{ color: "var(--color-gray-50)", fontStyle: "italic" }}>
-                Press Run (or Ctrl+Enter) to execute your code…
+          <div className="code-editor__right">
+            {/* Tabs */}
+            <div className="code-editor__tabs">
+              {tabs.map((id) => {
+                const file: WorkspaceFile | undefined = files.find(
+                  (f) => f.id === id
+                );
+                if (!file) return null;
+                return (
+                  <div
+                    key={id}
+                    className={`code-editor__tab${id === activeFileId ? " code-editor__tab--active" : ""}`}
+                    onClick={() => openFile(id)}
+                  >
+                    <span
+                      className="code-editor__tab-dot"
+                      style={{
+                        backgroundColor:
+                          FILE_ICON_COLORS[file.language] ?? "#999999",
+                      }}
+                    />
+                    <span className="code-editor__tab-name">{file.name}</span>
+                    <button
+                      className="code-editor__tab-close"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        closeTab(id);
+                      }}
+                    >
+                      <X size={11} />
+                    </button>
+                  </div>
+                );
+              })}
+              {tabs.length === 0 && (
+                <span className="code-editor__tabs-empty">No file open</span>
+              )}
+            </div>
+
+            {/* CodeMirror host */}
+            <div className="code-editor__editor-host" ref={editorHostRef} />
+
+            {/* Status bar */}
+            <div className="code-editor__statusbar">
+              <span className="code-editor__statusbar-left">
+                {activeFile ? activeFile.name : "No file"}
               </span>
-            )}
-          </pre>
+              <span className="code-editor__statusbar-right">{languageLabel}</span>
+            </div>
+
+            {/* Output */}
+            <div className="code-editor__output">
+              <div className="code-editor__output-header">
+                <span className="code-editor__output-label">Output</span>
+                {execTime > 0 && (
+                  <span className="code-editor__exec-time">{execTime.toFixed(0)}ms</span>
+                )}
+                <span style={{ flex: 1 }} />
+                {runStatus === "done" && (
+                  <span className="code-editor__output-badge code-editor__output-badge--success">✓ OK</span>
+                )}
+                {runStatus === "error" && (
+                  <span className="code-editor__output-badge code-editor__output-badge--error">✗ Error</span>
+                )}
+                {runStatus === "timeout" && (
+                  <span className="code-editor__output-badge code-editor__output-badge--timeout">⏱ Timeout</span>
+                )}
+                {runStatus === "loading" && (
+                  <span className="code-editor__output-badge code-editor__output-badge--loading">⏳ Loading</span>
+                )}
+                {output && (
+                  <button
+                    onClick={() => { setOutput(""); setRunStatus("idle"); setExecTime(0); }}
+                    className="code-editor__output-clear"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <pre
+                className={`code-editor__output-pre${runStatus === "error" || runStatus === "timeout" ? " code-editor__output-pre--error" : ""}`}
+              >
+                {output || (
+                  <span style={{ color: "#666", fontStyle: "italic" }}>
+                    Press Run (or Ctrl+Enter) to execute your code…
+                  </span>
+                )}
+              </pre>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -12,6 +12,7 @@ import type {
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { saveDrawing, loadDrawing } from "@/lib/firestore";
 import CodeEditorPanel from "./CodeEditorPanel";
+import { Moon, Sun } from "lucide-react";
 
 // Dynamically import the heavy Excalidraw component client-side only
 const ExcalidrawComponent = dynamic(
@@ -64,11 +65,21 @@ export default function ExcalidrawWrapper() {
   const excalidrawAPI = useRef<ExcalidrawImperativeAPI | null>(null);
   const [apiReady, setApiReady] = useState(false);
   const [showCodePanel, setShowCodePanel] = useState(false);
+  const showCodePanelRef = useRef(false);
   const [drawingName, setDrawingName] = useState("Untitled");
   const [drawingId, setDrawingId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<string>("");
   const [initialData, setInitialData] = useState<ExcalidrawInitialDataState | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("explaino-theme") as "light" | "dark") || "light";
+    }
+    return "light";
+  });
+
+  const drawingIdRef = useRef<string | null>(null);
+  const nameRef = useRef<string>("Untitled");
 
   // Save scene to Firestore (debounced auto-save)
   const autoSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -86,6 +97,12 @@ export default function ExcalidrawWrapper() {
       files: BinaryFiles
     ) => {
       latestSceneRef.current = { elements, appState, files };
+
+      // Close code panel if Excalidraw library opens
+      if ((appState as unknown as Record<string, unknown>).showLibrary && showCodePanelRef.current) {
+        setShowCodePanel(false);
+        showCodePanelRef.current = false;
+      }
 
       // Immediate local backup
       try {
@@ -133,9 +150,6 @@ export default function ExcalidrawWrapper() {
     },
     []
   );
-
-  const drawingIdRef = useRef<string | null>(null);
-  const nameRef = useRef<string>("Untitled");
 
   // --- Restore scene from Firestore on mount
   useEffect(() => {
@@ -249,6 +263,29 @@ export default function ExcalidrawWrapper() {
     }
   }, [handleSaveToCloud]);
 
+  useEffect(() => {
+    document.documentElement.classList.toggle("theme-dark", theme === "dark");
+    localStorage.setItem("explaino-theme", theme);
+  }, [theme]);
+
+  // Keep ref in sync with showCodePanel state
+  useEffect(() => {
+    showCodePanelRef.current = showCodePanel;
+  }, [showCodePanel]);
+
+  // Close code panel when Excalidraw's library button is clicked
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.getAttribute("aria-label") === "Library" && showCodePanelRef.current) {
+        setShowCodePanel(false);
+        showCodePanelRef.current = false;
+      }
+    };
+    document.addEventListener("click", handleClick, true);
+    return () => document.removeEventListener("click", handleClick, true);
+  }, []);
+
   return (
     <div className="w-full h-screen overflow-hidden relative" style={{ fontFamily: "var(--ui-font, 'Assistant', sans-serif)" }}>
       <ExcalidrawComponent
@@ -259,7 +296,7 @@ export default function ExcalidrawWrapper() {
         onChange={handleOnChange}
         initialData={initialData}
         name={drawingName}
-        theme="light"
+        theme={theme}
         renderTopRightUI={() => (
           <div className="flex items-center gap-2" style={{ marginLeft: 8 }}>
             <button
@@ -288,7 +325,12 @@ export default function ExcalidrawWrapper() {
             </button>
             <button
               type="button"
-              onClick={() => setShowCodePanel(!showCodePanel)}
+              onClick={() => {
+                if (!showCodePanel && excalidrawAPI.current) {
+                  excalidrawAPI.current.updateScene({ appState: { showLibrary: false } as unknown as AppState });
+                }
+                setShowCodePanel(!showCodePanel);
+              }}
               className="excalidraw-button"
               style={{
                 height: "2rem",
@@ -309,6 +351,33 @@ export default function ExcalidrawWrapper() {
               title="Open code editor"
             >
               Code
+            </button>
+            <button
+              type="button"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="excalidraw-button"
+              style={{
+                height: "2rem",
+                padding: "0 0.6rem",
+                minWidth: "2.6rem",
+                fontSize: "0.8rem",
+                borderRadius: "0.5rem",
+                background: "var(--color-surface-primary-container, #e0dfff)",
+                color: "var(--color-on-primary-container, #030064)",
+                border: "none",
+                cursor: "pointer",
+                fontWeight: 500,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              title="Toggle dark mode"
+            >
+              {theme === "dark" ? (
+                <Sun size={16} strokeWidth={2.2} />
+              ) : (
+                <Moon size={16} strokeWidth={2.2} />
+              )}
             </button>
           </div>
         )}

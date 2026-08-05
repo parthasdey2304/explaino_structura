@@ -2,6 +2,9 @@ import type { ExecutionResult, Language, Executor } from "./types";
 import { executeJavaScript } from "./javascript";
 import { executePython } from "./python";
 import { executeHTML } from "./html";
+import { executeC, executeCpp } from "./clang";
+import { executeJava } from "./java";
+import { executeDart } from "./dart";
 
 const executors: Record<Language, Executor> = {
   javascript: {
@@ -20,6 +23,30 @@ const executors: Record<Language, Executor> = {
     execute: executeHTML,
     language: "html",
     label: "HTML",
+    loaded: true,
+  },
+  c: {
+    execute: executeC,
+    language: "c",
+    label: "C",
+    loaded: false,
+  },
+  cpp: {
+    execute: executeCpp,
+    language: "cpp",
+    label: "C++",
+    loaded: false,
+  },
+  java: {
+    execute: executeJava,
+    language: "java",
+    label: "Java",
+    loaded: true,
+  },
+  dart: {
+    execute: executeDart,
+    language: "dart",
+    label: "Dart",
     loaded: true,
   },
 };
@@ -50,6 +77,10 @@ export function getSupportedLanguages(): { value: Language; label: string }[] {
     { value: "javascript", label: "JavaScript" },
     { value: "python", label: "Python" },
     { value: "html", label: "HTML" },
+    { value: "c", label: "C" },
+    { value: "cpp", label: "C++" },
+    { value: "java", label: "Java" },
+    { value: "dart", label: "Dart" },
   ];
 }
 
@@ -58,4 +89,5 @@ export function markPythonLoaded(): void {
 }
 
 export { executePython } from "./python";
+export { isClangLoaded } from "./clang";
 export type { ExecutionResult, Language } from "./types";

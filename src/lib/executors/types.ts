@@ -7,7 +7,14 @@ export interface ExecutionResult {
   status: "success" | "error" | "timeout";
 }
 
-export type Language = "javascript" | "python" | "html";
+export type Language =
+  | "javascript"
+  | "python"
+  | "html"
+  | "c"
+  | "cpp"
+  | "java"
+  | "dart";
 
 export interface Executor {
   execute: (code: string) => Promise<ExecutionResult>;
