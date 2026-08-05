@@ -302,6 +302,11 @@ export default function ExcalidrawWrapper() {
 
   return (
     <div className="w-full h-screen overflow-hidden relative" style={{ fontFamily: "var(--ui-font, 'Assistant', sans-serif)" }}>
+      {!loaded || initialData === null ? (
+        <div className="w-full h-screen flex items-center justify-center" style={{ background: "var(--default-bg-color)" }}>
+          <div className="text-sm text-gray-400">Loading canvas…</div>
+        </div>
+      ) : (
       <ExcalidrawComponent
         excalidrawAPI={(api) => {
           excalidrawAPI.current = api;
@@ -376,6 +381,7 @@ export default function ExcalidrawWrapper() {
           </div>
         )}
       />
+      )}
 
       {/* Mobile bottom toolbar */}
       {isMobile && (
