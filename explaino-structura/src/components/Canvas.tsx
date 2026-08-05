@@ -341,10 +341,10 @@ export default function Canvas({
           }
 
           if (el.type === "line" || el.type === "arrow") {
-            // End point is relative to the element's origin (start point)
+            // Points are relative to the element's current origin (el.x, el.y)
             return updateElementPoints(el, [
-              [0, 0],
-              [pos.x - start.canvasX, pos.y - start.canvasY],
+              [start.canvasX - el.x, start.canvasY - el.y],
+              [pos.x - el.x, pos.y - el.y],
             ]);
           }
 
@@ -392,7 +392,10 @@ export default function Canvas({
       setElements((prev) =>
         prev.filter((el) => {
           if (el.type === "text") return true;
-          if (el.type === "freedraw" || el.type === "line" || el.type === "arrow") {
+          if (el.type === "freedraw") {
+            return el.points && el.points.length >= 1;
+          }
+          if (el.type === "line" || el.type === "arrow") {
             return el.points && el.points.length >= 2;
           }
           return el.width !== 0 || el.height !== 0;

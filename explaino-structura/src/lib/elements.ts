@@ -125,9 +125,15 @@ export function updateElementPoints(
     if (py > maxY) maxY = py;
   }
 
+  if (minX === Infinity) {
+    minX = 0; minY = 0; maxX = 0; maxY = 0;
+  }
+
+  const normalizedPoints = points.map(([px, py]) => [px - minX, py - minY]);
+
   return {
     ...element,
-    points,
+    points: normalizedPoints,
     pressures: pressures || element.pressures,
     x: element.x + minX,
     y: element.y + minY,
