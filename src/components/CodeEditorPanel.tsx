@@ -29,6 +29,9 @@ import {
   flattenFiles,
   updateFileContent,
   setFileLanguage,
+  starterFor,
+  uid,
+  detectLanguage,
 } from "@/lib/workspace";
 import { executeJavaScript } from "@/lib/executors/javascript";
 import { executePython, isPyodideLoaded } from "@/lib/executors/python";
@@ -375,6 +378,47 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
     return () => window.removeEventListener("keydown", handler);
   }, [runCode]);
 
+  // Listen for new file creation from welcome screen
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      const lang = e.detail?.language ?? "javascript";
+      const extMap: Record<string, string> = {
+        javascript: "js",
+        python: "py",
+        html: "html",
+        c: "c",
+        cpp: "cpp",
+        java: "java",
+        dart: "dart",
+      };
+      const nameMap: Record<string, string> = {
+        javascript: "main.js",
+        python: "main.py",
+        html: "index.html",
+        c: "main.c",
+        cpp: "main.cpp",
+        java: "Main.java",
+        dart: "main.dart",
+      };
+      const name = nameMap[lang] ?? `main.${extMap[lang] ?? "txt"}`;
+      const newFile = {
+        type: "file" as const,
+        id: uid(),
+        name,
+        language: lang,
+        content: starterFor(lang, name),
+      };
+      setWs((prev) => ({
+        ...prev,
+        tree: [...prev.tree, newFile],
+        tabs: [...prev.tabs, newFile.id],
+        activeFileId: newFile.id,
+      }));
+    };
+    window.addEventListener("explaino:new-file", handler as EventListener);
+    return () => window.removeEventListener("explaino:new-file", handler as EventListener);
+  }, []);
+
   const languageLabel =
     LANGUAGES.find((l) => l.value === activeFile?.language)?.label ??
     activeFile?.language ??
@@ -502,16 +546,79 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
               )}
             </div>
 
-            {/* CodeMirror host */}
-            <div className="code-editor__editor-host" ref={editorHostRef} />
-
-            {/* Status bar */}
-            <div className="code-editor__statusbar">
-              <span className="code-editor__statusbar-left">
-                {activeFile ? activeFile.name : "No file"}
-              </span>
-              <span className="code-editor__statusbar-right">{languageLabel}</span>
-            </div>
+            {/* CodeMirror host or Welcome Screen */}
+            {!activeFile ? (
+              <div className="code-editor__welcome">
+                <div className="code-editor__welcome-content">
+                  <svg className="code-editor__welcome-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="64" height="64" rx="12" fill="currentColor" opacity="0.1"/>
+                    <path d="M16 22h32M16 32h24M16 42h20" stroke="currentColor" strokeWidth="3" strokeLinecap="round" opacity="0.5"/>
+                  </svg>
+                  <h2 className="code-editor__welcome-title">Welcome to Explaino Code</h2>
+                  <p className="code-editor__welcome-subtitle">Open a file from the explorer or create a new one to start coding</p>
+                  <div className="code-editor__welcome-actions">
+                    <button
+                      type="button"
+                      className="code-editor__welcome-btn code-editor__welcome-btn--primary"
+                      onClick={() => {
+                        // Trigger new file creation via the explorer's new file button
+                        const event = new CustomEvent("explaino:new-file", { detail: { language: "javascript" } });
+                        window.dispatchEvent(event);
+                      }}
+                    >
+                      <span>New File</span>
+                      <span className="code-editor__welcome-btn-shortcut">Ctrl+N</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="code-editor__welcome-btn"
+                      onClick={() => {
+                        const event = new CustomEvent("explaino:new-file", { detail: { language: "python" } });
+                        window.dispatchEvent(event);
+                      }}
+                    >
+                      <span>New Python File</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="code-editor__welcome-btn"
+                      onClick={() => {
+                        const event = new CustomEvent("explaino:new-file", { detail: { language: "java" } });
+                        window.dispatchEvent(event);
+                      }}
+                    >
+                      <span>New Java File</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="code-editor__welcome-btn"
+                      onClick={() => {
+                        const event = new CustomEvent("explaino:new-file", { detail: { language: "cpp" } });
+                        window.dispatchEvent(event);
+                      }}
+                    >
+                      <span>New C++ File</span>
+                    </button>
+                  </div>
+                  <div className="code-editor__welcome-tips">
+                    <span className="code-editor__welcome-tip">💡 <strong>Ctrl+Enter</strong> to run code</span>
+                    <span className="code-editor__welcome-tip">💡 <strong>Ctrl+N</strong> for new file</span>
+                    <span className="code-editor__welcome-tip">💡 Supports JS, Python, HTML, C, C++, Java, Dart</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="code-editor__editor-host" ref={editorHostRef} />
+                {/* Status bar */}
+                <div className="code-editor__statusbar">
+                  <span className="code-editor__statusbar-left">
+                    {activeFile ? activeFile.name : "No file"}
+                  </span>
+                  <span className="code-editor__statusbar-right">{languageLabel}</span>
+                </div>
+              </>
+            )}
 
             {/* Output */}
             <div className="code-editor__output">

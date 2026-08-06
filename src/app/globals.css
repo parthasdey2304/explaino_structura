@@ -774,6 +774,124 @@ canvas {
   height: 100%;
 }
 
+/* ── Welcome Screen ────────────────────────────────────────────────────── */
+.code-editor__welcome {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1e1e1e;
+  color: #cccccc;
+  padding: 24px;
+}
+
+.code-editor__welcome-content {
+  text-align: center;
+  max-width: 420px;
+  animation: welcomeFadeIn 0.3s ease-out;
+}
+
+@keyframes welcomeFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.code-editor__welcome-icon {
+  width: 80px;
+  height: 80px;
+  color: var(--color-primary);
+  margin: 0 auto 16px;
+  opacity: 0.8;
+}
+
+.code-editor__welcome-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0 0 8px;
+}
+
+.code-editor__welcome-subtitle {
+  font-size: 13px;
+  color: #888;
+  margin: 0 0 28px;
+  line-height: 1.5;
+}
+
+.code-editor__welcome-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 28px;
+}
+
+.code-editor__welcome-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #cccccc;
+  background: #252526;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.code-editor__welcome-btn:hover {
+  background: #2d2d2d;
+  border-color: #444;
+  color: #ffffff;
+}
+
+.code-editor__welcome-btn--primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #ffffff;
+}
+
+.code-editor__welcome-btn--primary:hover {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
+.code-editor__welcome-btn-shortcut {
+  font-size: 10px;
+  padding: 1px 5px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.code-editor__welcome-tips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+  font-size: 11px;
+  color: #6a6a6a;
+}
+
+.code-editor__welcome-tip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.code-editor__welcome-tip strong {
+  font-weight: 600;
+  color: #888;
+}
+
 /* ── Status bar ───────────────────────────────────────────────────────── */
 .code-editor__statusbar {
   display: flex;
