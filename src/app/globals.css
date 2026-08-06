@@ -1015,19 +1015,9 @@ canvas {
 }
 
 /* ── Data Structures Trigger & Panel ─────────────────────────────── */
-.data-structures-trigger {
-  position: fixed;
-  top: calc(var(--toolbar-gap) + 44px);
-  right: 12px;
-  z-index: 50;
-  height: 2.5rem;
-  padding: 0 0.9rem;
-  gap: 6px;
-}
-
 .data-structures-panel {
   position: fixed;
-  top: calc(var(--toolbar-gap) + 96px);
+  top: var(--toolbar-height);
   right: 12px;
   z-index: 45;
   width: 300px;
@@ -1533,12 +1523,6 @@ canvas {
     width: auto;
     max-width: none;
     border-radius: 12px;
-  }
-
-  /* Data Structures trigger hidden on mobile (no room in the top row);
-     panel becomes a bottom drawer like .left-sidebar / .code-editor-panel */
-  .data-structures-trigger {
-    display: none !important;
   }
 
   .data-structures-panel {

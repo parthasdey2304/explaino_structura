@@ -468,29 +468,41 @@ export default function ExcalidrawWrapper() {
                 <Moon size={16} strokeWidth={2.2} />
               )}
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                const api = excalidrawAPI.current;
+                if (!showDataStructuresPanel && api) {
+                  api.updateScene({ appState: { showLibrary: false } as unknown as AppState });
+                  if (showCodePanel) setShowCodePanel(false);
+                }
+                setShowDataStructuresPanel(!showDataStructuresPanel);
+              }}
+              className="excalidraw-button"
+              style={{
+                height: "2rem",
+                padding: "0 0.6rem",
+                minWidth: "2.6rem",
+                fontSize: "0.8rem",
+                borderRadius: "0.5rem",
+                background: "var(--color-surface-primary-container, #e0dfff)",
+                color: "var(--color-on-primary-container, #030064)",
+                border: "none",
+                cursor: "pointer",
+                fontWeight: 500,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              title="Data structure diagrams"
+            >
+              <Boxes size={16} strokeWidth={2.2} />
+            </button>
           </div>
         )}
       />
       </div>
       )}
-
-      {/* Data Structures trigger button — sits below Excalidraw's Library button */}
-      <button
-        type="button"
-        onClick={() => {
-          const api = excalidrawAPI.current;
-          if (!showDataStructuresPanel && api) {
-            api.updateScene({ appState: { showLibrary: false } as unknown as AppState });
-            if (showCodePanel) setShowCodePanel(false);
-          }
-          setShowDataStructuresPanel(!showDataStructuresPanel);
-        }}
-        className="excalidraw-button data-structures-trigger"
-        title="Data structure diagrams"
-      >
-        <Boxes size={16} strokeWidth={2.2} />
-        <span>Data Structures</span>
-      </button>
 
       {/* Code Editor Panel */}
       {showCodePanel && (
