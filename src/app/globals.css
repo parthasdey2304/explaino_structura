@@ -1014,6 +1014,112 @@ canvas {
   color: #f48771;
 }
 
+/* ── Data Structures Trigger & Panel ─────────────────────────────── */
+.data-structures-trigger {
+  position: fixed;
+  top: calc(var(--toolbar-gap) + 44px);
+  right: 12px;
+  z-index: 50;
+  height: 2.5rem;
+  padding: 0 0.9rem;
+  gap: 6px;
+}
+
+.data-structures-panel {
+  position: fixed;
+  top: calc(var(--toolbar-gap) + 96px);
+  right: 12px;
+  z-index: 45;
+  width: 300px;
+  max-height: calc(100vh - 160px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: var(--shadow-popover);
+}
+
+.data-structures-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 8px;
+  flex-shrink: 0;
+}
+
+.data-structures-panel__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+.data-structures-panel__hint {
+  font-size: 11px;
+  color: var(--color-gray-50);
+  padding: 0 14px 10px;
+  flex-shrink: 0;
+}
+
+.data-structures-panel__list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 10px 12px;
+}
+
+.data-structures-panel__card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--border-radius-md);
+  cursor: grab;
+  transition: background-color 0.12s ease;
+  border: 1px solid transparent;
+}
+
+.data-structures-panel__card:hover {
+  background-color: var(--color-surface-high);
+  border-color: var(--color-border-outline-variant);
+}
+
+.data-structures-panel__card:active {
+  cursor: grabbing;
+  background-color: var(--color-surface-primary-container);
+}
+
+.data-structures-panel__card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: var(--border-radius-sm);
+  background-color: var(--color-surface-mid);
+  color: var(--color-primary);
+}
+
+.data-structures-panel__card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.data-structures-panel__card-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+.data-structures-panel__card-desc {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--color-gray-60);
+}
+
 /* ── Save Toast ───────────────────────────────────────────── */
 .save-toast {
   position: fixed;
@@ -1427,6 +1533,27 @@ canvas {
     width: auto;
     max-width: none;
     border-radius: 12px;
+  }
+
+  /* Data Structures trigger hidden on mobile (no room in the top row);
+     panel becomes a bottom drawer like .left-sidebar / .code-editor-panel */
+  .data-structures-trigger {
+    display: none !important;
+  }
+
+  .data-structures-panel {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    max-height: 60vh;
+    border-radius: 16px 16px 0 0;
+    z-index: 80;
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15);
   }
 }
 

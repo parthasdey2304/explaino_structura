@@ -26,7 +26,6 @@ const STROKE_BLUE = "#1971c2";
 const STROKE_ORANGE = "#f08c00";
 
 const BG_TRANSPARENT = "transparent";
-const BG_RED = "#ffc9c9";
 const BG_GREEN = "#b2f2bb";
 const BG_BLUE = "#a5d8ff";
 const BG_YELLOW = "#ffec99";

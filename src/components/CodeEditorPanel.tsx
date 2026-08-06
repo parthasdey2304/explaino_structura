@@ -599,6 +599,16 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
                     >
                       <span>New C++ File</span>
                     </button>
+                    <button
+                      type="button"
+                      className="code-editor__welcome-btn"
+                      onClick={() => {
+                        const event = new CustomEvent("explaino:new-file", { detail: { language: "dart" } });
+                        window.dispatchEvent(event);
+                      }}
+                    >
+                      <span>New Dart File</span>
+                    </button>
                   </div>
                   <div className="code-editor__welcome-tips">
                     <span className="code-editor__welcome-tip">💡 <strong>Ctrl+Enter</strong> to run code</span>

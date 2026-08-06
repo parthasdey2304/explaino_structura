@@ -2,7 +2,13 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { Excalidraw, serializeAsJSON } from "@excalidraw/excalidraw";
+import {
+  Excalidraw,
+  serializeAsJSON,
+  convertToExcalidrawElements,
+  viewportCoordsToSceneCoords,
+  CaptureUpdateAction,
+} from "@excalidraw/excalidraw";
 import type {
   ExcalidrawImperativeAPI,
   BinaryFiles,
@@ -13,7 +19,9 @@ import type {
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { saveDrawing, loadDrawing } from "@/lib/firestore";
 import CodeEditorPanel from "./CodeEditorPanel";
-import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown } from "lucide-react";
+import DataStructuresPanel from "./DataStructuresPanel";
+import { DATA_STRUCTURES, type DataStructureDef } from "@/lib/dataStructures";
+import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes } from "lucide-react";
 
 // Dynamically import the heavy Excalidraw component client-side only
 const ExcalidrawComponent = dynamic(
@@ -67,6 +75,8 @@ export default function ExcalidrawWrapper() {
   const [apiReady, setApiReady] = useState(false);
   const [showCodePanel, setShowCodePanel] = useState(false);
   const showCodePanelRef = useRef(false);
+  const [showDataStructuresPanel, setShowDataStructuresPanel] = useState(false);
+  const showDataStructuresPanelRef = useRef(false);
   const [drawingName, setDrawingName] = useState("Untitled");
   const [drawingId, setDrawingId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<string>("");
@@ -101,10 +111,16 @@ export default function ExcalidrawWrapper() {
     ) => {
       latestSceneRef.current = { elements, appState, files };
 
-      // Close code panel if Excalidraw library opens
-      if ((appState as unknown as Record<string, unknown>).showLibrary && showCodePanelRef.current) {
-        setShowCodePanel(false);
-        showCodePanelRef.current = false;
+      // Close code panel / data structures panel if Excalidraw library opens
+      if ((appState as unknown as Record<string, unknown>).showLibrary) {
+        if (showCodePanelRef.current) {
+          setShowCodePanel(false);
+          showCodePanelRef.current = false;
+        }
+        if (showDataStructuresPanelRef.current) {
+          setShowDataStructuresPanel(false);
+          showDataStructuresPanelRef.current = false;
+        }
       }
 
       // Immediate local backup
@@ -278,18 +294,98 @@ export default function ExcalidrawWrapper() {
     showCodePanelRef.current = showCodePanel;
   }, [showCodePanel]);
 
-  // Close code panel when Excalidraw's library button is clicked
+  // Keep ref in sync with showDataStructuresPanel state
+  useEffect(() => {
+    showDataStructuresPanelRef.current = showDataStructuresPanel;
+  }, [showDataStructuresPanel]);
+
+  // Close code panel / data structures panel when Excalidraw's library button is clicked
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (target.getAttribute("aria-label") === "Library" && showCodePanelRef.current) {
-        setShowCodePanel(false);
-        showCodePanelRef.current = false;
+      if (target.getAttribute("aria-label") === "Library") {
+        if (showCodePanelRef.current) {
+          setShowCodePanel(false);
+          showCodePanelRef.current = false;
+        }
+        if (showDataStructuresPanelRef.current) {
+          setShowDataStructuresPanel(false);
+          showDataStructuresPanelRef.current = false;
+        }
       }
     };
     document.addEventListener("click", handleClick, true);
     return () => document.removeEventListener("click", handleClick, true);
   }, []);
+
+  // --- Insert a data-structure diagram into the scene at a given scene position
+  const insertDataStructure = useCallback(
+    (def: DataStructureDef, sceneX: number, sceneY: number) => {
+      const api = excalidrawAPI.current;
+      if (!api) return;
+      const skeleton = def.generate(sceneX, sceneY);
+      const newElements = convertToExcalidrawElements(skeleton);
+      api.updateScene({
+        elements: [...api.getSceneElements(), ...newElements],
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      });
+      api.scrollToContent(newElements, { fitToContent: false });
+    },
+    []
+  );
+
+  // --- Click-to-insert fallback: places the diagram near the viewport center
+  const handleInsertDataStructure = useCallback(
+    (def: DataStructureDef) => {
+      const api = excalidrawAPI.current;
+      if (!api) return;
+      const appState = api.getAppState();
+      const { x, y } = viewportCoordsToSceneCoords(
+        { clientX: appState.width / 2, clientY: appState.height / 2 },
+        {
+          zoom: appState.zoom,
+          offsetLeft: appState.offsetLeft,
+          offsetTop: appState.offsetTop,
+          scrollX: appState.scrollX,
+          scrollY: appState.scrollY,
+        }
+      );
+      insertDataStructure(def, x - 140, y - 100);
+    },
+    [insertDataStructure]
+  );
+
+  // --- Drag-and-drop from the Data Structures panel onto the canvas
+  const handleCanvasDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (e.dataTransfer.types.includes("application/x-data-structure")) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    }
+  }, []);
+
+  const handleCanvasDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      const dsId = e.dataTransfer.getData("application/x-data-structure");
+      if (!dsId) return;
+      const def = DATA_STRUCTURES.find((d) => d.id === dsId);
+      const api = excalidrawAPI.current;
+      if (!def || !api) return;
+      e.preventDefault();
+      const appState = api.getAppState();
+      const { x, y } = viewportCoordsToSceneCoords(
+        { clientX: e.clientX, clientY: e.clientY },
+        {
+          zoom: appState.zoom,
+          offsetLeft: appState.offsetLeft,
+          offsetTop: appState.offsetTop,
+          scrollX: appState.scrollX,
+          scrollY: appState.scrollY,
+        }
+      );
+      insertDataStructure(def, x, y);
+    },
+    [insertDataStructure]
+  );
 
   return (
     <div className="w-full h-screen overflow-hidden relative" style={{ fontFamily: "var(--ui-font, 'Assistant', sans-serif)" }}>
@@ -298,6 +394,11 @@ export default function ExcalidrawWrapper() {
           <div className="text-sm text-gray-400">Loading canvas…</div>
         </div>
       ) : (
+      <div
+        className="w-full h-full"
+        onDragOver={handleCanvasDragOver}
+        onDrop={handleCanvasDrop}
+      >
       <ExcalidrawComponent
         excalidrawAPI={(api) => {
           excalidrawAPI.current = api;
@@ -314,6 +415,7 @@ export default function ExcalidrawWrapper() {
               onClick={() => {
                 if (!showCodePanel && excalidrawAPI.current) {
                   excalidrawAPI.current.updateScene({ appState: { showLibrary: false } as unknown as AppState });
+                  if (showDataStructuresPanel) setShowDataStructuresPanel(false);
                 }
                 setShowCodePanel(!showCodePanel);
               }}
@@ -369,11 +471,38 @@ export default function ExcalidrawWrapper() {
           </div>
         )}
       />
+      </div>
       )}
+
+      {/* Data Structures trigger button — sits below Excalidraw's Library button */}
+      <button
+        type="button"
+        onClick={() => {
+          const api = excalidrawAPI.current;
+          if (!showDataStructuresPanel && api) {
+            api.updateScene({ appState: { showLibrary: false } as unknown as AppState });
+            if (showCodePanel) setShowCodePanel(false);
+          }
+          setShowDataStructuresPanel(!showDataStructuresPanel);
+        }}
+        className="excalidraw-button data-structures-trigger"
+        title="Data structure diagrams"
+      >
+        <Boxes size={16} strokeWidth={2.2} />
+        <span>Data Structures</span>
+      </button>
 
       {/* Code Editor Panel */}
       {showCodePanel && (
         <CodeEditorPanel onClose={() => setShowCodePanel(false)} />
+      )}
+
+      {/* Data Structures Panel */}
+      {showDataStructuresPanel && (
+        <DataStructuresPanel
+          onClose={() => setShowDataStructuresPanel(false)}
+          onInsert={handleInsertDataStructure}
+        />
       )}
 
       {saveStatus && (

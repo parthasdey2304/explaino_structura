@@ -135,7 +135,7 @@ int main() {
   return 0;
 }
 `,
-  java: `// Java — NOTE: cannot run in-browser without a backend compiler.
+  java: `// Java — compiles and runs via cloud API, no JDK install needed
 public class Main {
   public static void main(String[] args) {
     System.out.println("Hello from Java!");
@@ -143,10 +143,15 @@ public class Main {
   }
 }
 `,
-  dart: `// Dart — NOTE: cannot run in-browser without the Dart SDK.
+  dart: `// Dart — compiles and runs via cloud API, no SDK install needed
 void main() {
-  var names = ['Explaino', 'Dart', 'Browser'];
   print('Hello from Dart!');
+  var sum = 0;
+  for (var i = 1; i <= 10; i++) sum += i;
+  print('Sum 1..10 = $sum');
+
+  // List demo
+  var names = ['Explaino', 'Dart', 'Browser'];
   for (var name in names) {
     print(name);
   }
