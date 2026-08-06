@@ -40,6 +40,7 @@ import { executeC, executeCpp, isClangLoaded } from "@/lib/executors/clang";
 import { executeJava } from "@/lib/executors/java";
 import { executeDart } from "@/lib/executors/dart";
 import FileExplorer from "./FileExplorer";
+import Terminal from "./Terminal";
 
 const LANGUAGES = [
   { label: "JavaScript", value: "javascript" },
@@ -171,6 +172,7 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
   const [output, setOutput] = useState("");
   const [runStatus, setRunStatus] = useState<RunStatus>("idle");
   const [execTime, setExecTime] = useState(0);
+  const [panelTab, setPanelTab] = useState<"output" | "terminal">("output");
 
   const editorHostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -630,45 +632,70 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
               </>
             )}
 
-            {/* Output */}
-            <div className="code-editor__output">
-              <div className="code-editor__output-header">
-                <span className="code-editor__output-label">Output</span>
-                {execTime > 0 && (
-                  <span className="code-editor__exec-time">{execTime.toFixed(0)}ms</span>
-                )}
-                <span style={{ flex: 1 }} />
-                {runStatus === "done" && (
-                  <span className="code-editor__output-badge code-editor__output-badge--success">✓ OK</span>
-                )}
-                {runStatus === "error" && (
-                  <span className="code-editor__output-badge code-editor__output-badge--error">✗ Error</span>
-                )}
-                {runStatus === "timeout" && (
-                  <span className="code-editor__output-badge code-editor__output-badge--timeout">⏱ Timeout</span>
-                )}
-                {runStatus === "loading" && (
-                  <span className="code-editor__output-badge code-editor__output-badge--loading">⏳ Loading</span>
-                )}
-                {output && (
-                  <button
-                    onClick={() => { setOutput(""); setRunStatus("idle"); setExecTime(0); }}
-                    className="code-editor__output-clear"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-              <pre
-                className={`code-editor__output-pre${runStatus === "error" || runStatus === "timeout" ? " code-editor__output-pre--error" : ""}`}
+            {/* Output / Terminal tabs */}
+            <div className="code-editor__panel-tabs">
+              <button
+                type="button"
+                className={`code-editor__panel-tab${panelTab === "output" ? " code-editor__panel-tab--active" : ""}`}
+                onClick={() => setPanelTab("output")}
               >
-                {output || (
-                  <span style={{ color: "#666", fontStyle: "italic" }}>
-                    Press Run (or Ctrl+Enter) to execute your code…
-                  </span>
-                )}
-              </pre>
+                Output
+              </button>
+              <button
+                type="button"
+                className={`code-editor__panel-tab${panelTab === "terminal" ? " code-editor__panel-tab--active" : ""}`}
+                onClick={() => setPanelTab("terminal")}
+              >
+                Terminal
+              </button>
             </div>
+
+            {/* Output Panel */}
+            {panelTab === "output" && (
+              <div className="code-editor__output">
+                <div className="code-editor__output-header">
+                  <span className="code-editor__output-label">Output</span>
+                  {execTime > 0 && (
+                    <span className="code-editor__exec-time">{execTime.toFixed(0)}ms</span>
+                  )}
+                  <span style={{ flex: 1 }} />
+                  {runStatus === "done" && (
+                    <span className="code-editor__output-badge code-editor__output-badge--success">✓ OK</span>
+                  )}
+                  {runStatus === "error" && (
+                    <span className="code-editor__output-badge code-editor__output-badge--error">✗ Error</span>
+                  )}
+                  {runStatus === "timeout" && (
+                    <span className="code-editor__output-badge code-editor__output-badge--timeout">⏱ Timeout</span>
+                  )}
+                  {runStatus === "loading" && (
+                    <span className="code-editor__output-badge code-editor__output-badge--loading">⏳ Loading</span>
+                  )}
+                  {output && (
+                    <button
+                      onClick={() => { setOutput(""); setRunStatus("idle"); setExecTime(0); }}
+                      className="code-editor__output-clear"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <pre
+                  className={`code-editor__output-pre${runStatus === "error" || runStatus === "timeout" ? " code-editor__output-pre--error" : ""}`}
+                >
+                  {output || (
+                    <span style={{ color: "#666", fontStyle: "italic" }}>
+                      Press Run (or Ctrl+Enter) to execute your code…
+                    </span>
+                  )}
+                </pre>
+              </div>
+            )}
+
+            {/* Terminal Panel */}
+            {panelTab === "terminal" && (
+              <Terminal workspaceFiles={files.map((f) => ({ name: f.name, content: f.content, language: f.language }))} />
+            )}
           </div>
         </div>
       </div>
