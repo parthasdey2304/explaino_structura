@@ -41,6 +41,8 @@ import { executeJava } from "@/lib/executors/java";
 import { executeDart } from "@/lib/executors/dart";
 import FileExplorer from "./FileExplorer";
 import Terminal from "./Terminal";
+import VisualizerPanel from "./VisualizerPanel";
+import { Eye } from "lucide-react";
 
 const LANGUAGES = [
   { label: "JavaScript", value: "javascript" },
@@ -173,6 +175,8 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
   const [runStatus, setRunStatus] = useState<RunStatus>("idle");
   const [execTime, setExecTime] = useState(0);
   const [panelTab, setPanelTab] = useState<"output" | "terminal">("output");
+  const [showVisualizer, setShowVisualizer] = useState(false);
+  const [highlightedLine, setHighlightedLine] = useState<number | null>(null);
 
   const editorHostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -447,6 +451,16 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
           <span className="code-editor__badge">No API Key</span>
         </div>
         <div className="code-editor__header-right">
+          <button
+            onClick={() => setShowVisualizer(!showVisualizer)}
+            disabled={!activeFile || activeFile.language !== "javascript"}
+            className={`code-editor__visualize-btn${showVisualizer ? " code-editor__visualize-btn--active" : ""}`}
+            id="visualize-button"
+            title="Visualize code execution (JavaScript only)"
+          >
+            <Eye size={14} />
+            <span>Visualize</span>
+          </button>
           <select
             value={activeFile?.language ?? ""}
             onChange={(e) => changeLanguage(e.target.value)}
@@ -699,6 +713,15 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
           </div>
         </div>
       </div>
+
+      {/* Algorithm Visualizer Panel */}
+      {showVisualizer && activeFile && (
+        <VisualizerPanel
+          code={activeFile.content}
+          onClose={() => setShowVisualizer(false)}
+          highlightLine={(line) => setHighlightedLine(line)}
+        />
+      )}
     </div>
   );
 }
