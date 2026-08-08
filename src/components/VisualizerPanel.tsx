@@ -8,7 +8,7 @@ import {
   type Snapshot,
   type VariableState 
 } from "@/lib/visualizerStore";
-import { executeAndCapture } from "@/lib/instrumentation";
+import { traceJavaScript } from "@/lib/instrumentation";
 
 interface VisualizerPanelProps {
   code: string;
@@ -148,14 +148,18 @@ export default function VisualizerPanel({ code, onClose, highlightLine }: Visual
       dispatch({ type: 'SET_RUNNING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
       
-      const result = await executeAndCapture(code);
-      
-      if (result.error) {
-        dispatch({ type: 'SET_ERROR', payload: result.error });
-      } else {
-        dispatch({ type: 'SET_SNAPSHOTS', payload: result.snapshots });
-      }
-      
+      const result = await traceJavaScript(code);
+
+      dispatch({
+        type: 'SET_TRACE',
+        payload: {
+          snapshots: result.snapshots,
+          stdout: result.stdout,
+          truncated: result.truncated,
+        },
+      });
+      dispatch({ type: 'SET_ERROR', payload: result.error });
+
       dispatch({ type: 'SET_RUNNING', payload: false });
     };
     

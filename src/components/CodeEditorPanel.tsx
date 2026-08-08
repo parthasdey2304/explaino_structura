@@ -532,7 +532,6 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
             <span>Explorer</span>
           </button>
           <span className="code-editor__title">Code Editor</span>
-          <span className="code-editor__badge">No API Key</span>
         </div>
         <div className="code-editor__header-right">
           <button

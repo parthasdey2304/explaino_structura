@@ -1,15 +1,18 @@
 import type { ExcalidrawElementSkeleton } from "@excalidraw/excalidraw/data/transform";
 
 /**
- * Data-structure diagram generators for the "Data Structures" drag-and-drop
- * panel. Each generator returns a self-contained set of Excalidraw element
- * skeletons anchored at a given top-left (x, y) scene position. The
- * skeletons are converted via `convertToExcalidrawElements` before being
- * inserted into the scene, which automatically gives them Excalidraw's
- * signature hand-drawn (roughjs) rendering.
+ * Data-structure diagram generators for the "Data Structures" panel and for
+ * the on-canvas editing controls.
  *
- * Every generator now accepts a `data` parameter so the interactive panel
- * can build up the structure before insertion.
+ * Every generator turns a plain data object into a self-contained set of
+ * Excalidraw element skeletons anchored at a scene position. The skeletons
+ * go through `convertToExcalidrawElements` before insertion, which gives
+ * them Excalidraw's hand-drawn (roughjs) look and makes them ordinary
+ * canvas objects: selectable, movable, resizable, undoable and persisted
+ * with the scene.
+ *
+ * Diagrams are regenerated in place whenever their data changes, so the
+ * same generator drives both the initial insert and every later edit.
  */
 
 // ── Excalidraw default palette ─────────────────────────────────────────
@@ -23,6 +26,7 @@ const BG_TRANSPARENT = "transparent";
 const BG_GREEN = "#b2f2bb";
 const BG_BLUE = "#a5d8ff";
 const BG_YELLOW = "#ffec99";
+const BG_GRAY = "#e9ecef";
 
 // ── Small helpers ─────────────────────────────────────────────────────
 
@@ -176,7 +180,10 @@ export interface StructureData {
   "linked-list": { values: string[] };
   "binary-tree": { root: TreeNode | null };
   graph: { labels: string[] };
+  table: { rows: number; cols: number; cells: string[][] };
 }
+
+export type StructureId = keyof StructureData;
 
 export const DEFAULT_DATA: StructureData = {
   stack: { items: ["A", "B", "C"] },
@@ -190,9 +197,21 @@ export const DEFAULT_DATA: StructureData = {
     ),
   },
   graph: { labels: ["A", "B", "C", "D", "E"] },
+  table: {
+    rows: 3,
+    cols: 3,
+    cells: [
+      ["Column A", "Column B", "Column C"],
+      ["", "", ""],
+      ["", "", ""],
+    ],
+  },
 };
 
 // ── Stack ─────────────────────────────────────────────────────────────
+// Grows upward from a fixed base: the generator is top-left anchored, and
+// the insertion code re-anchors the bottom edge so pushing looks like the
+// container getting taller rather than the whole diagram sliding down.
 
 function generateStack(x: number, y: number, data: StructureData["stack"]): ExcalidrawElementSkeleton[] {
   const elements: ExcalidrawElementSkeleton[] = [];
@@ -202,9 +221,7 @@ function generateStack(x: number, y: number, data: StructureData["stack"]): Exca
   const bucketY = y + 36;
   const bucketW = 140;
   const blockH = 46;
-  const maxBlocks = 6;
-  const displayItems = items.slice(-maxBlocks);
-  const bucketH = Math.max(80, displayItems.length * blockH + 20);
+  const bucketH = Math.max(80, items.length * blockH + 20);
 
   elements.push(txt(bucketX, y, "STACK", { fontSize: 18 }));
 
@@ -217,22 +234,18 @@ function generateStack(x: number, y: number, data: StructureData["stack"]): Exca
     ], { strokeColor: STROKE_BLUE, strokeWidth: 2.5 })
   );
 
-  displayItems.forEach((label, i) => {
+  items.forEach((label, i) => {
     const blockY = bucketY + bucketH - blockH * (i + 1) - 4;
     elements.push(
       rect(bucketX + 10, blockY, bucketW - 20, blockH - 6, {
-        backgroundColor: i === displayItems.length - 1 ? BG_YELLOW : BG_BLUE,
+        backgroundColor: i === items.length - 1 ? BG_YELLOW : BG_BLUE,
         label: { text: label, fontSize: 18 },
       })
     );
   });
 
-  if (displayItems.length < items.length) {
-    elements.push(txt(bucketX + bucketW + 10, bucketY + bucketH - 20, `+${items.length - displayItems.length} more`, { fontSize: 11 }));
-  }
-
-  const topBlockY = bucketY + bucketH - blockH * displayItems.length - 4;
-  if (displayItems.length > 0) {
+  const topBlockY = bucketY + bucketH - blockH * items.length - 4;
+  if (items.length > 0) {
     elements.push(
       arrow(bucketX + bucketW + 65, topBlockY + (blockH - 6) / 2, [[0, 0], [-50, 0]], {
         label: { text: "TOP" },
@@ -249,30 +262,24 @@ function generateStack(x: number, y: number, data: StructureData["stack"]): Exca
 function generateQueue(x: number, y: number, data: StructureData["queue"]): ExcalidrawElementSkeleton[] {
   const elements: ExcalidrawElementSkeleton[] = [];
   const values = data.values;
-  const maxCells = 6;
-  const display = values.slice(0, maxCells);
 
   const tubeX = x + 70;
   const tubeY = y + 46;
   const cellW = 50;
   const cellH = 70;
-  const tubeWidth = cellW * display.length;
+  const tubeWidth = Math.max(cellW, cellW * values.length);
 
   elements.push(txt(tubeX, y, "QUEUE", { fontSize: 18 }));
 
   elements.push(line(tubeX, tubeY, [[0, 0], [tubeWidth, 0]], { strokeColor: STROKE_BLUE, strokeWidth: 2.5 }));
   elements.push(line(tubeX, tubeY + cellH, [[0, 0], [tubeWidth, 0]], { strokeColor: STROKE_BLUE, strokeWidth: 2.5 }));
 
-  display.forEach((value, i) => {
+  values.forEach((value, i) => {
     if (i > 0) {
       elements.push(line(tubeX + cellW * i, tubeY, [[0, 0], [0, cellH]], { strokeColor: STROKE_BLUE }));
     }
     elements.push(txt(tubeX + cellW * i + cellW / 2 - 8, tubeY + cellH / 2 - 10, value, { fontSize: 15 }));
   });
-
-  if (display.length < values.length) {
-    elements.push(txt(tubeX + tubeWidth + 4, tubeY + cellH / 2 - 8, `+${values.length - display.length}`, { fontSize: 11 }));
-  }
 
   elements.push(
     arrow(tubeX - 8, tubeY + cellH / 2, [[0, 0], [-50, 0]], {
@@ -295,8 +302,6 @@ function generateQueue(x: number, y: number, data: StructureData["queue"]): Exca
 function generateArray(x: number, y: number, data: StructureData["array"]): ExcalidrawElementSkeleton[] {
   const elements: ExcalidrawElementSkeleton[] = [];
   const values = data.values;
-  const maxCells = 6;
-  const display = values.slice(0, maxCells);
 
   const cellW = 55;
   const cellH = 55;
@@ -304,7 +309,7 @@ function generateArray(x: number, y: number, data: StructureData["array"]): Exca
 
   elements.push(txt(x, y, "ARRAY", { fontSize: 18 }));
 
-  display.forEach((value, i) => {
+  values.forEach((value, i) => {
     const cellX = x + cellW * i;
     elements.push(
       rect(cellX, rowY, cellW, cellH, {
@@ -320,10 +325,6 @@ function generateArray(x: number, y: number, data: StructureData["array"]): Exca
     );
   });
 
-  if (display.length < values.length) {
-    elements.push(txt(x + cellW * display.length + 4, rowY + cellH / 2, `+${values.length - display.length}`, { fontSize: 11 }));
-  }
-
   return elements;
 }
 
@@ -332,8 +333,6 @@ function generateArray(x: number, y: number, data: StructureData["array"]): Exca
 function generateLinkedList(x: number, y: number, data: StructureData["linked-list"]): ExcalidrawElementSkeleton[] {
   const elements: ExcalidrawElementSkeleton[] = [];
   const values = data.values;
-  const maxNodes = 5;
-  const display = values.slice(0, maxNodes);
 
   const nodeW = 60;
   const nodeH = 50;
@@ -343,7 +342,7 @@ function generateLinkedList(x: number, y: number, data: StructureData["linked-li
   elements.push(txt(x, y, "LINKED LIST", { fontSize: 18 }));
 
   let lastNodeX = x;
-  display.forEach((value, i) => {
+  values.forEach((value, i) => {
     const nodeX = x + i * (nodeW + gap);
     lastNodeX = nodeX;
     elements.push(
@@ -352,7 +351,7 @@ function generateLinkedList(x: number, y: number, data: StructureData["linked-li
         label: { text: value, fontSize: 16 },
       })
     );
-    if (i < display.length - 1) {
+    if (i < values.length - 1) {
       elements.push(
         arrow(nodeX + nodeW, nodeY + nodeH / 2, [[0, 0], [gap, 0]], {
           strokeColor: STROKE_BLACK,
@@ -361,9 +360,7 @@ function generateLinkedList(x: number, y: number, data: StructureData["linked-li
     }
   });
 
-  if (display.length < values.length) {
-    elements.push(txt(lastNodeX + nodeW + 6, nodeY + nodeH / 2 - 8, `→ +${values.length - display.length}`, { fontSize: 11 }));
-  } else {
+  if (values.length > 0) {
     elements.push(arrow(lastNodeX + nodeW, nodeY + nodeH / 2, [[0, 0], [35, 0]], { strokeColor: STROKE_BLACK }));
     elements.push(txt(lastNodeX + nodeW + 42, nodeY + nodeH / 2 - 8, "NULL", { fontSize: 14, strokeColor: STROKE_RED }));
   }
@@ -452,8 +449,8 @@ function generateGraph(x: number, y: number, data: StructureData["graph"]): Exca
   const labels = data.labels;
   if (labels.length === 0) return elements;
 
-  const size = 220;
-  const radius = 95;
+  const radius = Math.max(95, labels.length * 16);
+  const size = radius * 2;
   const centerX = x + size / 2;
   const centerY = y + 55 + size / 2;
   const diameter = 36;
@@ -469,13 +466,11 @@ function generateGraph(x: number, y: number, data: StructureData["graph"]): Exca
     };
   });
 
-  const edgeCount = Math.min(labels.length, 6);
-  for (let i = 0; i < edgeCount; i++) {
-    const a = i % labels.length;
-    const b = (i + 1) % labels.length;
-    if (i === edgeCount - 1 && labels.length > 3) break;
-    const from = nodes[a];
-    const to = nodes[b];
+  // Ring edges plus one chord, so the shape reads as a graph rather than a
+  // polygon outline.
+  for (let i = 0; i < nodes.length - 1; i++) {
+    const from = nodes[i];
+    const to = nodes[i + 1];
     elements.push(line(from.x, from.y, [[0, 0], [to.x - from.x, to.y - from.y]], { strokeColor: STROKE_BLUE }));
   }
   if (labels.length >= 3) {
@@ -496,15 +491,307 @@ function generateGraph(x: number, y: number, data: StructureData["graph"]): Exca
   return elements;
 }
 
-// ── DataStructureDef with generate accepting data ─────────────────────
+// ── Table ─────────────────────────────────────────────────────────────
+// Real canvas geometry rather than an HTML overlay: one labelled rectangle
+// per cell, so the whole table drags, scales, undoes and saves like any
+// other drawing, and a cell's text is edited by double-clicking it.
+
+const TABLE_CELL_W = 120;
+const TABLE_CELL_H = 40;
+
+function generateTable(x: number, y: number, data: StructureData["table"]): ExcalidrawElementSkeleton[] {
+  const elements: ExcalidrawElementSkeleton[] = [];
+  const { rows, cols, cells } = data;
+
+  elements.push(txt(x, y, "TABLE", { fontSize: 18 }));
+
+  const gridY = y + 32;
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const text = cells[r]?.[c] ?? "";
+      elements.push(
+        rect(x + c * TABLE_CELL_W, gridY + r * TABLE_CELL_H, TABLE_CELL_W, TABLE_CELL_H, {
+          backgroundColor: r === 0 ? BG_GRAY : BG_TRANSPARENT,
+          strokeWidth: r === 0 ? 2.5 : 2,
+          // An empty label would create a stray empty text element;
+          // double-clicking the cell adds one natively instead.
+          ...(text ? { label: { text, fontSize: 14 } } : {}),
+        })
+      );
+    }
+  }
+
+  return elements;
+}
+
+/** Resize a cell grid, preserving whatever text already exists. */
+function resizeCells(cells: string[][], rows: number, cols: number): string[][] {
+  return Array.from({ length: rows }, (_, r) =>
+    Array.from({ length: cols }, (_, c) => cells[r]?.[c] ?? "")
+  );
+}
+
+// ── Binary-tree editing helpers ───────────────────────────────────────
+
+export function collectNodes(root: TreeNode | null | undefined): TreeNode[] {
+  if (!root) return [];
+  return [root, ...collectNodes(root.left), ...collectNodes(root.right)];
+}
+
+export function addChildAt(
+  root: TreeNode | undefined,
+  parentId: string,
+  side: "left" | "right",
+  value: string
+): TreeNode | undefined {
+  if (!root) return undefined;
+  if (root.id === parentId) {
+    return { ...root, [side]: makeTreeNode(value) };
+  }
+  return {
+    ...root,
+    left: addChildAt(root.left, parentId, side, value),
+    right: addChildAt(root.right, parentId, side, value),
+  };
+}
+
+/** Remove a node and its subtree. Returns undefined when the root is removed. */
+export function removeNodeAt(root: TreeNode | undefined, id: string): TreeNode | undefined {
+  if (!root) return undefined;
+  if (root.id === id) return undefined;
+  return {
+    ...root,
+    left: removeNodeAt(root.left, id),
+    right: removeNodeAt(root.right, id),
+  };
+}
+
+// ── Shared edit actions ───────────────────────────────────────────────
+// One description of "what can I add to this structure" that both the
+// side panel and the on-canvas controls render, so the two never drift.
+
+export interface StructureAction {
+  /** Stable key passed back to `applyAction`. */
+  id: string;
+  label: string;
+  kind: "add" | "remove";
+  /** Uses the value input when present. */
+  usesValue?: boolean;
+  /** Requires a selected tree node. */
+  needsNode?: boolean;
+  /** Rendered as the big round quick-add button next to the shape. */
+  primary?: boolean;
+}
+
+export function actionsFor(type: StructureId): StructureAction[] {
+  switch (type) {
+    case "stack":
+      return [
+        { id: "push", label: "Push", kind: "add", usesValue: true, primary: true },
+        { id: "pop", label: "Pop", kind: "remove" },
+      ];
+    case "queue":
+      return [
+        { id: "enqueue", label: "Enqueue", kind: "add", usesValue: true, primary: true },
+        { id: "dequeue", label: "Dequeue", kind: "remove" },
+      ];
+    case "array":
+      return [
+        { id: "append", label: "Add cell", kind: "add", usesValue: true, primary: true },
+        { id: "pop", label: "Remove cell", kind: "remove" },
+      ];
+    case "linked-list":
+      return [
+        { id: "append", label: "Add node", kind: "add", usesValue: true, primary: true },
+        { id: "pop", label: "Remove node", kind: "remove" },
+      ];
+    case "binary-tree":
+      return [
+        { id: "add-left", label: "Add left", kind: "add", usesValue: true, needsNode: true, primary: true },
+        { id: "add-right", label: "Add right", kind: "add", usesValue: true, needsNode: true },
+        { id: "remove-node", label: "Remove node", kind: "remove", needsNode: true },
+      ];
+    case "graph":
+      return [
+        { id: "add-node", label: "Add node", kind: "add", usesValue: true, primary: true },
+        { id: "remove-node", label: "Remove node", kind: "remove" },
+      ];
+    case "table":
+      return [
+        { id: "add-row", label: "Add row", kind: "add", primary: true },
+        { id: "add-col", label: "Add column", kind: "add" },
+        { id: "remove-row", label: "Remove row", kind: "remove" },
+        { id: "remove-col", label: "Remove column", kind: "remove" },
+      ];
+    default:
+      return [];
+  }
+}
+
+export interface ApplyActionOptions {
+  /** Text typed into the value input, if any. */
+  value?: string;
+  /** Selected tree node id, for binary-tree actions. */
+  nodeId?: string | null;
+}
+
+/**
+ * Apply an edit action, returning fresh data. Returns the input unchanged
+ * when the action can't apply (empty stack, no node selected, and so on),
+ * which lets callers treat "no change" as a no-op.
+ */
+export function applyAction<T extends StructureId>(
+  type: T,
+  data: StructureData[T],
+  actionId: string,
+  opts: ApplyActionOptions = {}
+): StructureData[T] {
+  const typed = data as StructureData[StructureId];
+
+  switch (type) {
+    case "stack": {
+      const d = typed as StructureData["stack"];
+      if (actionId === "push") {
+        const value = opts.value?.trim() || nextLetter(d.items.length);
+        return { items: [...d.items, value] } as StructureData[T];
+      }
+      if (actionId === "pop" && d.items.length > 0) {
+        return { items: d.items.slice(0, -1) } as StructureData[T];
+      }
+      return data;
+    }
+    case "queue": {
+      const d = typed as StructureData["queue"];
+      if (actionId === "enqueue") {
+        const value = opts.value?.trim() || String(d.values.length * 10 + 10);
+        return { values: [...d.values, value] } as StructureData[T];
+      }
+      if (actionId === "dequeue" && d.values.length > 0) {
+        return { values: d.values.slice(1) } as StructureData[T];
+      }
+      return data;
+    }
+    case "array": {
+      const d = typed as StructureData["array"];
+      if (actionId === "append") {
+        const value = opts.value?.trim() || String(d.values.length * 7 + 5);
+        return { values: [...d.values, value] } as StructureData[T];
+      }
+      if (actionId === "pop" && d.values.length > 0) {
+        return { values: d.values.slice(0, -1) } as StructureData[T];
+      }
+      return data;
+    }
+    case "linked-list": {
+      const d = typed as StructureData["linked-list"];
+      if (actionId === "append") {
+        const value = opts.value?.trim() || nextLetter(d.values.length);
+        return { values: [...d.values, value] } as StructureData[T];
+      }
+      if (actionId === "pop" && d.values.length > 0) {
+        return { values: d.values.slice(0, -1) } as StructureData[T];
+      }
+      return data;
+    }
+    case "binary-tree": {
+      const d = typed as StructureData["binary-tree"];
+      if (!d.root) {
+        if (actionId === "add-left" || actionId === "add-right") {
+          return { root: makeTreeNode(opts.value?.trim() || "1") } as StructureData[T];
+        }
+        return data;
+      }
+      if (actionId === "add-left" || actionId === "add-right") {
+        if (!opts.nodeId) return data;
+        const side = actionId === "add-left" ? "left" : "right";
+        const next = addChildAt(d.root, opts.nodeId, side, opts.value?.trim() || "0");
+        return { root: next ?? null } as StructureData[T];
+      }
+      if (actionId === "remove-node" && opts.nodeId) {
+        return { root: removeNodeAt(d.root, opts.nodeId) ?? null } as StructureData[T];
+      }
+      return data;
+    }
+    case "graph": {
+      const d = typed as StructureData["graph"];
+      if (actionId === "add-node") {
+        const value = opts.value?.trim() || nextLetter(d.labels.length);
+        return { labels: [...d.labels, value] } as StructureData[T];
+      }
+      if (actionId === "remove-node" && d.labels.length > 0) {
+        return { labels: d.labels.slice(0, -1) } as StructureData[T];
+      }
+      return data;
+    }
+    case "table": {
+      const d = typed as StructureData["table"];
+      if (actionId === "add-row") {
+        const rows = d.rows + 1;
+        return { rows, cols: d.cols, cells: resizeCells(d.cells, rows, d.cols) } as StructureData[T];
+      }
+      if (actionId === "add-col") {
+        const cols = d.cols + 1;
+        return { rows: d.rows, cols, cells: resizeCells(d.cells, d.rows, cols) } as StructureData[T];
+      }
+      if (actionId === "remove-row" && d.rows > 1) {
+        const rows = d.rows - 1;
+        return { rows, cols: d.cols, cells: resizeCells(d.cells, rows, d.cols) } as StructureData[T];
+      }
+      if (actionId === "remove-col" && d.cols > 1) {
+        const cols = d.cols - 1;
+        return { rows: d.rows, cols, cells: resizeCells(d.cells, d.rows, cols) } as StructureData[T];
+      }
+      return data;
+    }
+    default:
+      return data;
+  }
+}
+
+function nextLetter(index: number): string {
+  return String.fromCharCode(65 + (index % 26));
+}
+
+/** Short human summary of a structure's contents, for the controls header. */
+export function describeData(type: StructureId, data: unknown): string {
+  switch (type) {
+    case "stack":
+      return `${(data as StructureData["stack"]).items.length} items`;
+    case "queue":
+      return `${(data as StructureData["queue"]).values.length} items`;
+    case "array":
+      return `${(data as StructureData["array"]).values.length} cells`;
+    case "linked-list":
+      return `${(data as StructureData["linked-list"]).values.length} nodes`;
+    case "binary-tree":
+      return `${collectNodes((data as StructureData["binary-tree"]).root).length} nodes`;
+    case "graph":
+      return `${(data as StructureData["graph"]).labels.length} nodes`;
+    case "table": {
+      const d = data as StructureData["table"];
+      return `${d.rows} \u00d7 ${d.cols}`;
+    }
+    default:
+      return "";
+  }
+}
+
+// ── Registry ──────────────────────────────────────────────────────────
 
 export interface DataStructureDef {
-  id: keyof StructureData;
+  id: StructureId;
   name: string;
   description: string;
   icon: string;
   generate: (x: number, y: number, data: unknown) => ExcalidrawElementSkeleton[];
-  defaultData: () => StructureData[keyof StructureData];
+  defaultData: () => StructureData[StructureId];
+  /**
+   * Which edge stays put when the diagram changes size. A stack should look
+   * like it grows upward from its base, everything else grows right/down
+   * from its top-left corner.
+   */
+  growthAnchor: "top-left" | "bottom-left";
 }
 
 export const DATA_STRUCTURES: DataStructureDef[] = [
@@ -514,7 +801,8 @@ export const DATA_STRUCTURES: DataStructureDef[] = [
     description: "LIFO container — push and pop from the top",
     icon: "Layers",
     generate: (x, y, data) => generateStack(x, y, data as StructureData["stack"]),
-    defaultData: () => ({ ...DEFAULT_DATA.stack }),
+    defaultData: () => ({ items: [...DEFAULT_DATA.stack.items] }),
+    growthAnchor: "bottom-left",
   },
   {
     id: "queue",
@@ -522,7 +810,8 @@ export const DATA_STRUCTURES: DataStructureDef[] = [
     description: "FIFO line — enqueue at the back, dequeue from the front",
     icon: "Rows3",
     generate: (x, y, data) => generateQueue(x, y, data as StructureData["queue"]),
-    defaultData: () => ({ ...DEFAULT_DATA.queue }),
+    defaultData: () => ({ values: [...DEFAULT_DATA.queue.values] }),
+    growthAnchor: "top-left",
   },
   {
     id: "array",
@@ -530,7 +819,8 @@ export const DATA_STRUCTURES: DataStructureDef[] = [
     description: "Fixed-size, indexed collection of elements",
     icon: "Grid3x3",
     generate: (x, y, data) => generateArray(x, y, data as StructureData["array"]),
-    defaultData: () => ({ ...DEFAULT_DATA.array }),
+    defaultData: () => ({ values: [...DEFAULT_DATA.array.values] }),
+    growthAnchor: "top-left",
   },
   {
     id: "linked-list",
@@ -538,7 +828,8 @@ export const DATA_STRUCTURES: DataStructureDef[] = [
     description: "Nodes linked in sequence, each pointing to the next",
     icon: "Link2",
     generate: (x, y, data) => generateLinkedList(x, y, data as StructureData["linked-list"]),
-    defaultData: () => ({ ...DEFAULT_DATA["linked-list"] }),
+    defaultData: () => ({ values: [...DEFAULT_DATA["linked-list"].values] }),
+    growthAnchor: "top-left",
   },
   {
     id: "binary-tree",
@@ -546,9 +837,8 @@ export const DATA_STRUCTURES: DataStructureDef[] = [
     description: "Hierarchical nodes with up to two children each",
     icon: "GitBranch",
     generate: (x, y, data) => generateBinaryTree(x, y, data as StructureData["binary-tree"]),
-    defaultData: () => ({
-      root: cloneTree(DEFAULT_DATA["binary-tree"].root!) ,
-    }),
+    defaultData: () => ({ root: cloneTree(DEFAULT_DATA["binary-tree"].root!) }),
+    growthAnchor: "top-left",
   },
   {
     id: "graph",
@@ -556,6 +846,24 @@ export const DATA_STRUCTURES: DataStructureDef[] = [
     description: "Nodes connected by edges, cycles allowed",
     icon: "Network",
     generate: (x, y, data) => generateGraph(x, y, data as StructureData["graph"]),
-    defaultData: () => ({ ...DEFAULT_DATA.graph }),
+    defaultData: () => ({ labels: [...DEFAULT_DATA.graph.labels] }),
+    growthAnchor: "top-left",
+  },
+  {
+    id: "table",
+    name: "Table",
+    description: "Editable grid drawn as real canvas cells",
+    icon: "Table",
+    generate: (x, y, data) => generateTable(x, y, data as StructureData["table"]),
+    defaultData: () => ({
+      rows: DEFAULT_DATA.table.rows,
+      cols: DEFAULT_DATA.table.cols,
+      cells: resizeCells(DEFAULT_DATA.table.cells, DEFAULT_DATA.table.rows, DEFAULT_DATA.table.cols),
+    }),
+    growthAnchor: "top-left",
   },
 ];
+
+export function findStructureDef(id: string): DataStructureDef | undefined {
+  return DATA_STRUCTURES.find((d) => d.id === id);
+}

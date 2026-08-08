@@ -1,0 +1,91 @@
+
+=== bubbleSort ===
+  steps=29 truncated=false error=none
+  stdout=["sorted: [1,3,5,8]"]
+  final vars: arr=[1,3,5,8] sorted=[1,3,5,8]
+  lines visited: 1,2,14,3,4,5,6,7,8,5,5,6,7,8,4,5,5,6,7,8,4,5,6,7,8,4,12,15,15
+  ASSERT PASS
+
+=== bracelessIf ===
+  steps=6 truncated=false error=none
+  stdout=["3 true"]
+  final vars: total=3 flag=true
+  lines visited: 1,2,3,4,5,5
+  ASSERT PASS
+
+=== tdzAndScope ===
+  steps=7 truncated=false error=none
+  stdout=["84"]
+  final vars: before=42 after=84
+  lines visited: 1,5,2,3,6,7,7
+  ASSERT PASS
+
+=== trickyLiterals ===
+  steps=8 truncated=false error=none
+  stdout=["40 a\\/b[/]"]
+  final vars: re={} s="he said { } ; //not a comment" t="tpl 1 end" obj={"a":1,"b":{"c":2}} n=40
+  lines visited: 1,2,3,4,5,6,7,7
+
+=== linkedList ===
+  steps=18 truncated=false error=none
+  stdout=["count 3"]
+  final vars: head={"v":1,"next":{"v":2,"next":{"v":3,"next":"[Circular]"}}} count=3 cur={"v":1,"next":{"v":2,"next":{"v":3,"next":"[Circular]"}}}
+  lines visited: 1,2,1,3,1,4,1,5,6,7,9,10,9,10,9,10,12,12
+
+=== classes ===
+  steps=0 truncated=false error=Syntax error: Identifier 'top' has already been declared
+  stdout=[]
+  final vars: 
+  lines visited: 
+  ASSERT FAIL
+
+=== switchAndDoWhile ===
+  steps=13 truncated=false error=none
+  stdout=["ab?"]
+  final vars: out="ab?" k=3
+  lines visited: 1,2,3,4,5,6,4,5,7,4,5,11,11
+  ASSERT FAIL
+
+=== destructuring ===
+  steps=6 truncated=false error=none
+  stdout=["33"]
+  final vars: pair=[10,20] first=10 second=20 x=1 renamed=2 sum=33
+  lines visited: 1,2,3,4,5,5
+  ASSERT PASS
+
+=== runtimeError ===
+  steps=3 truncated=false error=TypeError: Cannot read properties of null (reading 'boom')
+  stdout=[]
+  final vars: a=2
+  lines visited: 1,2,3
+
+=== infiniteLoop ===
+  steps=2500 truncated=true error=Stopped after 2500 steps — the snippet may loop forever.
+  stdout=[]
+  final vars: i=2498
+  lines visited: 1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2
+
+=== domBlocked ===
+  steps=5 truncated=false error=none
+  stdout=["undefined undefined undefined"]
+  final vars: leaked="undefined"
+  lines visited: 1,2,2,3,3
+  ASSERT PASS (sandbox shadows DOM globals)
+
+=== asyncAwait ===
+  steps=10 truncated=false error=none
+  stdout=["result 3"]
+  final vars: result=3
+  lines visited: 1,8,9,2,3,4,5,6,10,10
+  ASSERT PASS
+
+2 ASSERTION(S) FAILED
+
+=== instrumented bracelessIf ===
+__s(1,[["total",()=>total],["flag",()=>flag],["i",()=>i]]);let total = 0;
+__s(2,[["total",()=>total],["flag",()=>flag],["i",()=>i]]);let flag = false;
+__s(3,[["total",()=>total],["flag",()=>flag],["i",()=>i]]);if (total === 0) flag = true;
+__s(4,[["total",()=>total],["flag",()=>flag],["i",()=>i]]);for (let i = 0; i < 3; i++) total += i;
+__s(5,[["total",()=>total],["flag",()=>flag],["i",()=>i]]);console.log(total, flag);
+__s(5,[["total",()=>total],["flag",()=>flag],["i",()=>i]]);
+done exit=1
