@@ -2,7 +2,7 @@
 
 A full-featured Excalidraw-style whiteboard built with **Next.js 16 + TypeScript**, wired to your own **Firebase Firestore** database — plus a built-in **code editor terminal** that runs JavaScript, Python, and HTML entirely in the browser with **zero API keys**.
 
-![Excalidraw](https://excalidraw.com/og-image.png)
+<img width="2559" height="1599" alt="image" src="https://github.com/user-attachments/assets/162684f8-a1bb-47d8-b79d-d4109e1d8109" />
 
 ## Features
 
