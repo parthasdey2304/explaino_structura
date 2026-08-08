@@ -2328,6 +2328,7 @@ canvas {
 
 .ds-card__input-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
 }
@@ -2609,139 +2610,192 @@ canvas {
   font-style: italic;
 }
 
-/* ── Table Widget (interactive HTML table on the canvas) ─────── */
-.table-widget {
-  background: var(--island-bg-color, #2a2a2a);
-  border: 1px solid var(--color-border-outline-variant, rgba(255,255,255,0.12));
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
-  user-select: none;
-  font-family: inherit;
+/* ── On-canvas data-structure editing controls ────────────────── */
+/* Anchored to the selected diagram's bounding box in screen pixels, so they
+   follow panning and zooming without scaling into illegibility. */
+
+.ds-canvas-quickadd {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--color-primary, #6965db);
+  background: var(--island-bg-color, #fff);
+  color: var(--color-primary, #6965db);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  transition: background 0.12s, transform 0.12s;
+}
+.ds-canvas-quickadd:hover {
+  background: var(--color-primary, #6965db);
+  color: #fff;
+  transform: scale(1.08);
 }
 
-.table-widget__header {
+.ds-canvas-controls {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 210px;
+  max-width: 420px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--island-bg-color, #fff);
+  border: 1px solid var(--color-border-outline-variant, rgba(0, 0, 0, 0.12));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  font-family: inherit;
+  user-select: none;
+}
+
+.ds-canvas-controls__head {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
-  cursor: grab;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-on-surface, #d4d4d4);
-  border-bottom: 1px solid var(--color-border-outline-variant, rgba(255,255,255,0.08));
-  background: var(--color-surface-high, rgba(255,255,255,0.04));
-  border-radius: 6px 6px 0 0;
 }
-.table-widget__header:active {
-  cursor: grabbing;
+.ds-canvas-controls__name {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--color-on-surface, #1e1e1e);
 }
-.table-widget__close {
+.ds-canvas-controls__count {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--color-surface-high, rgba(0, 0, 0, 0.06));
+  color: var(--color-gray-60, #888);
+}
+.ds-canvas-controls__delete {
   margin-left: auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border: none;
-  border-radius: 3px;
+  border-radius: 4px;
   background: transparent;
   color: var(--color-gray-60, #888);
   cursor: pointer;
 }
-.table-widget__close:hover {
-  background: rgba(255,255,255,0.08);
+.ds-canvas-controls__delete:hover {
+  background: rgba(224, 49, 49, 0.12);
   color: #e03131;
 }
 
-.table-widget__wrapper {
-  position: relative;
-  padding: 4px;
+.ds-canvas-controls__nodes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+}
+.ds-canvas-controls__hint {
+  font-size: 10px;
+  color: var(--color-gray-60, #888);
+  margin-right: 2px;
+}
+.ds-canvas-controls__pill {
+  height: 20px;
+  padding: 0 7px;
+  font-size: 10.5px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border-outline-variant, rgba(0, 0, 0, 0.14));
+  background: transparent;
+  color: var(--color-on-surface, #1e1e1e);
+  cursor: pointer;
+}
+.ds-canvas-controls__pill:hover {
+  background: var(--color-surface-high, rgba(0, 0, 0, 0.06));
+}
+.ds-canvas-controls__pill--active {
+  background: var(--color-primary, #6965db);
+  border-color: var(--color-primary, #6965db);
+  color: #fff;
 }
 
-.table-widget__grid {
+.ds-canvas-controls__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+.ds-canvas-controls__input {
+  flex: 1 1 62px;
+  min-width: 62px;
+  height: 24px;
+  padding: 0 7px;
+  font-size: 11.5px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border-outline-variant, rgba(0, 0, 0, 0.16));
+  background: var(--color-surface-low, #fff);
+  color: var(--color-on-surface, #1e1e1e);
+  outline: none;
+}
+.ds-canvas-controls__input:focus {
+  border-color: var(--color-primary, #6965db);
+}
+
+.ds-canvas-controls__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.ds-canvas-controls__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.ds-canvas-controls__btn--add {
+  background: var(--color-primary, #6965db);
+  color: #fff;
+}
+.ds-canvas-controls__btn--add:not(:disabled):hover {
+  background: #5854c7;
+}
+.ds-canvas-controls__btn--remove {
+  background: var(--color-surface-high, rgba(0, 0, 0, 0.06));
+  color: var(--color-on-surface, #1e1e1e);
+}
+.ds-canvas-controls__btn--remove:not(:disabled):hover {
+  background: rgba(224, 49, 49, 0.14);
+  color: #e03131;
+}
+
+/* ── Table preview (Data Structures panel) ────────────────────── */
+.ds-preview__table {
   display: flex;
   flex-direction: column;
   border: 1.5px solid var(--color-on-surface, #d4d4d4);
   border-radius: 3px;
   overflow: hidden;
 }
-.table-widget__row {
+.ds-preview__table-row {
   display: flex;
 }
-.table-widget__row:not(:last-child) {
-  border-bottom: 1px solid var(--color-border-outline-variant, rgba(255,255,255,0.15));
+.ds-preview__table-row:not(:last-child) {
+  border-bottom: 1px solid var(--color-border-outline-variant, rgba(255, 255, 255, 0.15));
 }
-.table-widget__cell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 4px;
-  border-right: 1px solid var(--color-border-outline-variant, rgba(255,255,255,0.1));
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  pointer-events: none;
+.ds-preview__table-cell {
+  width: 26px;
+  height: 14px;
 }
-.table-widget__cell:last-child {
-  border-right: none;
+.ds-preview__table-cell:not(:last-child) {
+  border-right: 1px solid var(--color-border-outline-variant, rgba(255, 255, 255, 0.15));
 }
-.table-widget__cell-text {
-  pointer-events: none;
-}
-
-/* Invisible activation overlay for inactive table */
-.table-widget__overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: auto;
-  cursor: pointer;
-  z-index: 5;
-}
-.table-widget__cell-text {
-  font-size: 11px;
-  color: var(--color-on-surface, #d4d4d4);
-  pointer-events: none;
-}
-.table-widget__cell-input {
-  width: 100%;
-  height: 100%;
-  border: none;
-  background: var(--color-surface-primary-container, rgba(100,100,255,0.15));
-  color: var(--color-on-surface, #d4d4d4);
-  font-size: 11px;
-  text-align: center;
-  outline: none;
-}
-
-.table-widget__add-row,
-.table-widget__add-col {
-  position: absolute;
-  z-index: 2;
-}
-.table-widget__add-row {
-  display: flex;
-  flex-direction: column;
-}
-.table-widget__add-col {
-  display: flex;
-}
-
-.table-widget__plus {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border: 1px dashed var(--color-primary, #6965db);
-  border-radius: 3px;
-  background: var(--island-bg-color, #2a2a2a);
-  color: var(--color-primary, #6965db);
-  cursor: pointer;
-  transition: background 0.12s;
-}
-.table-widget__plus:hover {
-  background: rgba(105,101,219,0.15);
+.ds-preview__table-size {
+  font-size: 10px;
+  color: var(--color-gray-60, #888);
+  margin-left: 6px;
 }

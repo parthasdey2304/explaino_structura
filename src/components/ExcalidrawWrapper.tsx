@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
   Excalidraw,
@@ -22,19 +22,125 @@ import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { saveDrawing, loadDrawing } from "@/lib/firestore";
 import CodeEditorPanel from "./CodeEditorPanel";
 import DataStructuresPanel from "./DataStructuresPanel";
-import TableWidget from "./TableWidget";
-import { DATA_STRUCTURES, type DataStructureDef } from "@/lib/dataStructures";
+import CanvasStructureControls, { type ViewportBox } from "./CanvasStructureControls";
+import {
+  DATA_STRUCTURES,
+  applyAction,
+  findStructureDef,
+  valueCarrier,
+  writeSlots,
+  type AnyStructureData,
+  type ApplyActionOptions,
+  type DataStructureDef,
+  type StructureId,
+} from "@/lib/dataStructures";
 import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3 } from "lucide-react";
 
-interface TableWidgetState {
-  id: string;
-  sceneX: number;
-  sceneY: number;
-  rows: number;
-  cols: number;
+/**
+ * Metadata attached to every element of an inserted diagram via Excalidraw's
+ * `customData`, which round-trips through the scene's JSON. It's what lets
+ * the on-canvas controls know "this selection is a stack holding [A,B,C]"
+ * and regenerate the drawing from fresh data.
+ */
+interface DSMeta {
+  instanceId: string;
+  type: StructureId;
+  data: unknown;
+  /** Scene position the diagram was last generated at. */
+  anchor: { x: number; y: number };
 }
 
-let _tableIdCounter = 0;
+interface SceneBox {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+interface SelectedInstance {
+  meta: DSMeta;
+  box: SceneBox;
+}
+
+let _dsInstanceCounter = 0;
+
+function readMeta(el: ExcalidrawElement): DSMeta | null {
+  const customData = (el as unknown as { customData?: Record<string, unknown> }).customData;
+  const ds = customData?.ds as DSMeta | undefined;
+  if (!ds || typeof ds.instanceId !== "string" || typeof ds.type !== "string") return null;
+  if (!ds.anchor || typeof ds.anchor.x !== "number") return null;
+  return ds;
+}
+
+/** Tag a freshly generated diagram so it reads as one editable unit. */
+function stampInstance(elements: readonly ExcalidrawElement[], meta: DSMeta): void {
+  for (const raw of elements) {
+    const el = raw as unknown as {
+      customData?: Record<string, unknown>;
+      groupIds?: string[];
+      containerId?: string | null;
+    };
+    el.customData = { ...(el.customData ?? {}), ds: meta };
+    // Bound labels belong to their container, not to the group.
+    if (!el.containerId) {
+      el.groupIds = [meta.instanceId];
+    }
+  }
+}
+
+function boxOf(elements: readonly ExcalidrawElement[]): SceneBox {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const el of elements) {
+    const w = el.width ?? 0;
+    const h = el.height ?? 0;
+    if (el.x < minX) minX = el.x;
+    if (el.y < minY) minY = el.y;
+    if (el.x + w > maxX) maxX = el.x + w;
+    if (el.y + h > maxY) maxY = el.y + h;
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+/** Text a user typed into a labelled shape, via its bound text element. */
+function readLabel(
+  el: ExcalidrawElement,
+  byId: Map<string, ExcalidrawElement>
+): string {
+  const bound = (el as unknown as {
+    boundElements?: readonly { id: string; type: string }[] | null;
+  }).boundElements;
+  const ref = bound?.find((b) => b.type === "text");
+  if (!ref) return "";
+  const textEl = byId.get(ref.id) as unknown as { text?: string } | undefined;
+  return typeof textEl?.text === "string" ? textEl.text : "";
+}
+
+/**
+ * Read a diagram's current labels off the canvas, in generator order, so
+ * inline edits survive the next regeneration.
+ */
+function harvestLabels(
+  type: StructureId,
+  members: readonly ExcalidrawElement[],
+  byId: Map<string, ExcalidrawElement>
+): string[] | null {
+  const carrier = valueCarrier(type);
+  if (!carrier) return null;
+  return members.filter((el) => el.type === carrier).map((el) => readLabel(el, byId));
+}
+
+function sameBox(a: SceneBox | null, b: SceneBox | null): boolean {
+  if (!a || !b) return a === b;
+  return (
+    Math.round(a.minX) === Math.round(b.minX) &&
+    Math.round(a.minY) === Math.round(b.minY) &&
+    Math.round(a.maxX) === Math.round(b.maxX) &&
+    Math.round(a.maxY) === Math.round(b.maxY)
+  );
+}
 
 // Dynamically import the heavy Excalidraw component client-side only
 const ExcalidrawComponent = dynamic(
@@ -170,8 +276,8 @@ export default function ExcalidrawWrapper() {
   const [saveStatus, setSaveStatus] = useState<string>("");
   const [initialData, setInitialData] = useState<ExcalidrawInitialDataState | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [tableWidgets, setTableWidgets] = useState<TableWidgetState[]>([]);
-  const [activeTableId, setActiveTableId] = useState<string | null>(null);
+  const [selectedInstance, setSelectedInstance] = useState<SelectedInstance | null>(null);
+  const selectedInstanceRef = useRef<SelectedInstance | null>(null);
   const [viewport, setViewport] = useState<{ zoom: Zoom; offsetLeft: number; offsetTop: number; scrollX: number; scrollY: number }>({
     zoom: { value: 1 as unknown as Zoom["value"] },
     offsetLeft: 0,
@@ -230,6 +336,44 @@ export default function ExcalidrawWrapper() {
         setViewport(next);
       }
 
+      // Track which data-structure diagram (if any) is selected, so its
+      // on-canvas controls can be anchored to it. Guarded against no-op
+      // updates because onChange fires on every pointer move.
+      let hit: DSMeta | null = null;
+      for (const el of elements) {
+        if (el.isDeleted || !appState.selectedElementIds[el.id]) continue;
+        const meta = readMeta(el);
+        if (meta) {
+          hit = meta;
+          break;
+        }
+      }
+
+      const prev = selectedInstanceRef.current;
+      if (!hit) {
+        if (prev) {
+          selectedInstanceRef.current = null;
+          setSelectedInstance(null);
+        }
+      } else {
+        // Bound to a const so it stays narrowed inside the filter closure.
+        const found = hit;
+        const members = elements.filter(
+          (el) => !el.isDeleted && readMeta(el)?.instanceId === found.instanceId
+        );
+        const box = boxOf(members);
+        if (
+          !prev ||
+          prev.meta.instanceId !== found.instanceId ||
+          prev.meta.data !== found.data ||
+          !sameBox(prev.box, box)
+        ) {
+          const next: SelectedInstance = { meta: found, box };
+          selectedInstanceRef.current = next;
+          setSelectedInstance(next);
+        }
+      }
+
       // Close code panel / data structures panel if Excalidraw library opens
       if ((appState as unknown as Record<string, unknown>).showLibrary) {
         if (showCodePanelRef.current) {
@@ -270,7 +414,10 @@ export default function ExcalidrawWrapper() {
         saveDrawing(
           drawingIdRef.current,
           {
-            elements: scene.elements as unknown as unknown[],
+            // Elements now carry diagram metadata in `customData`, so they
+            // go through the same sanitizer as appState: Firestore rejects
+            // `undefined` anywhere in the payload.
+            elements: sanitizeForFirestore(scene.elements) as unknown[],
             appState: sanitizeForFirestore(
               scene.appState
             ) as Record<string, unknown>,
@@ -376,7 +523,7 @@ export default function ExcalidrawWrapper() {
       const id = await saveDrawing(
         drawingIdRef.current,
         {
-          elements: scene.elements as unknown as unknown[],
+          elements: sanitizeForFirestore(scene.elements) as unknown[],
           appState: sanitizeForFirestore(
             scene.appState
           ) as Record<string, unknown>,
@@ -494,8 +641,28 @@ export default function ExcalidrawWrapper() {
         const newElements = normalizeLinearElements(
           convertToExcalidrawElements(skeleton)
         );
+        const meta: DSMeta = {
+          instanceId: `ds-${Date.now().toString(36)}-${++_dsInstanceCounter}`,
+          type: def.id,
+          data,
+          anchor: { x: sceneX, y: sceneY },
+        };
+        stampInstance(newElements, meta);
+
+        // Select the new diagram so its editing controls appear right away.
+        const selectedElementIds: Record<string, true> = {};
+        for (const el of newElements) {
+          if (!(el as { containerId?: string | null }).containerId) {
+            selectedElementIds[el.id] = true;
+          }
+        }
+
         api.updateScene({
           elements: [...api.getSceneElements(), ...newElements],
+          appState: {
+            selectedElementIds,
+            selectedGroupIds: { [meta.instanceId]: true },
+          } as unknown as AppState,
           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
         });
         api.scrollToContent(newElements, { fitToContent: false });
@@ -505,6 +672,118 @@ export default function ExcalidrawWrapper() {
     },
     []
   );
+
+  /**
+   * Re-draw a diagram from changed data, keeping it where the user put it.
+   *
+   * The stored anchor is where the diagram was last generated, but the user
+   * may have dragged it since. Comparing a baseline re-generation at that
+   * anchor against the elements actually on the canvas recovers the drag
+   * offset, so edits never teleport the drawing back to its origin.
+   */
+  const applyStructureAction = useCallback(
+    (actionId: string, opts: ApplyActionOptions) => {
+      const api = excalidrawAPI.current;
+      const selected = selectedInstanceRef.current;
+      if (!api || !selected) return;
+
+      const { meta } = selected;
+      const def = findStructureDef(meta.type);
+      if (!def) return;
+
+      const all = api.getSceneElements();
+      const mine = all.filter((el) => readMeta(el)?.instanceId === meta.instanceId);
+      if (mine.length === 0) return;
+
+      // Pick up any text the user typed straight into the shapes before
+      // redrawing, otherwise the redraw would throw those edits away.
+      const byId = new Map(all.map((el) => [el.id, el] as const));
+      const labels = harvestLabels(meta.type, mine, byId);
+      const currentData = labels
+        ? writeSlots(meta.type, meta.data as AnyStructureData, labels)
+        : (meta.data as AnyStructureData);
+
+      const nextData = applyAction(meta.type, currentData, actionId, opts);
+      // `applyAction` hands back the same object when the edit can't apply
+      // (popping an empty stack, no tree node chosen, and so on).
+      if (nextData === currentData) return;
+
+      try {
+        const baseline = convertToExcalidrawElements(
+          def.generate(meta.anchor.x, meta.anchor.y, meta.data)
+        );
+        const baseBox = boxOf(baseline);
+        const liveBox = boxOf(mine);
+
+        let anchorX = meta.anchor.x + (liveBox.minX - baseBox.minX);
+        let anchorY = meta.anchor.y + (liveBox.minY - baseBox.minY);
+
+        let fresh = normalizeLinearElements(
+          convertToExcalidrawElements(def.generate(anchorX, anchorY, nextData))
+        );
+
+        if (def.growthAnchor === "bottom-left") {
+          // A stack should look like it grows upward from a fixed base, so
+          // pin the bottom edge instead of the top.
+          const freshBox = boxOf(fresh);
+          const dy = liveBox.maxY - freshBox.maxY;
+          if (Math.abs(dy) > 0.5) {
+            anchorY += dy;
+            fresh = normalizeLinearElements(
+              convertToExcalidrawElements(def.generate(anchorX, anchorY, nextData))
+            );
+          }
+        }
+
+        const nextMeta: DSMeta = {
+          instanceId: meta.instanceId,
+          type: meta.type,
+          data: nextData,
+          anchor: { x: anchorX, y: anchorY },
+        };
+        stampInstance(fresh, nextMeta);
+
+        const replacedIds = new Set(mine.map((el) => el.id));
+        const selectedElementIds: Record<string, true> = {};
+        for (const el of fresh) {
+          if (!(el as { containerId?: string | null }).containerId) {
+            selectedElementIds[el.id] = true;
+          }
+        }
+
+        api.updateScene({
+          elements: [...all.filter((el) => !replacedIds.has(el.id)), ...fresh],
+          appState: {
+            selectedElementIds,
+            selectedGroupIds: { [meta.instanceId]: true },
+          } as unknown as AppState,
+          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+        });
+
+        const nextSelected: SelectedInstance = { meta: nextMeta, box: boxOf(fresh) };
+        selectedInstanceRef.current = nextSelected;
+        setSelectedInstance(nextSelected);
+      } catch (err) {
+        console.warn(`Failed to update ${def.name}:`, err);
+      }
+    },
+    []
+  );
+
+  const removeStructure = useCallback(() => {
+    const api = excalidrawAPI.current;
+    const selected = selectedInstanceRef.current;
+    if (!api || !selected) return;
+    const { instanceId } = selected.meta;
+    api.updateScene({
+      elements: api
+        .getSceneElements()
+        .filter((el) => readMeta(el)?.instanceId !== instanceId),
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+    selectedInstanceRef.current = null;
+    setSelectedInstance(null);
+  }, []);
 
   // --- Click-to-insert fallback: places the diagram near the viewport center
   const handleInsertDataStructure = useCallback(
@@ -527,51 +806,12 @@ export default function ExcalidrawWrapper() {
     [insertDataStructure]
   );
 
-  // --- Insert table widget at center of viewport
+  // --- Insert a table. It's an ordinary data-structure diagram now: real
+  // canvas cells that drag, scale, undo and save like anything else drawn.
   const handleInsertTable = useCallback(() => {
-    const api = excalidrawAPI.current;
-    if (!api) return;
-    const appState = api.getAppState();
-    const { x, y } = viewportCoordsToSceneCoords(
-      { clientX: appState.width / 2, clientY: appState.height / 2 },
-      {
-        zoom: appState.zoom,
-        offsetLeft: appState.offsetLeft,
-        offsetTop: appState.offsetTop,
-        scrollX: appState.scrollX,
-        scrollY: appState.scrollY,
-      }
-    );
-    const newTable: TableWidgetState = {
-      id: `table-${++_tableIdCounter}`,
-      sceneX: x,
-      sceneY: y,
-      rows: 3,
-      cols: 3,
-    };
-    setTableWidgets((prev) => [...prev, newTable]);
-  }, []);
-
-  const handleMoveTable = useCallback((id: string, sceneX: number, sceneY: number) => {
-    setTableWidgets((prev) => prev.map((t) => (t.id === id ? { ...t, sceneX, sceneY } : t)));
-  }, []);
-
-  const handleResizeTable = useCallback((id: string, rows: number, cols: number) => {
-    setTableWidgets((prev) => prev.map((t) => (t.id === id ? { ...t, rows, cols } : t)));
-  }, []);
-
-  const handleCloseTable = useCallback((id: string) => {
-    setTableWidgets((prev) => prev.filter((t) => t.id !== id));
-    setActiveTableId((prev) => (prev === id ? null : prev));
-  }, []);
-
-  const handleActivateTable = useCallback((id: string) => {
-    setActiveTableId(id);
-  }, []);
-
-  const handleCanvasClick = useCallback(() => {
-    setActiveTableId(null);
-  }, []);
+    const def = findStructureDef("table");
+    if (def) handleInsertDataStructure(def, def.defaultData());
+  }, [handleInsertDataStructure]);
 
 
 
@@ -607,6 +847,28 @@ export default function ExcalidrawWrapper() {
     [insertDataStructure]
   );
 
+  // Scene-space box of the selected diagram, projected into screen pixels so
+  // the controls track the shape through panning and zooming.
+  const structureControlsBox = useMemo<ViewportBox | null>(() => {
+    if (!selectedInstance) return null;
+    const { minX, minY, maxX, maxY } = selectedInstance.box;
+    if (!Number.isFinite(minX) || !Number.isFinite(maxX)) return null;
+    const topLeft = sceneCoordsToViewportCoords(
+      { sceneX: minX, sceneY: minY },
+      viewport
+    );
+    const bottomRight = sceneCoordsToViewportCoords(
+      { sceneX: maxX, sceneY: maxY },
+      viewport
+    );
+    return {
+      left: topLeft.x,
+      top: topLeft.y,
+      right: bottomRight.x,
+      bottom: bottomRight.y,
+    };
+  }, [selectedInstance, viewport]);
+
   return (
     <div className="w-full h-screen overflow-hidden relative" style={{ fontFamily: "var(--ui-font, 'Assistant', sans-serif)" }}>
       {!loaded || initialData === null ? (
@@ -618,7 +880,6 @@ export default function ExcalidrawWrapper() {
         className="w-full h-full"
         onDragOver={handleCanvasDragOver}
         onDrop={handleCanvasDrop}
-        onClick={handleCanvasClick}
       >
       <ExcalidrawComponent
         excalidrawAPI={(api) => {
@@ -758,31 +1019,20 @@ export default function ExcalidrawWrapper() {
         <DataStructuresPanel
           onClose={() => setShowDataStructuresPanel(false)}
           onInsert={handleInsertDataStructure}
-          onInsertTable={() => {
-            setShowDataStructuresPanel(false);
-            handleInsertTable();
-          }}
         />
       )}
 
-      {/* Table Widgets (interactive HTML tables on the canvas) */}
-      {tableWidgets.map((t) => (
-        <TableWidget
-          key={t.id}
-          id={t.id}
-          sceneX={t.sceneX}
-          sceneY={t.sceneY}
-          rows={t.rows}
-          cols={t.cols}
-          viewport={viewport}
-          isActive={activeTableId === t.id}
-          onActivate={handleActivateTable}
-          onDeactivate={() => setActiveTableId(null)}
-          onMove={handleMoveTable}
-          onResize={handleResizeTable}
-          onClose={handleCloseTable}
+      {/* Editing controls for the selected diagram, floating just outside it */}
+      {selectedInstance && structureControlsBox && (
+        <CanvasStructureControls
+          instanceId={selectedInstance.meta.instanceId}
+          type={selectedInstance.meta.type}
+          data={selectedInstance.meta.data}
+          box={structureControlsBox}
+          onAction={applyStructureAction}
+          onRemove={removeStructure}
         />
-      ))}
+      )}
 
       {saveStatus && (
         <div

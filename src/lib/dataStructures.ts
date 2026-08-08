@@ -160,17 +160,36 @@ export interface TreeNode {
 }
 
 let _nodeCounter = 0;
+
+/**
+ * Build a tree node, omitting absent children rather than storing explicit
+ * `undefined`. Diagram data rides along in each element's `customData` and
+ * gets written to Firestore, which rejects `undefined` values outright.
+ */
 export function makeTreeNode(value: string, left?: TreeNode, right?: TreeNode): TreeNode {
-  return { id: `n${_nodeCounter++}`, value, left, right };
+  const node: TreeNode = { id: `n${_nodeCounter++}`, value };
+  if (left) node.left = left;
+  if (right) node.right = right;
+  return node;
 }
 
 export function cloneTree(node: TreeNode): TreeNode {
-  return {
-    id: node.id,
-    value: node.value,
-    left: node.left ? cloneTree(node.left) : undefined,
-    right: node.right ? cloneTree(node.right) : undefined,
-  };
+  const copy: TreeNode = { id: node.id, value: node.value };
+  if (node.left) copy.left = cloneTree(node.left);
+  if (node.right) copy.right = cloneTree(node.right);
+  return copy;
+}
+
+/** Rebuild a node with new children, dropping the keys that are empty. */
+function withChildren(
+  node: TreeNode,
+  left: TreeNode | undefined,
+  right: TreeNode | undefined
+): TreeNode {
+  const next: TreeNode = { id: node.id, value: node.value };
+  if (left) next.left = left;
+  if (right) next.right = right;
+  return next;
 }
 
 export interface StructureData {
@@ -547,24 +566,23 @@ export function addChildAt(
 ): TreeNode | undefined {
   if (!root) return undefined;
   if (root.id === parentId) {
-    return { ...root, [side]: makeTreeNode(value) };
+    const child = makeTreeNode(value);
+    return side === "left"
+      ? withChildren(root, child, root.right)
+      : withChildren(root, root.left, child);
   }
-  return {
-    ...root,
-    left: addChildAt(root.left, parentId, side, value),
-    right: addChildAt(root.right, parentId, side, value),
-  };
+  return withChildren(
+    root,
+    addChildAt(root.left, parentId, side, value),
+    addChildAt(root.right, parentId, side, value)
+  );
 }
 
 /** Remove a node and its subtree. Returns undefined when the root is removed. */
 export function removeNodeAt(root: TreeNode | undefined, id: string): TreeNode | undefined {
   if (!root) return undefined;
   if (root.id === id) return undefined;
-  return {
-    ...root,
-    left: removeNodeAt(root.left, id),
-    right: removeNodeAt(root.right, id),
-  };
+  return withChildren(root, removeNodeAt(root.left, id), removeNodeAt(root.right, id));
 }
 
 // ── Shared edit actions ───────────────────────────────────────────────
@@ -636,111 +654,113 @@ export interface ApplyActionOptions {
   nodeId?: string | null;
 }
 
+/** Any structure's data, before it's narrowed to a specific kind. */
+export type AnyStructureData = StructureData[StructureId];
+
 /**
- * Apply an edit action, returning fresh data. Returns the input unchanged
- * when the action can't apply (empty stack, no node selected, and so on),
- * which lets callers treat "no change" as a no-op.
+ * Apply an edit action, returning fresh data. Returns the *same object* when
+ * the action can't apply (popping an empty stack, adding a child with no node
+ * selected, and so on), so callers can treat reference equality as "nothing
+ * changed" and skip the redraw.
+ *
+ * Intentionally not generic: a generic return type would force every branch
+ * through an unsound `as StructureData[T]` cast.
  */
-export function applyAction<T extends StructureId>(
-  type: T,
-  data: StructureData[T],
+export function applyAction(
+  type: StructureId,
+  data: AnyStructureData,
   actionId: string,
   opts: ApplyActionOptions = {}
-): StructureData[T] {
-  const typed = data as StructureData[StructureId];
-
+): AnyStructureData {
   switch (type) {
     case "stack": {
-      const d = typed as StructureData["stack"];
+      const d = data as StructureData["stack"];
       if (actionId === "push") {
-        const value = opts.value?.trim() || nextLetter(d.items.length);
-        return { items: [...d.items, value] } as StructureData[T];
+        return { items: [...d.items, opts.value?.trim() || nextLetter(d.items.length)] };
       }
       if (actionId === "pop" && d.items.length > 0) {
-        return { items: d.items.slice(0, -1) } as StructureData[T];
+        return { items: d.items.slice(0, -1) };
       }
       return data;
     }
     case "queue": {
-      const d = typed as StructureData["queue"];
+      const d = data as StructureData["queue"];
       if (actionId === "enqueue") {
-        const value = opts.value?.trim() || String(d.values.length * 10 + 10);
-        return { values: [...d.values, value] } as StructureData[T];
+        return {
+          values: [...d.values, opts.value?.trim() || String(d.values.length * 10 + 10)],
+        };
       }
       if (actionId === "dequeue" && d.values.length > 0) {
-        return { values: d.values.slice(1) } as StructureData[T];
+        return { values: d.values.slice(1) };
       }
       return data;
     }
     case "array": {
-      const d = typed as StructureData["array"];
+      const d = data as StructureData["array"];
       if (actionId === "append") {
-        const value = opts.value?.trim() || String(d.values.length * 7 + 5);
-        return { values: [...d.values, value] } as StructureData[T];
+        return {
+          values: [...d.values, opts.value?.trim() || String(d.values.length * 7 + 5)],
+        };
       }
       if (actionId === "pop" && d.values.length > 0) {
-        return { values: d.values.slice(0, -1) } as StructureData[T];
+        return { values: d.values.slice(0, -1) };
       }
       return data;
     }
     case "linked-list": {
-      const d = typed as StructureData["linked-list"];
+      const d = data as StructureData["linked-list"];
       if (actionId === "append") {
-        const value = opts.value?.trim() || nextLetter(d.values.length);
-        return { values: [...d.values, value] } as StructureData[T];
+        return { values: [...d.values, opts.value?.trim() || nextLetter(d.values.length)] };
       }
       if (actionId === "pop" && d.values.length > 0) {
-        return { values: d.values.slice(0, -1) } as StructureData[T];
+        return { values: d.values.slice(0, -1) };
       }
       return data;
     }
     case "binary-tree": {
-      const d = typed as StructureData["binary-tree"];
+      const d = data as StructureData["binary-tree"];
+      const isAdd = actionId === "add-left" || actionId === "add-right";
       if (!d.root) {
-        if (actionId === "add-left" || actionId === "add-right") {
-          return { root: makeTreeNode(opts.value?.trim() || "1") } as StructureData[T];
-        }
-        return data;
+        // First click on an empty tree plants the root.
+        return isAdd ? { root: makeTreeNode(opts.value?.trim() || "1") } : data;
       }
-      if (actionId === "add-left" || actionId === "add-right") {
+      if (isAdd) {
         if (!opts.nodeId) return data;
         const side = actionId === "add-left" ? "left" : "right";
-        const next = addChildAt(d.root, opts.nodeId, side, opts.value?.trim() || "0");
-        return { root: next ?? null } as StructureData[T];
+        return { root: addChildAt(d.root, opts.nodeId, side, opts.value?.trim() || "0") ?? null };
       }
       if (actionId === "remove-node" && opts.nodeId) {
-        return { root: removeNodeAt(d.root, opts.nodeId) ?? null } as StructureData[T];
+        return { root: removeNodeAt(d.root, opts.nodeId) ?? null };
       }
       return data;
     }
     case "graph": {
-      const d = typed as StructureData["graph"];
+      const d = data as StructureData["graph"];
       if (actionId === "add-node") {
-        const value = opts.value?.trim() || nextLetter(d.labels.length);
-        return { labels: [...d.labels, value] } as StructureData[T];
+        return { labels: [...d.labels, opts.value?.trim() || nextLetter(d.labels.length)] };
       }
       if (actionId === "remove-node" && d.labels.length > 0) {
-        return { labels: d.labels.slice(0, -1) } as StructureData[T];
+        return { labels: d.labels.slice(0, -1) };
       }
       return data;
     }
     case "table": {
-      const d = typed as StructureData["table"];
+      const d = data as StructureData["table"];
       if (actionId === "add-row") {
         const rows = d.rows + 1;
-        return { rows, cols: d.cols, cells: resizeCells(d.cells, rows, d.cols) } as StructureData[T];
+        return { rows, cols: d.cols, cells: resizeCells(d.cells, rows, d.cols) };
       }
       if (actionId === "add-col") {
         const cols = d.cols + 1;
-        return { rows: d.rows, cols, cells: resizeCells(d.cells, d.rows, cols) } as StructureData[T];
+        return { rows: d.rows, cols, cells: resizeCells(d.cells, d.rows, cols) };
       }
       if (actionId === "remove-row" && d.rows > 1) {
         const rows = d.rows - 1;
-        return { rows, cols: d.cols, cells: resizeCells(d.cells, rows, d.cols) } as StructureData[T];
+        return { rows, cols: d.cols, cells: resizeCells(d.cells, rows, d.cols) };
       }
       if (actionId === "remove-col" && d.cols > 1) {
         const cols = d.cols - 1;
-        return { rows: d.rows, cols, cells: resizeCells(d.cells, d.rows, cols) } as StructureData[T];
+        return { rows: d.rows, cols, cells: resizeCells(d.cells, d.rows, cols) };
       }
       return data;
     }
@@ -751,6 +771,94 @@ export function applyAction<T extends StructureId>(
 
 function nextLetter(index: number): string {
   return String.fromCharCode(65 + (index % 26));
+}
+
+// ── Reading canvas edits back into the data ───────────────────────────
+// Diagram values are drawn as labelled shapes, and Excalidraw lets the user
+// double-click any of them and retype. Regenerating from stale stored data
+// would silently discard those edits, so before every redraw the labels are
+// read off the canvas and merged back in.
+
+/**
+ * Which element type carries this structure's editable values, in the order
+ * the generator emits them. `null` means the values aren't in labelled
+ * containers, so there's nothing to read back.
+ */
+export function valueCarrier(type: StructureId): "rectangle" | "ellipse" | null {
+  switch (type) {
+    case "stack":
+    case "array":
+    case "linked-list":
+    case "table":
+      return "rectangle";
+    case "graph":
+    case "binary-tree":
+      return "ellipse";
+    default:
+      // A queue draws its values as bare text, not labelled cells.
+      return null;
+  }
+}
+
+/** Replace a node's value by pre-order position, matching the draw order. */
+function writeTreeValues(node: TreeNode, values: string[], cursor: { i: number }): TreeNode {
+  const value = values[cursor.i++] ?? node.value;
+  const next: TreeNode = { id: node.id, value };
+  if (node.left) next.left = writeTreeValues(node.left, values, cursor);
+  if (node.right) next.right = writeTreeValues(node.right, values, cursor);
+  return next;
+}
+
+/**
+ * Merge canvas-edited labels back into a structure's data. `values` must be
+ * in generator order. Returns the same object when nothing changed.
+ */
+export function writeSlots(
+  type: StructureId,
+  data: AnyStructureData,
+  values: string[]
+): AnyStructureData {
+  switch (type) {
+    case "stack": {
+      const d = data as StructureData["stack"];
+      if (values.length !== d.items.length) return data;
+      if (values.every((v, i) => v === d.items[i])) return data;
+      return { items: values };
+    }
+    case "array":
+    case "linked-list": {
+      const d = data as StructureData["array"];
+      if (values.length !== d.values.length) return data;
+      if (values.every((v, i) => v === d.values[i])) return data;
+      return { values };
+    }
+    case "graph": {
+      const d = data as StructureData["graph"];
+      if (values.length !== d.labels.length) return data;
+      if (values.every((v, i) => v === d.labels[i])) return data;
+      return { labels: values };
+    }
+    case "binary-tree": {
+      const d = data as StructureData["binary-tree"];
+      if (!d.root) return data;
+      const nodes = collectNodes(d.root);
+      if (values.length !== nodes.length) return data;
+      if (values.every((v, i) => v === nodes[i].value)) return data;
+      return { root: writeTreeValues(d.root, values, { i: 0 }) };
+    }
+    case "table": {
+      const d = data as StructureData["table"];
+      if (values.length !== d.rows * d.cols) return data;
+      const cells = Array.from({ length: d.rows }, (_, r) =>
+        Array.from({ length: d.cols }, (_, c) => values[r * d.cols + c] ?? "")
+      );
+      const unchanged = cells.every((row, r) => row.every((v, c) => v === (d.cells[r]?.[c] ?? "")));
+      if (unchanged) return data;
+      return { rows: d.rows, cols: d.cols, cells };
+    }
+    default:
+      return data;
+  }
 }
 
 /** Short human summary of a structure's contents, for the controls header. */
