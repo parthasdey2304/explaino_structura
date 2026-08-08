@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { ExcalidrawErrorBoundary } from "@/components/ExcalidrawErrorBoundary";
 
 const ExcalidrawWrapper = dynamic(
   () => import("@/components/ExcalidrawWrapper"),
@@ -24,5 +25,9 @@ const ExcalidrawWrapper = dynamic(
 );
 
 export default function Home() {
-  return <ExcalidrawWrapper />;
+  return (
+    <ExcalidrawErrorBoundary>
+      <ExcalidrawWrapper />
+    </ExcalidrawErrorBoundary>
+  );
 }

@@ -27,8 +27,10 @@ import {
   loadWorkspace,
   saveWorkspace,
   flattenFiles,
+  flattenFilesWithPaths,
   updateFileContent,
   setFileLanguage,
+  mergeSandboxFiles,
   starterFor,
   uid,
   detectLanguage,
@@ -43,6 +45,7 @@ import FileExplorer from "./FileExplorer";
 import Terminal from "./Terminal";
 import VisualizerPanel from "./VisualizerPanel";
 import { Eye } from "lucide-react";
+import type { SandboxFileEntry } from "@/lib/terminal/service";
 
 const LANGUAGES = [
   { label: "JavaScript", value: "javascript" },
@@ -177,6 +180,55 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
   const [panelTab, setPanelTab] = useState<"output" | "terminal">("output");
   const [showVisualizer, setShowVisualizer] = useState(false);
   const [highlightedLine, setHighlightedLine] = useState<number | null>(null);
+  const [bottomHeight, setBottomHeight] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      const saved = Number(window.localStorage.getItem("explaino-panel-height"));
+      if (Number.isFinite(saved) && saved >= 120) return saved;
+    }
+    return 220;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeDragRef = useRef<{
+    pointerId: number;
+    startY: number;
+    startHeight: number;
+  } | null>(null);
+
+  // Persist the resized output panel height
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("explaino-panel-height", String(bottomHeight));
+    } catch {
+      // ignore quota errors
+    }
+  }, [bottomHeight]);
+
+  // ── Output / terminal panel resize (VS Code style) ────────────────────
+  const onResizerPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const el = e.currentTarget;
+    el.setPointerCapture(e.pointerId);
+    resizeDragRef.current = {
+      pointerId: e.pointerId,
+      startY: e.clientY,
+      startHeight: bottomHeight,
+    };
+    setIsResizing(true);
+  };
+
+  const onResizerPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = resizeDragRef.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    const delta = d.startY - e.clientY;
+    setBottomHeight(Math.min(Math.max(110, d.startHeight + delta), 900));
+  };
+
+  const onResizerPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = resizeDragRef.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    resizeDragRef.current = null;
+    setIsResizing(false);
+  };
 
   const editorHostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -186,6 +238,7 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
   const onDocChangeRef = useRef<(doc: string) => void>(() => {});
 
   const files = useMemo(() => flattenFiles(tree), [tree]);
+  const filesWithPaths = useMemo(() => flattenFilesWithPaths(tree), [tree]);
   const activeFile = useMemo(
     () => files.find((f) => f.id === activeFileId) ?? null,
     [files, activeFileId]
@@ -195,6 +248,16 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
   useEffect(() => {
     saveWorkspace(tree);
   }, [tree]);
+
+  // Files created/changed inside the sandbox terminal show up in the
+  // explorer in real time by being merged into the workspace tree.
+  const handleSandboxFilesChange = useCallback((sandboxFiles: SandboxFileEntry[]) => {
+    setWs((prev) => {
+      const nextTree = mergeSandboxFiles(prev.tree, sandboxFiles);
+      if (nextTree === prev.tree) return prev;
+      return { ...prev, tree: nextTree };
+    });
+  }, []);
 
   // ── CodeMirror wiring ──────────────────────────────────────────────────
   useEffect(() => {
@@ -384,6 +447,27 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
     return () => window.removeEventListener("keydown", handler);
   }, [runCode]);
 
+  // Ctrl+` opens the terminal panel and focuses it.
+  useEffect(() => {
+    const handler = () => {
+      setPanelTab("terminal");
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("explaino:focus-terminal-input"));
+      }, 50);
+    };
+    window.addEventListener("explaino:open-terminal", handler);
+    return () => window.removeEventListener("explaino:open-terminal", handler);
+  }, []);
+
+  // Ctrl+C opens the code editor and focuses it.
+  useEffect(() => {
+    const handler = () => {
+      viewRef.current?.focus();
+    };
+    window.addEventListener("explaino:focus-editor", handler);
+    return () => window.removeEventListener("explaino:focus-editor", handler);
+  }, []);
+
   // Listen for new file creation from welcome screen
   useEffect(() => {
     const handler = (e: CustomEvent) => {
@@ -435,17 +519,17 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
       {/* Header */}
       <div className="code-editor__header">
         <div className="code-editor__header-left">
-          <button 
-            type="button" 
-            className="tool-icon-btn" 
-            onClick={() => setIsExplorerOpen(!isExplorerOpen)} 
-            style={{ width: "24px", height: "24px", padding: 0 }}
-            title="Toggle Explorer"
+          <button
+            type="button"
+            className={`code-editor__explorer-toggle${isExplorerOpen ? " code-editor__explorer-toggle--active" : ""}`}
+            onClick={() => setIsExplorerOpen(!isExplorerOpen)}
+            title={isExplorerOpen ? "Hide Explorer" : "Show Explorer"}
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
               <line x1="9" y1="3" x2="9" y2="21" />
             </svg>
+            <span>Explorer</span>
           </button>
           <span className="code-editor__title">Code Editor</span>
           <span className="code-editor__badge">No API Key</span>
@@ -646,26 +730,36 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
               </>
             )}
 
-            {/* Output / Terminal tabs */}
-            <div className="code-editor__panel-tabs">
-              <button
-                type="button"
-                className={`code-editor__panel-tab${panelTab === "output" ? " code-editor__panel-tab--active" : ""}`}
-                onClick={() => setPanelTab("output")}
+            {/* Output / Terminal bottom panel (resizable) */}
+            <div className="code-editor__bottom" style={{ height: bottomHeight }}>
+              <div
+                className={`code-editor__resizer${isResizing ? " code-editor__resizer--active" : ""}`}
+                onPointerDown={onResizerPointerDown}
+                onPointerMove={onResizerPointerMove}
+                onPointerUp={onResizerPointerUp}
+                title="Drag to resize output panel"
               >
-                Output
-              </button>
-              <button
-                type="button"
-                className={`code-editor__panel-tab${panelTab === "terminal" ? " code-editor__panel-tab--active" : ""}`}
-                onClick={() => setPanelTab("terminal")}
-              >
-                Terminal
-              </button>
-            </div>
+                <div className="code-editor__resizer-grip" />
+              </div>
+              <div className="code-editor__panel-tabs">
+                <button
+                  type="button"
+                  className={`code-editor__panel-tab${panelTab === "output" ? " code-editor__panel-tab--active" : ""}`}
+                  onClick={() => setPanelTab("output")}
+                >
+                  Output
+                </button>
+                <button
+                  type="button"
+                  className={`code-editor__panel-tab${panelTab === "terminal" ? " code-editor__panel-tab--active" : ""}`}
+                  onClick={() => setPanelTab("terminal")}
+                >
+                  Terminal
+                </button>
+              </div>
 
-            {/* Output Panel */}
-            {panelTab === "output" && (
+              {/* Output Panel */}
+              {panelTab === "output" && (
               <div className="code-editor__output">
                 <div className="code-editor__output-header">
                   <span className="code-editor__output-label">Output</span>
@@ -708,8 +802,9 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
 
             {/* Terminal Panel */}
             {panelTab === "terminal" && (
-              <Terminal workspaceFiles={files.map((f) => ({ name: f.name, content: f.content, language: f.language }))} />
+              <Terminal workspaceFiles={filesWithPaths} onFilesChange={handleSandboxFilesChange} />
             )}
+            </div>
           </div>
         </div>
       </div>

@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import type { SandboxFileEntry } from "@/lib/terminal/service";
 
 interface TerminalProps {
-  workspaceFiles: { name: string; content: string; language: string }[];
+  workspaceFiles: { path: string; name: string; content: string; language: string }[];
+  onFilesChange?: (files: SandboxFileEntry[]) => void;
 }
 
 interface HistoryEntry {
@@ -11,7 +13,7 @@ interface HistoryEntry {
   text: string;
 }
 
-export default function Terminal({ workspaceFiles }: TerminalProps) {
+export default function Terminal({ workspaceFiles, onFilesChange }: TerminalProps) {
   const [sandboxId, setSandboxId] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [input, setInput] = useState("");
@@ -19,6 +21,9 @@ export default function Terminal({ workspaceFiles }: TerminalProps) {
   const [isConnected, setIsConnected] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const filesRef = useRef(workspaceFiles);
+  filesRef.current = workspaceFiles;
 
   const addEntry = useCallback((entry: HistoryEntry) => {
     setHistory((prev) => [...prev, entry]);
@@ -64,25 +69,46 @@ export default function Terminal({ workspaceFiles }: TerminalProps) {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync workspace files to sandbox
+  // Sync workspace files to sandbox (debounced, silent — no status spam).
   useEffect(() => {
-    if (!sandboxId || workspaceFiles.length === 0) return;
+    if (!sandboxId) return;
 
-    const syncFiles = async () => {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(async () => {
       try {
         await fetch("/api/terminal/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sandboxId, files: workspaceFiles }),
+          body: JSON.stringify({ sandboxId, files: filesRef.current }),
         });
-        addEntry({ type: "system", text: `📄 Synced ${workspaceFiles.length} file(s) to sandbox` });
       } catch {
-        // Silent fail - sandbox might be dead
+        // Silent fail — sandbox might be dead
       }
-    };
+    }, 800);
 
-    syncFiles();
-  }, [sandboxId, workspaceFiles]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    };
+  }, [sandboxId, workspaceFiles]);
+
+  // Pull the sandbox file listing back into the workspace explorer after a
+  // command, so files created in the terminal show up in real time.
+  const refreshFiles = useCallback(async () => {
+    if (!sandboxId || !onFilesChange) return;
+    try {
+      const res = await fetch("/api/terminal/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sandboxId }),
+      });
+      const data = await res.json();
+      if (Array.isArray(data.files)) {
+        onFilesChange(data.files as SandboxFileEntry[]);
+      }
+    } catch {
+      // Silent fail — non-critical
+    }
+  }, [sandboxId, onFilesChange]);
 
   const executeCommand = async (cmd: string) => {
     if (!sandboxId || !cmd.trim()) return;
@@ -119,6 +145,8 @@ export default function Terminal({ workspaceFiles }: TerminalProps) {
     } finally {
       setIsLoading(false);
       inputRef.current?.focus();
+      // Reflect any files the command created/changed into the explorer.
+      refreshFiles();
     }
   };
 
@@ -150,6 +178,15 @@ export default function Terminal({ workspaceFiles }: TerminalProps) {
       addEntry({ type: "error", text: "Reconnection failed" });
     }
   };
+
+  // Ctrl+` opens the terminal: focus the input when that shortcut fires.
+  useEffect(() => {
+    const handler = () => {
+      inputRef.current?.focus();
+    };
+    window.addEventListener("explaino:focus-terminal-input", handler);
+    return () => window.removeEventListener("explaino:focus-terminal-input", handler);
+  }, []);
 
   return (
     <div className="terminal" onClick={() => inputRef.current?.focus()}>

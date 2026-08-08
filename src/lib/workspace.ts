@@ -53,26 +53,17 @@ export function detectLanguage(fileName: string): string {
 }
 
 export const STARTER_CODE: Record<string, string> = {
-  javascript: `// JavaScript — runs in browser, no API needed
-function greet(name) {
-  return \`Hello, \${name}!\`;
+  javascript: `// JavaScript — try the Visualize button (Eye icon) to step through!
+let x = 5;
+let y = 10;
+let sum = x + y;
+let arr = [3, 1, 4, 1, 5];
+arr.sort();
+for (let i = 0; i < arr.length; i++) {
+  sum += arr[i];
 }
-
-console.log(greet("Explaino"));
-console.log("2 + 2 =", 2 + 2);
-
-// Canvas demo
-const canvas = document.getElementById("c");
-if (canvas) {
-  canvas.width = 200;
-  canvas.height = 100;
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#6965db";
-  ctx.fillRect(10, 10, 180, 80);
-  ctx.fillStyle = "#fff";
-  ctx.font = "bold 20px sans-serif";
-  ctx.fillText("Hello!", 60, 55);
-}
+let message = "Done";
+console.log(message, sum);
 `,
   python: `# Python 3 — runs via Pyodide (WebAssembly), no API needed
 def greet(name):
@@ -255,6 +246,140 @@ export function flattenFiles(tree: WorkspaceNode[]): WorkspaceFile[] {
     else files.push(...flattenFiles(n.children));
   }
   return files;
+}
+
+export interface WorkspaceFileWithPath {
+  path: string;
+  name: string;
+  language: string;
+  content: string;
+}
+
+export function flattenFilesWithPaths(
+  tree: WorkspaceNode[],
+  prefix = ""
+): WorkspaceFileWithPath[] {
+  const files: WorkspaceFileWithPath[] = [];
+  for (const n of tree) {
+    if (n.type === "file") {
+      files.push({
+        path: prefix ? `${prefix}/${n.name}` : n.name,
+        name: n.name,
+        language: n.language,
+        content: n.content,
+      });
+    } else {
+      files.push(
+        ...flattenFilesWithPaths(n.children, prefix ? `${prefix}/${n.name}` : n.name)
+      );
+    }
+  }
+  return files;
+}
+
+function findChildByName(
+  nodes: WorkspaceNode[],
+  name: string
+): WorkspaceNode | undefined {
+  return nodes.find(
+    (n) => n.name.toLowerCase() === name.toLowerCase()
+  );
+}
+
+function mergeNode(
+  tree: WorkspaceNode[],
+  sandboxNode: WorkspaceNode
+): { tree: WorkspaceNode[]; changed: boolean } {
+  const existing = findChildByName(tree, sandboxNode.name);
+
+  // Sandbox file that already exists locally → refresh its content if needed.
+  if (sandboxNode.type === "file") {
+    if (existing && existing.type === "file") {
+      if (existing.content !== sandboxNode.content) {
+        return {
+          tree: tree.map((n) =>
+            n === existing
+              ? { ...existing, content: sandboxNode.content }
+              : n
+          ),
+          changed: true,
+        };
+      }
+      return { tree, changed: false };
+    }
+    return { tree: [...tree, sandboxNode], changed: true };
+  }
+
+  // Sandbox folder.
+  if (existing && existing.type === "folder") {
+    let changed = false;
+    let children = (existing as WorkspaceFolder).children;
+    for (const child of sandboxNode.children) {
+      const res = mergeNode(children, child);
+      children = res.tree;
+      changed = changed || res.changed;
+    }
+    if (!changed) return { tree, changed: false };
+    return {
+      tree: tree.map((n) => (n === existing ? { ...existing, children } : n)),
+      changed: true,
+    };
+  }
+
+  // Folder name collides with an existing file → keep both at same level.
+  return { tree: [...tree, sandboxNode], changed: true };
+}
+
+/**
+ * Merge a flat list of sandbox file paths (relative to the workspace root)
+ * into the workspace tree. Adds new files/folders and updates content of
+ * existing same-name files. Never deletes workspace entries — local-only
+ * files are preserved and synced back to the sandbox.
+ */
+export function mergeSandboxFiles(
+  tree: WorkspaceNode[],
+  sandboxFiles: { path: string; content: string }[]
+): WorkspaceNode[] {
+  if (sandboxFiles.length === 0) return tree;
+
+  // Build a WorkspaceNode tree from the flat sandbox listing.
+  const sandboxTree: WorkspaceNode[] = [];
+  for (const file of sandboxFiles) {
+    const segments = file.path.split("/").filter(Boolean);
+    if (segments.length === 0) continue;
+    const fileName = segments[segments.length - 1];
+    const newFile: WorkspaceNode = {
+      type: "file",
+      id: uid(),
+      name: fileName,
+      language: detectLanguage(fileName),
+      content: file.content,
+    };
+
+    let level = sandboxTree;
+    for (let i = 0; i < segments.length - 1; i++) {
+      const seg = segments[i];
+      let folder = findChildByName(level, seg);
+      if (!folder || folder.type !== "folder") {
+        folder = {
+          type: "folder",
+          id: uid(),
+          name: seg,
+          children: [],
+        };
+        level.push(folder);
+      }
+      level = (folder as WorkspaceFolder).children;
+    }
+    level.push(newFile);
+  }
+
+  let result = tree;
+  for (const node of sandboxTree) {
+    const res = mergeNode(result, node);
+    result = res.tree;
+  }
+  return result;
 }
 
 export function isDuplicateName(

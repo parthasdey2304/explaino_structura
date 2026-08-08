@@ -7,6 +7,7 @@ import {
   serializeAsJSON,
   convertToExcalidrawElements,
   viewportCoordsToSceneCoords,
+  sceneCoordsToViewportCoords,
   CaptureUpdateAction,
 } from "@excalidraw/excalidraw";
 import type {
@@ -15,13 +16,25 @@ import type {
   ExcalidrawInitialDataState,
   AppState,
   ActiveTool,
+  Zoom,
 } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { saveDrawing, loadDrawing } from "@/lib/firestore";
 import CodeEditorPanel from "./CodeEditorPanel";
 import DataStructuresPanel from "./DataStructuresPanel";
+import TableWidget from "./TableWidget";
 import { DATA_STRUCTURES, type DataStructureDef } from "@/lib/dataStructures";
-import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes } from "lucide-react";
+import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3 } from "lucide-react";
+
+interface TableWidgetState {
+  id: string;
+  sceneX: number;
+  sceneY: number;
+  rows: number;
+  cols: number;
+}
+
+let _tableIdCounter = 0;
 
 // Dynamically import the heavy Excalidraw component client-side only
 const ExcalidrawComponent = dynamic(
@@ -37,6 +50,81 @@ const ExcalidrawComponent = dynamic(
 );
 
 const STORAGE_KEY = "explaino-autosave";
+
+const LINEAR_TYPES = new Set(["line", "arrow", "freedraw"]);
+
+function isPointPair(p: unknown): p is [number, number] {
+  return (
+    Array.isArray(p) &&
+    p.length === 2 &&
+    typeof p[0] === "number" &&
+    Number.isFinite(p[0]) &&
+    typeof p[1] === "number" &&
+    Number.isFinite(p[1])
+  );
+}
+
+/**
+ * Sanitize a raw scene element array so corrupt/incompatible entries can
+ * never crash Excalidraw's linear-element editor.
+ *  - drops entries that aren't objects with a string id/type
+ *  - for line/arrow elements: requires >=2 valid point pairs and shifts
+ *    points so the first point is [0, 0] (Excalidraw's normalization
+ *    requirement, mirrored by an x/y translation so geometry is preserved)
+ */
+function sanitizeElements(elements: unknown[]): ExcalidrawElement[] {
+  const out: ExcalidrawElement[] = [];
+  for (const raw of elements) {
+    if (!raw || typeof raw !== "object") continue;
+    const el = raw as Record<string, unknown>;
+    if (typeof el.type !== "string" || typeof el.id !== "string") continue;
+
+    if (LINEAR_TYPES.has(el.type)) {
+      const points = el.points;
+      if (!Array.isArray(points)) continue;
+      const clean: [number, number][] = points.filter((p) => isPointPair(p));
+      if (clean.length < 2) continue;
+      const [dx, dy] = clean[0];
+      if (Math.abs(dx) > 1e-9 || Math.abs(dy) > 1e-9) {
+        el.x = (typeof el.x === "number" ? el.x : 0) + dx;
+        el.y = (typeof el.y === "number" ? el.y : 0) + dy;
+        el.points = clean.map(([px, py]) => [px - dx, py - dy]);
+      } else {
+        el.points = clean;
+      }
+    }
+
+    out.push(el as ExcalidrawElement);
+  }
+  return out;
+}
+
+/**
+ * Normalize any line/arrow/freedraw element whose first point is not [0, 0]
+ * so selecting it never trips Excalidraw's LinearElementEditor guard.
+ */
+function normalizeLinearElements(elements: readonly ExcalidrawElement[]): ExcalidrawElement[] {
+  for (const raw of elements) {
+    if (!LINEAR_TYPES.has(raw.type)) continue;
+    const el = raw as unknown as {
+      x: number;
+      y: number;
+      points?: readonly (readonly [number, number])[] | null;
+    };
+    const points = el.points;
+    if (!points || points.length < 2) continue;
+    const p0 = points[0];
+    if (!isPointPair(p0)) continue;
+    if (Math.abs(p0[0]) > 1e-9 || Math.abs(p0[1]) > 1e-9) {
+      const dx = p0[0];
+      const dy = p0[1];
+      el.x += dx;
+      el.y += dy;
+      el.points = points.map((p) => [p[0] - dx, p[1] - dy]);
+    }
+  }
+  return elements as ExcalidrawElement[];
+}
 
 /**
  * Convert a value to a Firestore-safe plain object.
@@ -82,6 +170,16 @@ export default function ExcalidrawWrapper() {
   const [saveStatus, setSaveStatus] = useState<string>("");
   const [initialData, setInitialData] = useState<ExcalidrawInitialDataState | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [tableWidgets, setTableWidgets] = useState<TableWidgetState[]>([]);
+  const [activeTableId, setActiveTableId] = useState<string | null>(null);
+  const [viewport, setViewport] = useState<{ zoom: Zoom; offsetLeft: number; offsetTop: number; scrollX: number; scrollY: number }>({
+    zoom: { value: 1 as unknown as Zoom["value"] },
+    offsetLeft: 0,
+    offsetTop: 0,
+    scrollX: 0,
+    scrollY: 0,
+  });
+  const viewportRef = useRef(viewport);
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined") {
       return (localStorage.getItem("explaino-theme") as "light" | "dark") || "light";
@@ -110,6 +208,27 @@ export default function ExcalidrawWrapper() {
       files: BinaryFiles
     ) => {
       latestSceneRef.current = { elements, appState, files };
+
+      // Track viewport for HTML widget positioning (handles pan + zoom)
+      // Only update state when values actually change to avoid render loops
+      const vp = viewportRef.current;
+      if (
+        vp.scrollX !== appState.scrollX ||
+        vp.scrollY !== appState.scrollY ||
+        vp.offsetLeft !== appState.offsetLeft ||
+        vp.offsetTop !== appState.offsetTop ||
+        vp.zoom.value !== appState.zoom.value
+      ) {
+        const next = {
+          zoom: appState.zoom,
+          offsetLeft: appState.offsetLeft,
+          offsetTop: appState.offsetTop,
+          scrollX: appState.scrollX,
+          scrollY: appState.scrollY,
+        };
+        viewportRef.current = next;
+        setViewport(next);
+      }
 
       // Close code panel / data structures panel if Excalidraw library opens
       if ((appState as unknown as Record<string, unknown>).showLibrary) {
@@ -188,7 +307,7 @@ export default function ExcalidrawWrapper() {
           setDrawingId(saved.id);
           setDrawingName(saved.name);
           setInitialData({
-            elements: saved.elements as ExcalidrawElement[],
+            elements: sanitizeElements(saved.elements as unknown[]),
             appState: saved.appState as Partial<AppState>,
             files: Object.fromEntries(
               Object.entries(saved.files || {}).map(([id, f]) => [
@@ -209,14 +328,18 @@ export default function ExcalidrawWrapper() {
       if (localScene && !cancelled) {
         try {
           const parsed = JSON.parse(localScene);
+          if (!parsed || !Array.isArray(parsed.elements)) throw new Error("Invalid scene");
+          // Sanitize elements to avoid Excalidraw normalization crashes
+          const validElements = sanitizeElements(parsed.elements);
           setInitialData({
-            elements: parsed.elements as ExcalidrawElement[],
+            elements: validElements,
             appState: parsed.appState as Partial<AppState>,
             files: parsed.files as BinaryFiles,
           });
           return;
         } catch {
-          // fall through
+          // Corrupted scene — clear it
+          localStorage.removeItem(STORAGE_KEY);
         }
       }
 
@@ -318,25 +441,74 @@ export default function ExcalidrawWrapper() {
     return () => document.removeEventListener("click", handleClick, true);
   }, []);
 
+  // ── Global shortcuts ──────────────────────────────────────────────────
+  // Ctrl+` opens the code panel on the Terminal tab (VS Code style).
+  // Ctrl+C opens the code editor when no text field is focused.
+  useEffect(() => {
+    const isEditable = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false;
+      return !!target.closest(
+        "input, textarea, [contenteditable='true'], .cm-content, select"
+      );
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+
+      if (e.key === "`") {
+        e.preventDefault();
+        setShowCodePanel(true);
+        showCodePanelRef.current = true;
+        // Let the panel mount, then switch to the terminal tab and focus it.
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent("explaino:open-terminal"));
+        }, 60);
+        return;
+      }
+
+      if (e.key.toLowerCase() === "c") {
+        // Only hijack Ctrl+C when the code panel is closed and the user
+        // isn't typing in an input/editor, so copy still works normally.
+        if (showCodePanelRef.current) return;
+        if (isEditable(e.target)) return;
+        e.preventDefault();
+        setShowCodePanel(true);
+        showCodePanelRef.current = true;
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent("explaino:focus-editor"));
+        }, 60);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // --- Insert a data-structure diagram into the scene at a given scene position
   const insertDataStructure = useCallback(
-    (def: DataStructureDef, sceneX: number, sceneY: number) => {
+    (def: DataStructureDef, data: unknown, sceneX: number, sceneY: number) => {
       const api = excalidrawAPI.current;
       if (!api) return;
-      const skeleton = def.generate(sceneX, sceneY);
-      const newElements = convertToExcalidrawElements(skeleton);
-      api.updateScene({
-        elements: [...api.getSceneElements(), ...newElements],
-        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-      });
-      api.scrollToContent(newElements, { fitToContent: false });
+      try {
+        const skeleton = def.generate(sceneX, sceneY, data);
+        const newElements = normalizeLinearElements(
+          convertToExcalidrawElements(skeleton)
+        );
+        api.updateScene({
+          elements: [...api.getSceneElements(), ...newElements],
+          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+        });
+        api.scrollToContent(newElements, { fitToContent: false });
+      } catch (err) {
+        console.warn(`Failed to insert ${def.name}:`, err);
+      }
     },
     []
   );
 
   // --- Click-to-insert fallback: places the diagram near the viewport center
   const handleInsertDataStructure = useCallback(
-    (def: DataStructureDef) => {
+    (def: DataStructureDef, data: unknown) => {
       const api = excalidrawAPI.current;
       if (!api) return;
       const appState = api.getAppState();
@@ -350,10 +522,58 @@ export default function ExcalidrawWrapper() {
           scrollY: appState.scrollY,
         }
       );
-      insertDataStructure(def, x - 140, y - 100);
+      insertDataStructure(def, data, x - 140, y - 100);
     },
     [insertDataStructure]
   );
+
+  // --- Insert table widget at center of viewport
+  const handleInsertTable = useCallback(() => {
+    const api = excalidrawAPI.current;
+    if (!api) return;
+    const appState = api.getAppState();
+    const { x, y } = viewportCoordsToSceneCoords(
+      { clientX: appState.width / 2, clientY: appState.height / 2 },
+      {
+        zoom: appState.zoom,
+        offsetLeft: appState.offsetLeft,
+        offsetTop: appState.offsetTop,
+        scrollX: appState.scrollX,
+        scrollY: appState.scrollY,
+      }
+    );
+    const newTable: TableWidgetState = {
+      id: `table-${++_tableIdCounter}`,
+      sceneX: x,
+      sceneY: y,
+      rows: 3,
+      cols: 3,
+    };
+    setTableWidgets((prev) => [...prev, newTable]);
+  }, []);
+
+  const handleMoveTable = useCallback((id: string, sceneX: number, sceneY: number) => {
+    setTableWidgets((prev) => prev.map((t) => (t.id === id ? { ...t, sceneX, sceneY } : t)));
+  }, []);
+
+  const handleResizeTable = useCallback((id: string, rows: number, cols: number) => {
+    setTableWidgets((prev) => prev.map((t) => (t.id === id ? { ...t, rows, cols } : t)));
+  }, []);
+
+  const handleCloseTable = useCallback((id: string) => {
+    setTableWidgets((prev) => prev.filter((t) => t.id !== id));
+    setActiveTableId((prev) => (prev === id ? null : prev));
+  }, []);
+
+  const handleActivateTable = useCallback((id: string) => {
+    setActiveTableId(id);
+  }, []);
+
+  const handleCanvasClick = useCallback(() => {
+    setActiveTableId(null);
+  }, []);
+
+
 
   // --- Drag-and-drop from the Data Structures panel onto the canvas
   const handleCanvasDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
@@ -382,7 +602,7 @@ export default function ExcalidrawWrapper() {
           scrollY: appState.scrollY,
         }
       );
-      insertDataStructure(def, x, y);
+      insertDataStructure(def, def.defaultData(), x, y);
     },
     [insertDataStructure]
   );
@@ -398,6 +618,7 @@ export default function ExcalidrawWrapper() {
         className="w-full h-full"
         onDragOver={handleCanvasDragOver}
         onDrop={handleCanvasDrop}
+        onClick={handleCanvasClick}
       >
       <ExcalidrawComponent
         excalidrawAPI={(api) => {
@@ -498,6 +719,29 @@ export default function ExcalidrawWrapper() {
             >
               <Boxes size={16} strokeWidth={2.2} />
             </button>
+            <button
+              type="button"
+              onClick={handleInsertTable}
+              className="excalidraw-button"
+              style={{
+                height: "2rem",
+                padding: "0 0.6rem",
+                minWidth: "2.6rem",
+                fontSize: "0.8rem",
+                borderRadius: "0.5rem",
+                background: "var(--color-surface-primary-container, #e0dfff)",
+                color: "var(--color-on-primary-container, #030064)",
+                border: "none",
+                cursor: "pointer",
+                fontWeight: 500,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              title="Insert editable table"
+            >
+              <Grid3x3 size={16} strokeWidth={2.2} />
+            </button>
           </div>
         )}
       />
@@ -514,8 +758,31 @@ export default function ExcalidrawWrapper() {
         <DataStructuresPanel
           onClose={() => setShowDataStructuresPanel(false)}
           onInsert={handleInsertDataStructure}
+          onInsertTable={() => {
+            setShowDataStructuresPanel(false);
+            handleInsertTable();
+          }}
         />
       )}
+
+      {/* Table Widgets (interactive HTML tables on the canvas) */}
+      {tableWidgets.map((t) => (
+        <TableWidget
+          key={t.id}
+          id={t.id}
+          sceneX={t.sceneX}
+          sceneY={t.sceneY}
+          rows={t.rows}
+          cols={t.cols}
+          viewport={viewport}
+          isActive={activeTableId === t.id}
+          onActivate={handleActivateTable}
+          onDeactivate={() => setActiveTableId(null)}
+          onMove={handleMoveTable}
+          onResize={handleResizeTable}
+          onClose={handleCloseTable}
+        />
+      ))}
 
       {saveStatus && (
         <div

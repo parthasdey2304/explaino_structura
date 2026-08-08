@@ -6,19 +6,13 @@ import type { ExcalidrawElementSkeleton } from "@excalidraw/excalidraw/data/tran
  * skeletons anchored at a given top-left (x, y) scene position. The
  * skeletons are converted via `convertToExcalidrawElements` before being
  * inserted into the scene, which automatically gives them Excalidraw's
- * signature hand-drawn (roughjs) rendering — no extra work needed here.
+ * signature hand-drawn (roughjs) rendering.
+ *
+ * Every generator now accepts a `data` parameter so the interactive panel
+ * can build up the structure before insertion.
  */
 
-export interface DataStructureDef {
-  id: string;
-  name: string;
-  description: string;
-  /** lucide-react icon name, verified to exist in the installed version */
-  icon: string;
-  generate: (x: number, y: number) => ExcalidrawElementSkeleton[];
-}
-
-// ── Excalidraw default palette (hardcoded, matches the app's color pickers) ─
+// ── Excalidraw default palette ─────────────────────────────────────────
 const STROKE_BLACK = "#1e1e1e";
 const STROKE_RED = "#e03131";
 const STROKE_GREEN = "#2f9e44";
@@ -30,7 +24,7 @@ const BG_GREEN = "#b2f2bb";
 const BG_BLUE = "#a5d8ff";
 const BG_YELLOW = "#ffec99";
 
-// ── Small helpers to keep generators readable ───────────────────────────
+// ── Small helpers ─────────────────────────────────────────────────────
 
 interface RectOptions {
   strokeColor?: string;
@@ -152,89 +146,133 @@ function arrow(
   };
 }
 
-// ── Stack ─────────────────────────────────────────────────────────────────
-// Drawn as an open-top "bucket" container (open top, closed bottom & sides)
-// with blocks stacked inside, plus a "TOP" arrow pointing at the top block.
-function generateStack(x: number, y: number): ExcalidrawElementSkeleton[] {
+// ── Data types ────────────────────────────────────────────────────────
+
+export interface TreeNode {
+  id: string;
+  value: string;
+  left?: TreeNode;
+  right?: TreeNode;
+}
+
+let _nodeCounter = 0;
+export function makeTreeNode(value: string, left?: TreeNode, right?: TreeNode): TreeNode {
+  return { id: `n${_nodeCounter++}`, value, left, right };
+}
+
+export function cloneTree(node: TreeNode): TreeNode {
+  return {
+    id: node.id,
+    value: node.value,
+    left: node.left ? cloneTree(node.left) : undefined,
+    right: node.right ? cloneTree(node.right) : undefined,
+  };
+}
+
+export interface StructureData {
+  stack: { items: string[] };
+  queue: { values: string[] };
+  array: { values: string[] };
+  "linked-list": { values: string[] };
+  "binary-tree": { root: TreeNode | null };
+  graph: { labels: string[] };
+}
+
+export const DEFAULT_DATA: StructureData = {
+  stack: { items: ["A", "B", "C"] },
+  queue: { values: ["10", "20", "30", "40"] },
+  array: { values: ["12", "7", "39", "4", "21"] },
+  "linked-list": { values: ["A", "B", "C"] },
+  "binary-tree": {
+    root: makeTreeNode("8",
+      makeTreeNode("3", makeTreeNode("1"), makeTreeNode("6")),
+      makeTreeNode("10", makeTreeNode("9"), makeTreeNode("14"))
+    ),
+  },
+  graph: { labels: ["A", "B", "C", "D", "E"] },
+};
+
+// ── Stack ─────────────────────────────────────────────────────────────
+
+function generateStack(x: number, y: number, data: StructureData["stack"]): ExcalidrawElementSkeleton[] {
   const elements: ExcalidrawElementSkeleton[] = [];
+  const items = data.items;
 
   const bucketX = x + 55;
   const bucketY = y + 36;
   const bucketW = 140;
-  const bucketH = 170;
   const blockH = 46;
-  const blocks = ["A", "B", "C"]; // bottom -> top
+  const maxBlocks = 6;
+  const displayItems = items.slice(-maxBlocks);
+  const bucketH = Math.max(80, displayItems.length * blockH + 20);
 
   elements.push(txt(bucketX, y, "STACK", { fontSize: 18 }));
 
-  // Open-top outline: left wall down, across the bottom, up the right wall.
   elements.push(
-    line(
-      bucketX,
-      bucketY,
-      [
-        [0, 0],
-        [0, bucketH],
-        [bucketW, bucketH],
-        [bucketW, 0],
-      ],
-      { strokeColor: STROKE_BLUE, strokeWidth: 2.5 }
-    )
+    line(bucketX, bucketY, [
+      [0, 0],
+      [0, bucketH],
+      [bucketW, bucketH],
+      [bucketW, 0],
+    ], { strokeColor: STROKE_BLUE, strokeWidth: 2.5 })
   );
 
-  blocks.forEach((label, i) => {
+  displayItems.forEach((label, i) => {
     const blockY = bucketY + bucketH - blockH * (i + 1) - 4;
     elements.push(
       rect(bucketX + 10, blockY, bucketW - 20, blockH - 6, {
-        backgroundColor: i === blocks.length - 1 ? BG_YELLOW : BG_BLUE,
+        backgroundColor: i === displayItems.length - 1 ? BG_YELLOW : BG_BLUE,
         label: { text: label, fontSize: 18 },
       })
     );
   });
 
-  const topBlockY = bucketY + bucketH - blockH * blocks.length - 4;
-  elements.push(
-    arrow(bucketX + bucketW + 65, topBlockY + (blockH - 6) / 2, [
-      [0, 0],
-      [-50, 0],
-    ], { label: { text: "TOP" }, strokeColor: STROKE_ORANGE })
-  );
+  if (displayItems.length < items.length) {
+    elements.push(txt(bucketX + bucketW + 10, bucketY + bucketH - 20, `+${items.length - displayItems.length} more`, { fontSize: 11 }));
+  }
+
+  const topBlockY = bucketY + bucketH - blockH * displayItems.length - 4;
+  if (displayItems.length > 0) {
+    elements.push(
+      arrow(bucketX + bucketW + 65, topBlockY + (blockH - 6) / 2, [[0, 0], [-50, 0]], {
+        label: { text: "TOP" },
+        strokeColor: STROKE_ORANGE,
+      })
+    );
+  }
 
   return elements;
 }
 
-// ── Queue ─────────────────────────────────────────────────────────────────
-// A row of cells inside an open-ended "tube" (top/bottom rails only, no end
-// walls), with ENQUEUE entering from the right and DEQUEUE leaving the left.
-function generateQueue(x: number, y: number): ExcalidrawElementSkeleton[] {
+// ── Queue ─────────────────────────────────────────────────────────────
+
+function generateQueue(x: number, y: number, data: StructureData["queue"]): ExcalidrawElementSkeleton[] {
   const elements: ExcalidrawElementSkeleton[] = [];
+  const values = data.values;
+  const maxCells = 6;
+  const display = values.slice(0, maxCells);
 
   const tubeX = x + 70;
   const tubeY = y + 46;
   const cellW = 50;
   const cellH = 70;
-  const values = ["10", "20", "30", "40"];
-  const tubeWidth = cellW * values.length;
+  const tubeWidth = cellW * display.length;
 
   elements.push(txt(tubeX, y, "QUEUE", { fontSize: 18 }));
 
-  elements.push(
-    line(tubeX, tubeY, [[0, 0], [tubeWidth, 0]], { strokeColor: STROKE_BLUE, strokeWidth: 2.5 })
-  );
-  elements.push(
-    line(tubeX, tubeY + cellH, [[0, 0], [tubeWidth, 0]], { strokeColor: STROKE_BLUE, strokeWidth: 2.5 })
-  );
+  elements.push(line(tubeX, tubeY, [[0, 0], [tubeWidth, 0]], { strokeColor: STROKE_BLUE, strokeWidth: 2.5 }));
+  elements.push(line(tubeX, tubeY + cellH, [[0, 0], [tubeWidth, 0]], { strokeColor: STROKE_BLUE, strokeWidth: 2.5 }));
 
-  values.forEach((value, i) => {
+  display.forEach((value, i) => {
     if (i > 0) {
-      elements.push(
-        line(tubeX + cellW * i, tubeY, [[0, 0], [0, cellH]], { strokeColor: STROKE_BLUE })
-      );
+      elements.push(line(tubeX + cellW * i, tubeY, [[0, 0], [0, cellH]], { strokeColor: STROKE_BLUE }));
     }
-    elements.push(
-      txt(tubeX + cellW * i + cellW / 2 - 8, tubeY + cellH / 2 - 10, value, { fontSize: 15 })
-    );
+    elements.push(txt(tubeX + cellW * i + cellW / 2 - 8, tubeY + cellH / 2 - 10, value, { fontSize: 15 }));
   });
+
+  if (display.length < values.length) {
+    elements.push(txt(tubeX + tubeWidth + 4, tubeY + cellH / 2 - 8, `+${values.length - display.length}`, { fontSize: 11 }));
+  }
 
   elements.push(
     arrow(tubeX - 8, tubeY + cellH / 2, [[0, 0], [-50, 0]], {
@@ -252,19 +290,21 @@ function generateQueue(x: number, y: number): ExcalidrawElementSkeleton[] {
   return elements;
 }
 
-// ── Array ─────────────────────────────────────────────────────────────────
-// A row of indexed, fixed-size cells with the index printed below each cell.
-function generateArray(x: number, y: number): ExcalidrawElementSkeleton[] {
+// ── Array ─────────────────────────────────────────────────────────────
+
+function generateArray(x: number, y: number, data: StructureData["array"]): ExcalidrawElementSkeleton[] {
   const elements: ExcalidrawElementSkeleton[] = [];
+  const values = data.values;
+  const maxCells = 6;
+  const display = values.slice(0, maxCells);
 
   const cellW = 55;
   const cellH = 55;
-  const values = ["12", "7", "39", "4", "21"];
   const rowY = y + 40;
 
   elements.push(txt(x, y, "ARRAY", { fontSize: 18 }));
 
-  values.forEach((value, i) => {
+  display.forEach((value, i) => {
     const cellX = x + cellW * i;
     elements.push(
       rect(cellX, rowY, cellW, cellH, {
@@ -280,24 +320,30 @@ function generateArray(x: number, y: number): ExcalidrawElementSkeleton[] {
     );
   });
 
+  if (display.length < values.length) {
+    elements.push(txt(x + cellW * display.length + 4, rowY + cellH / 2, `+${values.length - display.length}`, { fontSize: 11 }));
+  }
+
   return elements;
 }
 
-// ── Linked List ───────────────────────────────────────────────────────────
-// Boxes connected by arrows, terminating in a "NULL" text node.
-function generateLinkedList(x: number, y: number): ExcalidrawElementSkeleton[] {
+// ── Linked List ───────────────────────────────────────────────────────
+
+function generateLinkedList(x: number, y: number, data: StructureData["linked-list"]): ExcalidrawElementSkeleton[] {
   const elements: ExcalidrawElementSkeleton[] = [];
+  const values = data.values;
+  const maxNodes = 5;
+  const display = values.slice(0, maxNodes);
 
   const nodeW = 60;
   const nodeH = 50;
   const gap = 35;
-  const values = ["A", "B", "C"];
   const nodeY = y + 40;
 
   elements.push(txt(x, y, "LINKED LIST", { fontSize: 18 }));
 
   let lastNodeX = x;
-  values.forEach((value, i) => {
+  display.forEach((value, i) => {
     const nodeX = x + i * (nodeW + gap);
     lastNodeX = nodeX;
     elements.push(
@@ -306,7 +352,7 @@ function generateLinkedList(x: number, y: number): ExcalidrawElementSkeleton[] {
         label: { text: value, fontSize: 16 },
       })
     );
-    if (i < values.length - 1) {
+    if (i < display.length - 1) {
       elements.push(
         arrow(nodeX + nodeW, nodeY + nodeH / 2, [[0, 0], [gap, 0]], {
           strokeColor: STROKE_BLACK,
@@ -315,84 +361,96 @@ function generateLinkedList(x: number, y: number): ExcalidrawElementSkeleton[] {
     }
   });
 
-  elements.push(
-    arrow(lastNodeX + nodeW, nodeY + nodeH / 2, [[0, 0], [35, 0]], {
-      strokeColor: STROKE_BLACK,
-    })
-  );
-  elements.push(
-    txt(lastNodeX + nodeW + 42, nodeY + nodeH / 2 - 8, "NULL", {
-      fontSize: 14,
-      strokeColor: STROKE_RED,
-    })
-  );
+  if (display.length < values.length) {
+    elements.push(txt(lastNodeX + nodeW + 6, nodeY + nodeH / 2 - 8, `→ +${values.length - display.length}`, { fontSize: 11 }));
+  } else {
+    elements.push(arrow(lastNodeX + nodeW, nodeY + nodeH / 2, [[0, 0], [35, 0]], { strokeColor: STROKE_BLACK }));
+    elements.push(txt(lastNodeX + nodeW + 42, nodeY + nodeH / 2 - 8, "NULL", { fontSize: 14, strokeColor: STROKE_RED }));
+  }
 
   return elements;
 }
 
-// ── Binary Tree ───────────────────────────────────────────────────────────
-// Root + two children + four grandchildren (3 levels), connected by lines.
-function generateBinaryTree(x: number, y: number): ExcalidrawElementSkeleton[] {
-  const elements: ExcalidrawElementSkeleton[] = [];
+// ── Binary Tree ───────────────────────────────────────────────────────
 
-  const width = 280;
+interface TreeLayout {
+  x: number;
+  y: number;
+  node: TreeNode;
+  left?: TreeLayout;
+  right?: TreeLayout;
+}
+
+function layoutTree(root: TreeNode, x: number, baseY: number, level: number, minX: number, maxX: number): TreeLayout {
+  const cx = (minX + maxX) / 2;
+  const cy = baseY + level * 70;
+  const layout: TreeLayout = { x: cx, y: cy, node: root };
+
+  if (root.left) {
+    layout.left = layoutTree(root.left, x, baseY, level + 1, minX, cx);
+  }
+  if (root.right) {
+    layout.right = layoutTree(root.right, x, baseY, level + 1, cx, maxX);
+  }
+  return layout;
+}
+
+function countNodes(node: TreeNode | undefined): number {
+  if (!node) return 0;
+  return 1 + countNodes(node.left) + countNodes(node.right);
+}
+
+function generateBinaryTree(x: number, y: number, data: StructureData["binary-tree"]): ExcalidrawElementSkeleton[] {
+  const elements: ExcalidrawElementSkeleton[] = [];
+  const root = data.root;
+  if (!root) return elements;
+
   const diameter = 40;
-  const titleY = y;
+  const nodeCount = countNodes(root);
+  const width = Math.max(200, nodeCount * 70);
   const baseY = y + 40;
 
-  const centerOf = (cx: number, cy: number) => ({ x: cx, y: cy });
+  elements.push(txt(x + width / 2 - 45, y, "BINARY TREE", { fontSize: 18 }));
 
-  const root = centerOf(x + width / 2, baseY + diameter / 2);
-  const level1 = [
-    centerOf(x + width * 0.25, baseY + 90 + diameter / 2),
-    centerOf(x + width * 0.75, baseY + 90 + diameter / 2),
-  ];
-  const level2 = [
-    centerOf(x + width * 0.125, baseY + 180 + diameter / 2),
-    centerOf(x + width * 0.375, baseY + 180 + diameter / 2),
-    centerOf(x + width * 0.625, baseY + 180 + diameter / 2),
-    centerOf(x + width * 0.875, baseY + 180 + diameter / 2),
-  ];
+  const layout = layoutTree(root, x, baseY, 0, x, x + width);
 
-  elements.push(txt(x + width / 2 - 45, titleY, "BINARY TREE", { fontSize: 18 }));
+  const connect = (parent: TreeLayout, child: TreeLayout) =>
+    line(parent.x, parent.y, [[0, 0], [child.x - parent.x, child.y - parent.y]], { strokeColor: STROKE_BLACK });
 
-  const connect = (
-    parent: { x: number; y: number },
-    child: { x: number; y: number }
-  ): ExcalidrawElementSkeleton =>
-    line(parent.x, parent.y, [
-      [0, 0],
-      [child.x - parent.x, child.y - parent.y],
-    ], { strokeColor: STROKE_BLACK });
+  const traverse = (node: TreeLayout) => {
+    if (node.left) {
+      elements.push(connect(node, node.left));
+      traverse(node.left);
+    }
+    if (node.right) {
+      elements.push(connect(node, node.right));
+      traverse(node.right);
+    }
+  };
+  traverse(layout);
 
-  elements.push(connect(root, level1[0]));
-  elements.push(connect(root, level1[1]));
-  elements.push(connect(level1[0], level2[0]));
-  elements.push(connect(level1[0], level2[1]));
-  elements.push(connect(level1[1], level2[2]));
-  elements.push(connect(level1[1], level2[3]));
-
-  const node = (center: { x: number; y: number }, label: string, bg: string) =>
-    ellipse(center.x - diameter / 2, center.y - diameter / 2, diameter, diameter, {
-      backgroundColor: bg,
-      label: { text: label, fontSize: 15 },
-    });
-
-  elements.push(node(root, "8", BG_YELLOW));
-  elements.push(node(level1[0], "3", BG_BLUE));
-  elements.push(node(level1[1], "10", BG_BLUE));
-  elements.push(node(level2[0], "1", BG_GREEN));
-  elements.push(node(level2[1], "6", BG_GREEN));
-  elements.push(node(level2[2], "9", BG_GREEN));
-  elements.push(node(level2[3], "14", BG_GREEN));
+  const drawNode = (node: TreeLayout) => {
+    const bg = !node.left && !node.right ? BG_GREEN : BG_BLUE;
+    elements.push(
+      ellipse(node.x - diameter / 2, node.y - diameter / 2, diameter, diameter, {
+        backgroundColor: bg,
+        label: { text: node.node.value, fontSize: 15 },
+      })
+    );
+    if (node.left) drawNode(node.left);
+    if (node.right) drawNode(node.right);
+  };
+  drawNode(layout);
 
   return elements;
 }
 
-// ── Graph ─────────────────────────────────────────────────────────────────
-// Five labeled nodes (A-E) arranged in a pentagon with connecting edges.
-function generateGraph(x: number, y: number): ExcalidrawElementSkeleton[] {
+// ── Graph ─────────────────────────────────────────────────────────────
+
+function generateGraph(x: number, y: number, data: StructureData["graph"]): ExcalidrawElementSkeleton[] {
   const elements: ExcalidrawElementSkeleton[] = [];
+  const labels = data.labels;
+  if (labels.length === 0) return elements;
 
   const size = 220;
   const radius = 95;
@@ -400,9 +458,10 @@ function generateGraph(x: number, y: number): ExcalidrawElementSkeleton[] {
   const centerY = y + 55 + size / 2;
   const diameter = 36;
 
-  const labels = ["A", "B", "C", "D", "E"];
+  elements.push(txt(centerX - 30, y, "GRAPH", { fontSize: 18 }));
+
   const nodes = labels.map((label, i) => {
-    const angle = (-90 + i * 72) * (Math.PI / 180);
+    const angle = (-90 + i * (360 / labels.length)) * (Math.PI / 180);
     return {
       label,
       x: centerX + radius * Math.cos(angle),
@@ -410,28 +469,20 @@ function generateGraph(x: number, y: number): ExcalidrawElementSkeleton[] {
     };
   });
 
-  elements.push(txt(centerX - 30, y, "GRAPH", { fontSize: 18 }));
-
-  const edges: [number, number][] = [
-    [0, 1],
-    [1, 2],
-    [2, 3],
-    [3, 4],
-    [4, 0],
-    [1, 3],
-  ];
-
-  // Edges first, so node fills sit on top and hide the segments inside them.
-  edges.forEach(([a, b]) => {
+  const edgeCount = Math.min(labels.length, 6);
+  for (let i = 0; i < edgeCount; i++) {
+    const a = i % labels.length;
+    const b = (i + 1) % labels.length;
+    if (i === edgeCount - 1 && labels.length > 3) break;
     const from = nodes[a];
     const to = nodes[b];
-    elements.push(
-      line(from.x, from.y, [
-        [0, 0],
-        [to.x - from.x, to.y - from.y],
-      ], { strokeColor: STROKE_BLUE })
-    );
-  });
+    elements.push(line(from.x, from.y, [[0, 0], [to.x - from.x, to.y - from.y]], { strokeColor: STROKE_BLUE }));
+  }
+  if (labels.length >= 3) {
+    const from = nodes[0];
+    const to = nodes[2];
+    elements.push(line(from.x, from.y, [[0, 0], [to.x - from.x, to.y - from.y]], { strokeColor: STROKE_BLUE }));
+  }
 
   nodes.forEach((n) => {
     elements.push(
@@ -445,48 +496,66 @@ function generateGraph(x: number, y: number): ExcalidrawElementSkeleton[] {
   return elements;
 }
 
-// ── Registry ──────────────────────────────────────────────────────────────
+// ── DataStructureDef with generate accepting data ─────────────────────
+
+export interface DataStructureDef {
+  id: keyof StructureData;
+  name: string;
+  description: string;
+  icon: string;
+  generate: (x: number, y: number, data: unknown) => ExcalidrawElementSkeleton[];
+  defaultData: () => StructureData[keyof StructureData];
+}
+
 export const DATA_STRUCTURES: DataStructureDef[] = [
   {
     id: "stack",
     name: "Stack",
     description: "LIFO container — push and pop from the top",
     icon: "Layers",
-    generate: generateStack,
+    generate: (x, y, data) => generateStack(x, y, data as StructureData["stack"]),
+    defaultData: () => ({ ...DEFAULT_DATA.stack }),
   },
   {
     id: "queue",
     name: "Queue",
     description: "FIFO line — enqueue at the back, dequeue from the front",
     icon: "Rows3",
-    generate: generateQueue,
+    generate: (x, y, data) => generateQueue(x, y, data as StructureData["queue"]),
+    defaultData: () => ({ ...DEFAULT_DATA.queue }),
   },
   {
     id: "array",
     name: "Array",
     description: "Fixed-size, indexed collection of elements",
     icon: "Grid3x3",
-    generate: generateArray,
+    generate: (x, y, data) => generateArray(x, y, data as StructureData["array"]),
+    defaultData: () => ({ ...DEFAULT_DATA.array }),
   },
   {
     id: "linked-list",
     name: "Linked List",
     description: "Nodes linked in sequence, each pointing to the next",
     icon: "Link2",
-    generate: generateLinkedList,
+    generate: (x, y, data) => generateLinkedList(x, y, data as StructureData["linked-list"]),
+    defaultData: () => ({ ...DEFAULT_DATA["linked-list"] }),
   },
   {
     id: "binary-tree",
     name: "Binary Tree",
     description: "Hierarchical nodes with up to two children each",
     icon: "GitBranch",
-    generate: generateBinaryTree,
+    generate: (x, y, data) => generateBinaryTree(x, y, data as StructureData["binary-tree"]),
+    defaultData: () => ({
+      root: cloneTree(DEFAULT_DATA["binary-tree"].root!) ,
+    }),
   },
   {
     id: "graph",
     name: "Graph",
     description: "Nodes connected by edges, cycles allowed",
     icon: "Network",
-    generate: generateGraph,
+    generate: (x, y, data) => generateGraph(x, y, data as StructureData["graph"]),
+    defaultData: () => ({ ...DEFAULT_DATA.graph }),
   },
 ];
