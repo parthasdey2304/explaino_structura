@@ -22,6 +22,7 @@
     "@excalidraw/excalidraw": "^0.18.1",
     "codemirror": "^6.0.2",
     "e2b": "^2.38.0",
+    "emmet": "2.4.11",
     "firebase": "^12.17.1",
     "lucide-react": "^1.28.0",
     "next": "16.3.0",

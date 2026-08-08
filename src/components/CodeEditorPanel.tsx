@@ -19,7 +19,7 @@ import { python } from "@codemirror/lang-python";
 import { html } from "@codemirror/lang-html";
 import { cpp } from "@codemirror/lang-cpp";
 import { java } from "@codemirror/lang-java";
-import { X } from "lucide-react";
+import { X, Eye, Sparkles } from "lucide-react";
 import { dartLang } from "@/lib/dartMode";
 import type { Extension } from "@codemirror/state";
 import type { WorkspaceFile, WorkspaceNode } from "@/lib/workspace";
@@ -44,8 +44,11 @@ import { executeDart } from "@/lib/executors/dart";
 import FileExplorer from "./FileExplorer";
 import Terminal from "./Terminal";
 import VisualizerPanel from "./VisualizerPanel";
-import { Eye } from "lucide-react";
+import SettingsMenu from "./SettingsMenu";
+import AIChatPanel from "./AIChatPanel";
 import type { SandboxFileEntry } from "@/lib/terminal/service";
+import { createTabKeymap, snippetLanguageData } from "@/lib/emmetExtension";
+import { getEditorSettings, subscribeEditorSettings } from "@/lib/editorSettings";
 
 const LANGUAGES = [
   { label: "JavaScript", value: "javascript" },
@@ -129,7 +132,7 @@ const cmHighlight = HighlightStyle.define([
   { tag: tags.null, color: "#569cd6" },
 ]);
 
-function langExtension(language: string): Extension {
+function baseLangExtension(language: string): Extension {
   switch (language) {
     case "javascript":
       return javascript();
@@ -147,6 +150,15 @@ function langExtension(language: string): Extension {
     default:
       return [];
   }
+}
+
+/**
+ * Language mode plus its snippet table (Tab-to-expand shorthand like `syso`,
+ * `cl`, `def…`). HTML gets no extra language-data extension here — its
+ * Emmet expansion is handled directly by the Tab keymap in emmetExtension.ts.
+ */
+function langExtension(language: string): Extension {
+  return [baseLangExtension(language), snippetLanguageData(language)];
 }
 
 type RunStatus = "idle" | "running" | "loading" | "done" | "error" | "timeout";
@@ -234,8 +246,22 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
   const viewRef = useRef<EditorView | null>(null);
   const langCompartmentRef = useRef<Compartment | null>(null);
   const activeFileIdRef = useRef<string | null>(activeFileId);
+  const activeLanguageRef = useRef<string>("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onDocChangeRef = useRef<(doc: string) => void>(() => {});
+  const [aiWriteMode, setAiWriteMode] = useState<"manual" | "ai" | "pair">("manual");
+  const [showAIChat, setShowAIChat] = useState(false);
+  const [settingsSnapshot, setSettingsSnapshot] = useState(() => getEditorSettings());
+
+  useEffect(() => subscribeEditorSettings(setSettingsSnapshot), []);
+
+  // Fall back to the Output tab if the terminal gets disabled while it's
+  // the active bottom-panel tab.
+  useEffect(() => {
+    if (!settingsSnapshot.terminalEnabled && panelTab === "terminal") {
+      setPanelTab("output");
+    }
+  }, [settingsSnapshot.terminalEnabled, panelTab]);
 
   const files = useMemo(() => flattenFiles(tree), [tree]);
   const filesWithPaths = useMemo(() => flattenFilesWithPaths(tree), [tree]);
@@ -275,6 +301,10 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
           basicSetup,
           syntaxHighlighting(cmHighlight),
           EditorView.lineWrapping,
+          // Registered once, outside the per-file language Compartment, so
+          // it survives file switches. Reads the current language through
+          // a ref rather than being rebuilt per file.
+          createTabKeymap(() => activeLanguageRef.current),
           langCompartment.of([]),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
@@ -309,6 +339,7 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
     const view = viewRef.current;
     if (!view || !activeFile) return;
     activeFileIdRef.current = activeFile.id;
+    activeLanguageRef.current = activeFile.language;
     const compartment = langCompartmentRef.current;
     view.dispatch({
       changes: {
@@ -348,6 +379,52 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
     []
   );
 
+  // ── Drag-to-reorder tabs ────────────────────────────────────────────────
+  const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+
+  const handleTabDragStart = useCallback((e: React.DragEvent<HTMLDivElement>, id: string) => {
+    setDraggedTabId(id);
+    e.dataTransfer.effectAllowed = "move";
+    // Firefox requires data to be set for the drag to start at all.
+    e.dataTransfer.setData("text/plain", id);
+  }, []);
+
+  const handleTabDragOver = useCallback(
+    (e: React.DragEvent<HTMLDivElement>, id: string) => {
+      if (!draggedTabId || draggedTabId === id) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      setDropTargetId(id);
+    },
+    [draggedTabId]
+  );
+
+  const handleTabDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>, targetId: string) => {
+      e.preventDefault();
+      const sourceId = draggedTabId;
+      setDraggedTabId(null);
+      setDropTargetId(null);
+      if (!sourceId || sourceId === targetId) return;
+      setWs((prev) => {
+        const from = prev.tabs.indexOf(sourceId);
+        const to = prev.tabs.indexOf(targetId);
+        if (from === -1 || to === -1) return prev;
+        const nextTabs = [...prev.tabs];
+        nextTabs.splice(from, 1);
+        nextTabs.splice(to, 0, sourceId);
+        return { ...prev, tabs: nextTabs };
+      });
+    },
+    [draggedTabId]
+  );
+
+  const handleTabDragEnd = useCallback(() => {
+    setDraggedTabId(null);
+    setDropTargetId(null);
+  }, []);
+
   const changeLanguage = useCallback((language: string) => {
     setWs((prev) => {
       if (!prev.activeFileId) return prev;
@@ -356,6 +433,19 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
         tree: setFileLanguage(prev.tree, prev.activeFileId, language),
       };
     });
+  }, []);
+
+  // Lets the AI panel write a generated snippet straight into the active
+  // file: replaces the CodeMirror doc directly (so the user sees it land)
+  // and updateFileContent keeps the workspace tree as the source of truth.
+  const applyCodeToActiveFile = useCallback((code: string) => {
+    const id = activeFileIdRef.current;
+    const view = viewRef.current;
+    if (!id || !view) return;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: code },
+    });
+    setWs((prev) => ({ ...prev, tree: updateFileContent(prev.tree, id, code) }));
   }, []);
 
   // ── Run code ───────────────────────────────────────────────────────────
@@ -534,6 +624,18 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
           <span className="code-editor__title">Code Editor</span>
         </div>
         <div className="code-editor__header-right">
+          <SettingsMenu />
+          {settingsSnapshot.aiEnabled && (
+            <button
+              onClick={() => setShowAIChat(!showAIChat)}
+              className={`code-editor__ai-btn${showAIChat ? " code-editor__ai-btn--active" : ""}`}
+              id="ai-chat-button"
+              title="AI assistant (Mistral)"
+            >
+              <Sparkles size={14} />
+              <span>AI</span>
+            </button>
+          )}
           <button
             onClick={() => setShowVisualizer(!showVisualizer)}
             disabled={!activeFile || activeFile.language !== "javascript"}
@@ -617,8 +719,14 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
                 return (
                   <div
                     key={id}
-                    className={`code-editor__tab${id === activeFileId ? " code-editor__tab--active" : ""}`}
+                    draggable
+                    onDragStart={(e) => handleTabDragStart(e, id)}
+                    onDragOver={(e) => handleTabDragOver(e, id)}
+                    onDrop={(e) => handleTabDrop(e, id)}
+                    onDragEnd={handleTabDragEnd}
+                    className={`code-editor__tab${id === activeFileId ? " code-editor__tab--active" : ""}${draggedTabId === id ? " code-editor__tab--dragging" : ""}${dropTargetId === id ? " code-editor__tab--drop-target" : ""}`}
                     onClick={() => openFile(id)}
+                    title="Drag to reorder"
                   >
                     <span
                       className="code-editor__tab-dot"
@@ -748,13 +856,15 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
                 >
                   Output
                 </button>
-                <button
-                  type="button"
-                  className={`code-editor__panel-tab${panelTab === "terminal" ? " code-editor__panel-tab--active" : ""}`}
-                  onClick={() => setPanelTab("terminal")}
-                >
-                  Terminal
-                </button>
+                {settingsSnapshot.terminalEnabled && (
+                  <button
+                    type="button"
+                    className={`code-editor__panel-tab${panelTab === "terminal" ? " code-editor__panel-tab--active" : ""}`}
+                    onClick={() => setPanelTab("terminal")}
+                  >
+                    Terminal
+                  </button>
+                )}
               </div>
 
               {/* Output Panel */}
@@ -800,7 +910,7 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
             )}
 
             {/* Terminal Panel */}
-            {panelTab === "terminal" && (
+            {panelTab === "terminal" && settingsSnapshot.terminalEnabled && (
               <Terminal workspaceFiles={filesWithPaths} onFilesChange={handleSandboxFilesChange} />
             )}
             </div>
@@ -814,6 +924,17 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
           code={activeFile.content}
           onClose={() => setShowVisualizer(false)}
           highlightLine={(line) => setHighlightedLine(line)}
+        />
+      )}
+
+      {/* AI Assistant Panel (Mistral) */}
+      {showAIChat && settingsSnapshot.aiEnabled && (
+        <AIChatPanel
+          onClose={() => setShowAIChat(false)}
+          activeFile={activeFile}
+          writeMode={aiWriteMode}
+          onWriteModeChange={setAiWriteMode}
+          onApplyCode={applyCodeToActiveFile}
         />
       )}
     </div>
