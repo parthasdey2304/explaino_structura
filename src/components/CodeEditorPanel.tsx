@@ -19,6 +19,7 @@ import { python } from "@codemirror/lang-python";
 import { html } from "@codemirror/lang-html";
 import { cpp } from "@codemirror/lang-cpp";
 import { java } from "@codemirror/lang-java";
+import { Decoration, DecorationSet, ViewPlugin } from "@codemirror/view";
 import { X, Eye, Sparkles } from "lucide-react";
 import { dartLang } from "@/lib/dartMode";
 import type { Extension } from "@codemirror/state";
@@ -275,6 +276,7 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
   const editorHostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const langCompartmentRef = useRef<Compartment | null>(null);
+  const highlightCompartmentRef = useRef<Compartment | null>(null);
   const activeFileIdRef = useRef<string | null>(activeFileId);
   const activeLanguageRef = useRef<string>("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -327,6 +329,23 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
     const langCompartment = new Compartment();
     langCompartmentRef.current = langCompartment;
 
+    const highlightCompartment = new Compartment();
+    highlightCompartmentRef.current = highlightCompartment;
+
+    const highlightLine = Decoration.line({ class: "cm-highlight-line" });
+    const highlightPlugin = ViewPlugin.fromClass(
+      class {
+        decorations;
+        constructor(view: EditorView) {
+          this.decorations = Decoration.none;
+        }
+        update() {
+          this.decorations = Decoration.none;
+        }
+      },
+      { decorations: (v: { decorations: DecorationSet }) => v.decorations }
+    );
+
     const view = new EditorView({
       state: EditorState.create({
         doc: "",
@@ -340,6 +359,7 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
           // a ref rather than being rebuilt per file.
           createTabKeymap(() => activeLanguageRef.current),
           langCompartment.of([]),
+          highlightCompartment.of(highlightPlugin),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
               onDocChangeRef.current(update.state.doc.toString());
@@ -355,6 +375,34 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
       viewRef.current = null;
     };
   }, []);
+
+  // Highlight the active visualizer line in the editor.
+  useEffect(() => {
+    const view = viewRef.current;
+    const compartment = highlightCompartmentRef.current;
+    if (!view || !compartment) return;
+
+    if (highlightedLine === null || highlightedLine < 1) {
+      view.dispatch({ effects: compartment.reconfigure([]) });
+      return;
+    }
+
+    const lineNum: number = highlightedLine;
+    const highlightDeco = Decoration.line({ class: "cm-highlight-line" });
+    const plugin = ViewPlugin.fromClass(
+      class {
+        decorations: DecorationSet;
+        constructor(view: EditorView) {
+          this.decorations = Decoration.none;
+          const line = view.state.doc.line(lineNum);
+          this.decorations = Decoration.set([highlightDeco.range(line.from)]);
+        }
+        update() {}
+      },
+      { decorations: (v: { decorations: DecorationSet }) => v.decorations }
+    );
+    view.dispatch({ effects: compartment.reconfigure([plugin]) });
+  }, [highlightedLine]);
 
   // Keep the doc-change handler pointing at the latest tree updater.
   useEffect(() => {
@@ -570,6 +618,18 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [runCode]);
+
+  // Ctrl+N to create a new file
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("explaino:new-file", { detail: { language: "javascript" } }));
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   // Ctrl+` opens the terminal panel and focuses it.
   useEffect(() => {

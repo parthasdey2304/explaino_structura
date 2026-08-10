@@ -1027,6 +1027,14 @@ export default function ExcalidrawWrapper() {
         <MainMenu>
           <MainMenu.DefaultItems.LoadScene />
           <MainMenu.DefaultItems.SaveToActiveFile />
+          <MainMenu.Item
+            onSelect={handleSaveClick}
+            icon={<Save />}
+            className="explaino-menu-item"
+            title="Save drawing to cloud (Firebase)"
+          >
+            Save to Cloud
+          </MainMenu.Item>
           <MainMenu.DefaultItems.Export />
           <MainMenu.DefaultItems.SaveAsImage />
           <MainMenu.DefaultItems.SearchMenu />

@@ -774,6 +774,13 @@ canvas {
   height: 100%;
 }
 
+/* Active line highlight for visualizer playback. */
+.cm-highlight-line {
+  background-color: rgba(105, 101, 219, 0.18) !important;
+  border-left: 3px solid var(--color-primary);
+  margin-left: -3px;
+}
+
 /* ── Welcome Screen ────────────────────────────────────────────────────── */
 .code-editor__welcome {
   flex: 1;
@@ -3219,7 +3226,7 @@ canvas {
 }
 .ai-chat-panel__input-row {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 4px;
 }
 .ai-chat-panel__input {
