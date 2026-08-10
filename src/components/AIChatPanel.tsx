@@ -19,7 +19,14 @@ import {
   Volume2,
   VolumeX,
   Trash2,
+  Phone,
+  PhoneOff,
 } from "lucide-react";
+import {
+  GeminiLiveSession,
+  getStoredGeminiKey,
+  setStoredGeminiKey,
+} from "@/lib/ai/gemini-live";
 import type { WorkspaceFile } from "@/lib/workspace";
 import {
   MISTRAL_MODELS,
@@ -110,12 +117,17 @@ export default function AIChatPanel({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const [ttsSupported, setTtsSupported] = useState(false);
+  const [geminiKey, setGeminiKey] = useState(() => getStoredGeminiKey());
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState<string>("");
+  const [showGeminiKey, setShowGeminiKey] = useState(() => !getStoredGeminiKey());
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const streamingIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<ReturnType<typeof createSpeechRecognition> | null>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const geminiSessionRef = useRef<GeminiLiveSession | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -365,6 +377,67 @@ export default function AIChatPanel({
     [onApplyCode]
   );
 
+  // ── Gemini Live voice mode ──────────────────────────────────────────────
+  const startVoiceMode = useCallback(() => {
+    const key = geminiKey.trim() || getStoredGeminiKey();
+    if (!key) {
+      setShowGeminiKey(true);
+      return;
+    }
+    setVoiceStatus("Connecting...");
+    const session = new GeminiLiveSession(key, {
+      onAudioStart: () => setVoiceStatus("Speaking..."),
+      onAudioEnd: () => setVoiceStatus("Listening..."),
+      onTextDelta: (delta) => {
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant" && last.id.startsWith("voice-")) {
+            return prev.map((m) => (m.id === last.id ? { ...m, text: m.text + delta } : m));
+          }
+          return [...prev, { id: `voice-${nextId()}`, role: "assistant", text: delta }];
+        });
+      },
+      onTranscript: (text, isFinal) => {
+        if (isFinal) {
+          setMessages((prev) => [
+            ...prev,
+            { id: `voice-user-${nextId()}`, role: "user", text },
+          ]);
+        }
+      },
+      onError: (err) => {
+        setVoiceStatus(`Error: ${err}`);
+        setTimeout(() => {
+          setVoiceMode(false);
+          setVoiceStatus("");
+        }, 3000);
+      },
+      onClose: () => {
+        setVoiceMode(false);
+        setVoiceStatus("");
+      },
+    });
+    geminiSessionRef.current = session;
+    setVoiceMode(true);
+    setVoiceStatus("Listening...");
+    session.start().catch((err) => {
+      setVoiceStatus(`Failed: ${err.message}`);
+      setVoiceMode(false);
+    });
+  }, [geminiKey]);
+
+  const stopVoiceMode = useCallback(() => {
+    geminiSessionRef.current?.stop();
+    geminiSessionRef.current = null;
+    setVoiceMode(false);
+    setVoiceStatus("");
+  }, []);
+
+  const toggleVoiceMode = useCallback(() => {
+    if (voiceMode) stopVoiceMode();
+    else startVoiceMode();
+  }, [voiceMode, startVoiceMode, stopVoiceMode]);
+
   return (
     <div className="ai-chat-panel excalidraw-island">
       <div className="ai-chat-panel__header">
@@ -429,6 +502,32 @@ export default function AIChatPanel({
             </a>
             . It's saved to this browser's local storage and sent only to Mistral, via this app's own
             proxy — never logged or stored server-side.
+          </p>
+        </div>
+      )}
+
+      {showGeminiKey && (
+        <div className="ai-chat-panel__keybox">
+          <label className="ai-chat-panel__keybox-label">
+            Google AI Studio API key (for voice)
+            <input
+              type="password"
+              value={geminiKey}
+              onChange={(e) => {
+                setGeminiKey(e.target.value);
+                setStoredGeminiKey(e.target.value);
+              }}
+              placeholder="Paste your key — stored only in this browser"
+              className="ai-chat-panel__keybox-input"
+              autoComplete="off"
+            />
+          </label>
+          <p className="ai-chat-panel__keybox-hint">
+            Get a key at{" "}
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer noopener">
+              aistudio.google.com/apikey
+            </a>
+            . Used only for voice conversations — sent directly to Google's Live API from your browser.
           </p>
         </div>
       )}
@@ -528,6 +627,12 @@ export default function AIChatPanel({
             </button>
           </div>
         )}
+        {voiceMode && (
+          <div className="ai-chat-panel__voice-status">
+            <span className="ai-chat-panel__voice-dot" />
+            <span>{voiceStatus || "Voice call active"}</span>
+          </div>
+        )}
         <div className="ai-chat-panel__input-row">
           <input
             ref={fileInputRef}
@@ -555,6 +660,14 @@ export default function AIChatPanel({
               {isListening ? <MicOff size={14} /> : <Mic size={14} />}
             </button>
           )}
+          <button
+            type="button"
+            className={`ai-chat-panel__voice-btn${voiceMode ? " ai-chat-panel__voice-btn--active" : ""}`}
+            onClick={toggleVoiceMode}
+            title={voiceMode ? "End voice call" : "Voice call"}
+          >
+            {voiceMode ? <PhoneOff size={14} /> : <Phone size={14} />}
+          </button>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}

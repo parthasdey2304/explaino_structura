@@ -3270,6 +3270,47 @@ canvas {
   background: rgba(224, 49, 49, 0.15);
   color: #e03131;
 }
+.ai-chat-panel__voice-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-gray-60, #888);
+  cursor: pointer;
+}
+.ai-chat-panel__voice-btn:hover {
+  background: rgba(127, 127, 127, 0.15);
+  color: var(--color-on-surface);
+}
+.ai-chat-panel__voice-btn--active {
+  background: rgba(46, 160, 67, 0.15);
+  color: #2ea043;
+}
+.ai-chat-panel__voice-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: #2ea043;
+  font-weight: 500;
+}
+.ai-chat-panel__voice-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2ea043;
+  animation: ai-chat-pulse 1.2s ease-in-out infinite;
+}
+@keyframes ai-chat-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
 .ai-chat-panel__send {
   flex-shrink: 0;
   width: 34px;
