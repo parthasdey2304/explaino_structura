@@ -207,11 +207,23 @@ export default function AIChatPanel({
     abortRef.current?.abort();
   }, []);
 
+  const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
+
   const copyMessage = useCallback((id: string, text: string) => {
     navigator.clipboard?.writeText(text).then(() => {
       setCopiedId(id);
       setTimeout(() => setCopiedId((prev) => (prev === id ? null : prev)), 1500);
     });
+  }, []);
+
+  const copyCode = useCallback((id: string, text: string) => {
+    const code = extractFirstCodeBlock(text);
+    if (code) {
+      navigator.clipboard?.writeText(code).then(() => {
+        setCopiedCodeId(id);
+        setTimeout(() => setCopiedCodeId((prev) => (prev === id ? null : prev)), 1500);
+      });
+    }
   }, []);
 
   const applyMessage = useCallback(
@@ -343,6 +355,16 @@ export default function AIChatPanel({
                     {copiedId === m.id ? <ClipboardCheck size={11} /> : <Clipboard size={11} />}
                     <span>{copiedId === m.id ? "Copied" : "Copy"}</span>
                   </button>
+                  {extractFirstCodeBlock(m.text) && (
+                    <button
+                      type="button"
+                      className="ai-chat-panel__msg-action"
+                      onClick={() => copyCode(m.id, m.text)}
+                    >
+                      {copiedCodeId === m.id ? <ClipboardCheck size={11} /> : <FileCode size={11} />}
+                      <span>{copiedCodeId === m.id ? "Code copied" : "Copy code"}</span>
+                    </button>
+                  )}
                   {writeMode !== "ai" && extractFirstCodeBlock(m.text) && (
                     <button
                       type="button"
