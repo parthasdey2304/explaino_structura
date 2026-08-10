@@ -173,14 +173,44 @@ interface CodeEditorPanelProps {
   onClose: () => void;
 }
 
+const PANEL_STATE_KEY = "explaino-panel-tabs";
+
+function loadPanelState(): { tabs: string[]; activeFileId: string | null } {
+  try {
+    const raw = localStorage.getItem(PANEL_STATE_KEY);
+    if (!raw) return { tabs: [], activeFileId: null };
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed.tabs) && (parsed.activeFileId === null || typeof parsed.activeFileId === "string")) {
+      return { tabs: parsed.tabs, activeFileId: parsed.activeFileId };
+    }
+    return { tabs: [], activeFileId: null };
+  } catch {
+    return { tabs: [], activeFileId: null };
+  }
+}
+
+function savePanelState(tabs: string[], activeFileId: string | null) {
+  try {
+    localStorage.setItem(PANEL_STATE_KEY, JSON.stringify({ tabs, activeFileId }));
+  } catch {
+    // quota errors ignored
+  }
+}
+
 export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
   const [ws, setWs] = useState<PanelState>(() => {
     const tree = loadWorkspace();
-    const first = flattenFiles(tree)[0];
+    const files = flattenFiles(tree);
+    const saved = loadPanelState();
+    // Restore saved tabs, but only keep IDs that still exist in the tree
+    const validTabIds = saved.tabs.filter((id) => files.some((f) => f.id === id));
+    const activeFileId = saved.activeFileId && files.some((f) => f.id === saved.activeFileId)
+      ? saved.activeFileId
+      : (validTabIds[0] ?? null);
     return {
       tree,
-      tabs: first ? [first.id] : [],
-      activeFileId: first?.id ?? null,
+      tabs: validTabIds.length > 0 ? validTabIds : (files[0] ? [files[0].id] : []),
+      activeFileId: activeFileId ?? files[0]?.id ?? null,
     };
   });
   const { tree, tabs, activeFileId } = ws;
@@ -274,6 +304,11 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
   useEffect(() => {
     saveWorkspace(tree);
   }, [tree]);
+
+  // Persist open tabs and active file so they survive panel close/reopen.
+  useEffect(() => {
+    savePanelState(tabs, activeFileId);
+  }, [tabs, activeFileId]);
 
   // Files created/changed inside the sandbox terminal show up in the
   // explorer in real time by being merged into the workspace tree.

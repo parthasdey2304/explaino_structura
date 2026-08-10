@@ -287,6 +287,8 @@ function generateQueue(x: number, y: number, data: StructureData["queue"]): Exca
   const cellW = 50;
   const cellH = 70;
   const tubeWidth = Math.max(cellW, cellW * values.length);
+  // Extra padding so DEQUEUE / ENQUEUE arrows never overlap the first / last cell.
+  const sidePad = 80;
 
   elements.push(txt(tubeX, y, "QUEUE", { fontSize: 18 }));
 
@@ -300,14 +302,16 @@ function generateQueue(x: number, y: number, data: StructureData["queue"]): Exca
     elements.push(txt(tubeX + cellW * i + cellW / 2 - 8, tubeY + cellH / 2 - 10, value, { fontSize: 15 }));
   });
 
+  // DEQUEUE arrow sits to the left of the first cell, with a clear gap.
   elements.push(
-    arrow(tubeX - 8, tubeY + cellH / 2, [[0, 0], [-50, 0]], {
+    arrow(tubeX - sidePad, tubeY + cellH / 2, [[0, 0], [sidePad - 12, 0]], {
       label: { text: "DEQUEUE" },
       strokeColor: STROKE_RED,
     })
   );
+  // ENQUEUE arrow sits to the right of the last cell, with a clear gap.
   elements.push(
-    arrow(tubeX + tubeWidth + 58, tubeY + cellH / 2, [[0, 0], [-50, 0]], {
+    arrow(tubeX + tubeWidth + 12, tubeY + cellH / 2, [[0, 0], [sidePad - 12, 0]], {
       label: { text: "ENQUEUE" },
       strokeColor: STROKE_GREEN,
     })

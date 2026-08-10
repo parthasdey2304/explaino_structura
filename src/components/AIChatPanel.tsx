@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 import {
   X,
   Send,
@@ -27,6 +29,37 @@ import {
   setStoredModel,
   type ChatMessage,
 } from "@/lib/ai/mistral";
+
+const AI_CHAT_STORAGE_KEY = "explaino-ai-chat-history";
+const MAX_STORED_MESSAGES = 100;
+
+marked.setOptions({ breaks: true, gfm: true });
+
+function loadChatHistory(): DisplayMessage[] {
+  try {
+    const raw = localStorage.getItem(AI_CHAT_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed;
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+function saveChatHistory(messages: DisplayMessage[]) {
+  try {
+    const trimmed = messages.slice(-MAX_STORED_MESSAGES);
+    localStorage.setItem(AI_CHAT_STORAGE_KEY, JSON.stringify(trimmed));
+  } catch {
+    // quota errors ignored
+  }
+}
+
+function renderMarkdown(text: string): string {
+  const html = marked.parse(text, { async: false }) as string;
+  return DOMPurify.sanitize(html);
+}
 
 export type AIWriteMode = "manual" | "ai" | "pair";
 
@@ -66,7 +99,7 @@ export default function AIChatPanel({
   onWriteModeChange,
   onApplyCode,
 }: AIChatPanelProps) {
-  const [messages, setMessages] = useState<DisplayMessage[]>([]);
+  const [messages, setMessages] = useState<DisplayMessage[]>(() => loadChatHistory());
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [apiKey, setApiKey] = useState(() => getStoredApiKey());
@@ -84,6 +117,11 @@ export default function AIChatPanel({
   useEffect(() => {
     return () => abortRef.current?.abort();
   }, []);
+
+  // Persist conversation so it survives panel close/reopen.
+  useEffect(() => {
+    saveChatHistory(messages);
+  }, [messages]);
 
   const saveKey = useCallback((value: string) => {
     setApiKey(value);
@@ -285,9 +323,16 @@ export default function AIChatPanel({
               {m.role === "user" ? <User size={13} /> : m.role === "error" ? <X size={13} /> : <Bot size={13} />}
             </div>
             <div className="ai-chat-panel__msg-body">
-              <pre className="ai-chat-panel__msg-text">
-                {m.text || (isStreaming && streamingIdRef.current === m.id ? "\u2026" : "")}
-              </pre>
+              <div
+                className="ai-chat-panel__msg-text ai-chat-panel__msg-text--markdown"
+                dangerouslySetInnerHTML={{
+                  __html: m.text
+                    ? renderMarkdown(m.text)
+                    : isStreaming && streamingIdRef.current === m.id
+                    ? "<p><em>…</em></p>"
+                    : "",
+                }}
+              />
               {m.role === "assistant" && m.text && (
                 <div className="ai-chat-panel__msg-actions">
                   <button
