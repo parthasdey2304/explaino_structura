@@ -13,9 +13,12 @@ import {
   ClipboardCheck,
   Clipboard,
   FileCode,
-  Pencil,
-  Sparkles,
-  Users,
+  Paperclip,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
+  Trash2,
 } from "lucide-react";
 import type { WorkspaceFile } from "@/lib/workspace";
 import {
@@ -61,28 +64,24 @@ function renderMarkdown(text: string): string {
   return DOMPurify.sanitize(html);
 }
 
-export type AIWriteMode = "manual" | "ai" | "pair";
-
 interface AIChatPanelProps {
   onClose: () => void;
   activeFile: WorkspaceFile | null;
-  writeMode: AIWriteMode;
-  onWriteModeChange: (mode: AIWriteMode) => void;
-  /** Writes AI-generated code into the currently open file. */
   onApplyCode: (code: string) => void;
 }
 
-interface DisplayMessage {
+export interface DisplayMessage {
   id: string;
   role: "user" | "assistant" | "error";
   text: string;
+  attachment?: { name: string; type: string; content: string } | null;
 }
 
-const WRITE_MODES: { id: AIWriteMode; label: string; hint: string; icon: typeof Pencil }[] = [
-  { id: "manual", label: "You write", hint: "Chat for guidance only — nothing is written for you", icon: Pencil },
-  { id: "ai", label: "AI writes", hint: "Every reply's code is applied to the file automatically", icon: Sparkles },
-  { id: "pair", label: "Pair", hint: "AI proposes code; review it and apply with one click", icon: Users },
-];
+interface AttachedFile {
+  name: string;
+  type: string;
+  content: string;
+}
 
 let _msgCounter = 0;
 const nextId = () => `m${++_msgCounter}-${Date.now().toString(36)}`;
@@ -90,13 +89,12 @@ const nextId = () => `m${++_msgCounter}-${Date.now().toString(36)}`;
 const SYSTEM_PROMPT =
   "You are a concise coding assistant embedded in a browser-based code editor. " +
   "When asked to write or modify code, respond with a short explanation followed by a single fenced code block " +
-  "containing the complete file content (not a diff). Prefer the language of the file the user is editing.";
+  "containing the complete file content (not a diff). Prefer the language of the file the user is editing. " +
+  "You may receive attached files (text or images). Use their content to answer the user's question accurately.";
 
 export default function AIChatPanel({
   onClose,
   activeFile,
-  writeMode,
-  onWriteModeChange,
   onApplyCode,
 }: AIChatPanelProps) {
   const [messages, setMessages] = useState<DisplayMessage[]>(() => loadChatHistory());
@@ -106,9 +104,24 @@ export default function AIChatPanel({
   const [showKeyInput, setShowKeyInput] = useState(() => !getStoredApiKey());
   const [model, setModel] = useState(() => getStoredModel());
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
+  const [attachedFile, setAttachedFile] = useState<AttachedFile | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const [ttsSupported, setTtsSupported] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const streamingIdRef = useRef<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<ReturnType<typeof createSpeechRecognition> | null>(null);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setSpeechSupported("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
+    setTtsSupported("speechSynthesis" in window);
+  }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -137,30 +150,153 @@ export default function AIChatPanel({
     const base: ChatMessage[] = [{ role: "system", content: SYSTEM_PROMPT }];
     for (const m of messages) {
       if (m.role === "error") continue;
-      base.push({ role: m.role, content: m.text });
+      let text = m.text;
+      if (m.attachment) {
+        const att = m.attachment;
+        if (att.type.startsWith("image/")) {
+          text += `\n\n[Attached image: ${att.name}]`;
+        } else {
+          text += `\n\n[Attached file: ${att.name}]\n\`\`\`\n${att.content}\n\`\`\``;
+        }
+      }
+      base.push({ role: m.role, content: text });
     }
     return base;
   }, [messages]);
 
+  // ── File attachment ───────────────────────────────────────────────────
+  const handleFileAttach = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") {
+        setAttachedFile({ name: file.name, type: file.type, content: result });
+      } else if (result instanceof ArrayBuffer) {
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(result)));
+        setAttachedFile({ name: file.name, type: file.type, content: base64 });
+      }
+    };
+    if (file.type.startsWith("image/")) {
+      reader.readAsDataURL(file);
+    } else {
+      reader.readAsText(file);
+    }
+    e.target.value = "";
+  }, []);
+
+  const clearAttachment = useCallback(() => setAttachedFile(null), []);
+
+  // ── Voice: Speech-to-Text ─────────────────────────────────────────────
+  function createSpeechRecognition() {
+    const Ctor = (window as unknown as Record<string, unknown>).SpeechRecognition
+      || (window as unknown as Record<string, unknown>).webkitSpeechRecognition;
+    if (!Ctor) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const recog = new (Ctor as any)();
+    recog.continuous = true;
+    recog.interimResults = true;
+    recog.lang = "en-US";
+    return recog;
+  }
+
+  const startListening = useCallback(() => {
+    if (!speechSupported) return;
+    const recog = createSpeechRecognition();
+    if (!recog) return;
+    recognitionRef.current = recog;
+    let finalTranscript = "";
+    let interimTranscript = "";
+
+    recog.onresult = (event: { results: SpeechRecognitionResultList }) => {
+      interimTranscript = "";
+      for (let i = event.results.length - 1; i >= 0; i--) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          finalTranscript += result[0].transcript;
+        } else {
+          interimTranscript += result[0].transcript;
+        }
+      }
+      setInput(finalTranscript + interimTranscript);
+    };
+    recog.onerror = () => setIsListening(false);
+    recog.onend = () => setIsListening(false);
+    recog.start();
+    setIsListening(true);
+  }, [speechSupported]);
+
+  const stopListening = useCallback(() => {
+    recognitionRef.current?.stop();
+    setIsListening(false);
+  }, []);
+
+  const toggleListening = useCallback(() => {
+    if (isListening) stopListening();
+    else startListening();
+  }, [isListening, startListening, stopListening]);
+
+  // ── Voice: Text-to-Speech ─────────────────────────────────────────────
+  const speakText = useCallback((text: string) => {
+    if (!ttsSupported || isSpeaking) {
+      if (isSpeaking) window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+    const cleanText = text.replace(/```[\s\S]*?```/g, " code block ").replace(/[#*_~`>\-]/g, "");
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    utteranceRef.current = utterance;
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  }, [ttsSupported, isSpeaking]);
+
+  const stopSpeaking = useCallback(() => {
+    window.speechSynthesis.cancel();
+    setIsSpeaking(false);
+  }, []);
+
+  // ── Send message ───────────────────────────────────────────────────────
   const send = useCallback(async () => {
     const text = input.trim();
-    if (!text || isStreaming) return;
+    if (!text && !attachedFile) return;
+    if (isStreaming) return;
 
     if (!getStoredApiKey()) {
       setShowKeyInput(true);
       return;
     }
 
+    stopListening();
+    stopSpeaking();
+
+    let messageText = text;
+    if (attachedFile && !attachedFile.type.startsWith("image/")) {
+      messageText += `\n\n[Attached file: ${attachedFile.name}]\n\`\`\`\n${attachedFile.content}\n\`\`\``;
+    }
+
     const contextPrefix = activeFile
       ? `Active file: ${activeFile.name} (${activeFile.language})\n\n${activeFile.content}\n\n---\n\n`
       : "";
 
-    const userMsg: DisplayMessage = { id: nextId(), role: "user", text };
+    const userMsg: DisplayMessage = {
+      id: nextId(),
+      role: "user",
+      text: messageText,
+      attachment: attachedFile && attachedFile.type.startsWith("image/")
+        ? attachedFile
+        : null,
+    };
     const assistantId = nextId();
     streamingIdRef.current = assistantId;
 
     setMessages((prev) => [...prev, userMsg, { id: assistantId, role: "assistant", text: "" }]);
     setInput("");
+    setAttachedFile(null);
     setIsStreaming(true);
 
     const controller = new AbortController();
@@ -168,7 +304,7 @@ export default function AIChatPanel({
 
     const outgoing: ChatMessage[] = [
       ...history,
-      { role: "user", content: contextPrefix ? `${contextPrefix}${text}` : text },
+      { role: "user", content: contextPrefix ? `${contextPrefix}${messageText}` : messageText },
     ];
 
     try {
@@ -182,11 +318,8 @@ export default function AIChatPanel({
         },
         controller.signal
       );
-
-      if (writeMode === "ai") {
-        const code = extractFirstCodeBlock(full);
-        if (code) onApplyCode(code);
-      }
+      const code = extractFirstCodeBlock(full);
+      if (code && activeFile) onApplyCode(code);
     } catch (err) {
       if (controller.signal.aborted) {
         // User-initiated stop — leave the partial reply as-is.
@@ -201,13 +334,11 @@ export default function AIChatPanel({
       setIsStreaming(false);
       abortRef.current = null;
     }
-  }, [input, isStreaming, activeFile, history, model, writeMode, onApplyCode]);
+  }, [input, attachedFile, isStreaming, activeFile, history, model, onApplyCode, stopListening, stopSpeaking]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
   }, []);
-
-  const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
 
   const copyMessage = useCallback((id: string, text: string) => {
     navigator.clipboard?.writeText(text).then(() => {
@@ -264,26 +395,6 @@ export default function AIChatPanel({
         </div>
       </div>
 
-      {/* Write-mode selector: who writes the code */}
-      <div className="ai-chat-panel__modes">
-        {WRITE_MODES.map((m) => {
-          const Icon = m.icon;
-          const active = writeMode === m.id;
-          return (
-            <button
-              key={m.id}
-              type="button"
-              className={`ai-chat-panel__mode${active ? " ai-chat-panel__mode--active" : ""}`}
-              onClick={() => onWriteModeChange(m.id)}
-              title={m.hint}
-            >
-              <Icon size={12} />
-              <span>{m.label}</span>
-            </button>
-          );
-        })}
-      </div>
-
       {showKeyInput && (
         <div className="ai-chat-panel__keybox">
           <label className="ai-chat-panel__keybox-label">
@@ -327,6 +438,9 @@ export default function AIChatPanel({
           <div className="ai-chat-panel__empty">
             <Bot size={22} />
             <p>Ask about your code, or request a feature — I can see the active file.</p>
+            <p className="ai-chat-panel__empty-hint">
+              Attach files or images with the paperclip icon, or use the mic to speak.
+            </p>
           </div>
         )}
         {messages.map((m) => (
@@ -335,6 +449,12 @@ export default function AIChatPanel({
               {m.role === "user" ? <User size={13} /> : m.role === "error" ? <X size={13} /> : <Bot size={13} />}
             </div>
             <div className="ai-chat-panel__msg-body">
+              {m.role === "user" && m.attachment?.type.startsWith("image/") && (
+                <div className="ai-chat-panel__attachment">
+                  <img src={m.attachment.content} alt={m.attachment.name} />
+                  <span className="ai-chat-panel__attachment-name">{m.attachment.name}</span>
+                </div>
+              )}
               <div
                 className="ai-chat-panel__msg-text ai-chat-panel__msg-text--markdown"
                 dangerouslySetInnerHTML={{
@@ -365,7 +485,7 @@ export default function AIChatPanel({
                       <span>{copiedCodeId === m.id ? "Code copied" : "Copy code"}</span>
                     </button>
                   )}
-                  {writeMode !== "ai" && extractFirstCodeBlock(m.text) && (
+                  {extractFirstCodeBlock(m.text) && activeFile && (
                     <button
                       type="button"
                       className="ai-chat-panel__msg-action ai-chat-panel__msg-action--primary"
@@ -375,6 +495,17 @@ export default function AIChatPanel({
                       <span>Apply to file</span>
                     </button>
                   )}
+                  {ttsSupported && (
+                    <button
+                      type="button"
+                      className="ai-chat-panel__msg-action"
+                      onClick={() => speakText(m.text)}
+                      title={isSpeaking ? "Stop reading" : "Read aloud"}
+                    >
+                      {isSpeaking ? <VolumeX size={11} /> : <Volume2 size={11} />}
+                      <span>{isSpeaking ? "Stop" : "Speak"}</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -382,37 +513,79 @@ export default function AIChatPanel({
         ))}
       </div>
 
+      {/* Composer with attachment and voice */}
       <div className="ai-chat-panel__composer">
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send();
-            }
-          }}
-          placeholder={
-            activeFile ? `Ask about ${activeFile.name}…` : "Open a file, then ask me anything…"
-          }
-          className="ai-chat-panel__input"
-          rows={2}
-        />
-        {isStreaming ? (
-          <button type="button" className="ai-chat-panel__send ai-chat-panel__send--stop" onClick={stop}>
-            <Loader2 size={14} className="ai-chat-panel__spin" />
-          </button>
-        ) : (
+        {attachedFile && (
+          <div className="ai-chat-panel__attached">
+            {attachedFile.type.startsWith("image/") ? (
+              <img src={attachedFile.content} alt={attachedFile.name} className="ai-chat-panel__attached-preview" />
+            ) : (
+              <FileCode size={12} />
+            )}
+            <span className="ai-chat-panel__attached-name">{attachedFile.name}</span>
+            <button type="button" className="ai-chat-panel__attached-remove" onClick={clearAttachment} title="Remove">
+              <X size={10} />
+            </button>
+          </div>
+        )}
+        <div className="ai-chat-panel__input-row">
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="ai-chat-panel__file-input"
+            accept="image/*,.txt,.js,.ts,.py,.java,.cpp,.c,.html,.css,.json,.md,.xml,.csv"
+            onChange={handleFileAttach}
+            style={{ display: "none" }}
+          />
           <button
             type="button"
-            className="ai-chat-panel__send"
-            onClick={send}
-            disabled={!input.trim()}
-            title="Send (Enter)"
+            className="ai-chat-panel__attach-btn"
+            onClick={() => fileInputRef.current?.click()}
+            title="Attach file or image"
           >
-            <Send size={14} />
+            <Paperclip size={14} />
           </button>
-        )}
+          {speechSupported && (
+            <button
+              type="button"
+              className={`ai-chat-panel__mic-btn${isListening ? " ai-chat-panel__mic-btn--active" : ""}`}
+              onClick={toggleListening}
+              title={isListening ? "Stop recording" : "Voice input"}
+            >
+              {isListening ? <MicOff size={14} /> : <Mic size={14} />}
+            </button>
+          )}
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            placeholder={
+              activeFile ? `Ask about ${activeFile.name}…` : "Open a file, then ask me anything…"
+            }
+            className="ai-chat-panel__input"
+            rows={2}
+          />
+          {isStreaming ? (
+            <button type="button" className="ai-chat-panel__send ai-chat-panel__send--stop" onClick={stop}>
+              <Loader2 size={14} className="ai-chat-panel__spin" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="ai-chat-panel__send"
+              onClick={send}
+              disabled={!input.trim() && !attachedFile}
+              title="Send (Enter)"
+            >
+              <Send size={14} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

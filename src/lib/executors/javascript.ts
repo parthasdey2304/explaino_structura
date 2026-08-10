@@ -83,11 +83,11 @@ export function executeJavaScript(code: string): Promise<ExecutionResult> {
   }catch(e){
     console.error(e.message||String(e));
   }
-  var cv=document.getElementById("c");
-  if(cv&&cv.width>0&&cv.height>0){
-    try{parent.postMessage({type:"canvas",dataURL:cv.toDataURL()},"*");}catch(x){}
-  }
-  parent.postMessage({type:"done"},"*");
+   var cv=document.getElementById("c");
+   if(cv&&typeof cv.toDataURL==="function"&&cv.width>0&&cv.height>0){
+     try{parent.postMessage({type:"canvas",dataURL:cv.toDataURL()},"*");}catch(x){}
+   }
+   parent.postMessage({type:"done"},"*");
 })();
 <\/script></body></html>`;
   });

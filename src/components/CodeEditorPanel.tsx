@@ -279,7 +279,6 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
   const activeLanguageRef = useRef<string>("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onDocChangeRef = useRef<(doc: string) => void>(() => {});
-  const [aiWriteMode, setAiWriteMode] = useState<"manual" | "ai" | "pair">("manual");
   const [showAIChat, setShowAIChat] = useState(false);
   const [settingsSnapshot, setSettingsSnapshot] = useState(() => getEditorSettings());
 
@@ -967,8 +966,6 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
         <AIChatPanel
           onClose={() => setShowAIChat(false)}
           activeFile={activeFile}
-          writeMode={aiWriteMode}
-          onWriteModeChange={setAiWriteMode}
           onApplyCode={applyCodeToActiveFile}
         />
       )}

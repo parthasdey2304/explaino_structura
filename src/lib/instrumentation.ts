@@ -60,6 +60,28 @@ const BOUNDARY_STOP_WORDS = new Set([
  * shadows the real global of the same name, which is what keeps the
  * traced snippet away from the DOM and the network.
  */
+// Mock DOM element returned by the sandbox's document.getElementById.
+// Lets traced code that touches the DOM fail gracefully instead of
+// crashing with "Cannot read properties of undefined".
+function createMockElement(): ReturnType<typeof Object.create> {
+  const el: Record<string, unknown> = {
+    style: {},
+    width: 0,
+    height: 0,
+    getContext: () => null,
+    appendChild: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    setAttribute: () => {},
+    getAttribute: () => null,
+    innerHTML: "",
+    textContent: "",
+    value: "",
+    getBoundingClientRect: () => ({ x: 0, y: 0, width: 0, height: 0, top: 0, left: 0, right: 0, bottom: 0 }),
+  };
+  return el;
+}
+
 const SANDBOX_GLOBALS: Record<string, unknown> = {
   Math,
   JSON,
@@ -95,27 +117,34 @@ const SANDBOX_GLOBALS: Record<string, unknown> = {
   clearTimeout: () => undefined,
   clearInterval: () => undefined,
   requestAnimationFrame: () => 0,
-  // Blocked: DOM, network, storage and ambient window noise. Shadowing
-  // these keeps `() => name`-style probes from resolving to `window.name`
-  // and keeps traced code sandboxed.
-  window: undefined,
-  globalThis: undefined,
-  self: undefined,
-  document: undefined,
-  location: undefined,
-  history: undefined,
-  navigator: undefined,
-  screen: undefined,
-  parent: undefined,
-  top: undefined,
-  frames: undefined,
-  opener: undefined,
-  closed: undefined,
-  origin: undefined,
-  event: undefined,
-  status: undefined,
-  name: undefined,
-  length: undefined,
+  // Mocked DOM: traced code that touches the DOM gets a safe mock object
+  // instead of crashing with "Cannot read properties of undefined".
+  window: { document: { getElementById: createMockElement } },
+  globalThis: {},
+  self: {},
+  document: {
+    getElementById: createMockElement,
+    createElement: createMockElement,
+    querySelector: createMockElement,
+    querySelectorAll: () => [],
+    body: { appendChild: () => {} },
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  },
+  location: {},
+  history: { pushState: () => {}, replaceState: () => {} },
+  navigator: { userAgent: "explaino-sandbox" },
+  screen: { width: 0, height: 0 },
+  parent: {},
+  top: {},
+  frames: [],
+  opener: null,
+  closed: false,
+  origin: "null",
+  event: null,
+  status: "",
+  name: "",
+  length: 0,
   fetch: undefined,
   XMLHttpRequest: undefined,
   WebSocket: undefined,
@@ -124,10 +153,10 @@ const SANDBOX_GLOBALS: Record<string, unknown> = {
   sessionStorage: undefined,
   indexedDB: undefined,
   crypto: undefined,
-  alert: undefined,
-  confirm: undefined,
-  prompt: undefined,
-  postMessage: undefined,
+  alert: () => {},
+  confirm: () => true,
+  prompt: () => "",
+  postMessage: () => {},
   importScripts: undefined,
   Function: undefined,
   process: undefined,
