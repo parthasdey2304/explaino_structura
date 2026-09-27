@@ -114,3 +114,169 @@ export function highlightCode(code: string, lang?: string): string {
   }
   return out;
 }
+
+function toBase64(str: string): string {
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(str, "utf-8").toString("base64");
+  }
+  if (typeof window !== "undefined" && typeof window.btoa === "function") {
+    if (typeof TextEncoder !== "undefined") {
+      const bytes = new TextEncoder().encode(str);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return window.btoa(binary);
+    }
+    return window.btoa(unescape(encodeURIComponent(str)));
+  }
+  return "";
+}
+
+/**
+ * Generate a standalone syntax-highlighted code card as an SVG data URL for
+ * embedding on the Excalidraw canvas as an image element.
+ */
+export function createCodeCardSvg(
+  code: string,
+  lang: string,
+  isDark: boolean = false
+): { dataUrl: string; width: number; height: number } {
+  const language = resolveLanguage(lang);
+  const cleanCode = code.replace(/\r\n/g, "\n");
+  const rawLines = cleanCode.split("\n");
+
+  interface TokenChunk {
+    text: string;
+    classes: string;
+  }
+  const lineTokens: TokenChunk[][] = [[]];
+
+  if (language) {
+    try {
+      const tree = language.parser.parse(cleanCode);
+      runHighlight(
+        cleanCode,
+        tree,
+        classHighlighter,
+        (text, classes) => {
+          const parts = text.split("\n");
+          for (let i = 0; i < parts.length; i++) {
+            if (i > 0) {
+              lineTokens.push([]);
+            }
+            if (parts[i]) {
+              lineTokens[lineTokens.length - 1].push({
+                text: parts[i],
+                classes: classes || "",
+              });
+            }
+          }
+        },
+        () => {
+          lineTokens.push([]);
+        }
+      );
+    } catch {
+      // Fallback to raw lines below
+    }
+  }
+
+  const finalLines: TokenChunk[][] =
+    lineTokens.length > 0 && lineTokens.some((l) => l.length > 0)
+      ? lineTokens
+      : rawLines.map((l) => [{ text: l, classes: "" }]);
+
+  let maxCols = 1;
+  for (const l of finalLines) {
+    const len = l.reduce((acc, t) => acc + t.text.length, 0);
+    if (len > maxCols) maxCols = len;
+  }
+
+  const charWidth = 8.4;
+  const paddingX = 22;
+  const headerHeight = 40;
+  const lineHeight = 21;
+  const paddingBottom = 18;
+
+  const cardWidth = Math.max(
+    340,
+    Math.min(1200, Math.round(maxCols * charWidth + paddingX * 2))
+  );
+  const cardHeight = Math.round(
+    headerHeight + finalLines.length * lineHeight + paddingBottom
+  );
+
+  const displayLang = (lang || "code").toUpperCase();
+
+  function escapeXml(str: string): string {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;");
+  }
+
+  function getDarkTokenColor(classes: string): string {
+    if (!classes) return "#d4d4d4";
+    if (classes.includes("tok-comment")) return "#6a9955";
+    if (classes.includes("tok-keyword")) return "#569cd6";
+    if (classes.includes("tok-string")) return "#ce9178";
+    if (classes.includes("tok-number")) return "#b5cea8";
+    if (
+      classes.includes("tok-bool") ||
+      classes.includes("tok-atom") ||
+      classes.includes("tok-literal")
+    )
+      return "#569cd6";
+    if (classes.includes("tok-meta")) return "#c586c0";
+    if (
+      classes.includes("tok-typeName") ||
+      classes.includes("tok-className") ||
+      classes.includes("tok-namespace")
+    )
+      return "#4ec9b0";
+    if (
+      classes.includes("tok-variableName") &&
+      classes.includes("tok-definition")
+    )
+      return "#dcdcaa";
+    if (
+      classes.includes("tok-variableName") ||
+      classes.includes("tok-propertyName")
+    )
+      return "#9cdcfe";
+    if (classes.includes("tok-operator") || classes.includes("tok-punctuation"))
+      return "#d4d4d4";
+    return "#d4d4d4";
+  }
+
+  let textSvg = "";
+  for (let idx = 0; idx < finalLines.length; idx++) {
+    const l = finalLines[idx];
+    const y = headerHeight + 18 + idx * lineHeight;
+    let lineContent = "";
+    for (const t of l) {
+      const color = getDarkTokenColor(t.classes);
+      lineContent += `<tspan fill="${color}">${escapeXml(t.text)}</tspan>`;
+    }
+    textSvg += `  <text x="${paddingX}" y="${y}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="13" xml:space="preserve">${lineContent}</text>\n`;
+  }
+
+  const borderColor = isDark ? "rgba(255, 255, 255, 0.85)" : "#3f3f46";
+  const borderWidth = isDark ? 1.5 : 1.2;
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${cardWidth}" height="${cardHeight}" viewBox="0 0 ${cardWidth} ${cardHeight}">
+  <rect x="0.75" y="0.75" width="${cardWidth - 1.5}" height="${cardHeight - 1.5}" rx="16" ry="16" fill="#18181b" stroke="${borderColor}" stroke-width="${borderWidth}" />
+  <circle cx="20" cy="20" r="5" fill="#ef4444" />
+  <circle cx="35" cy="20" r="5" fill="#eab308" />
+  <circle cx="50" cy="20" r="5" fill="#22c55e" />
+  <text x="${cardWidth - 18}" y="24" text-anchor="end" font-family="ui-monospace, monospace" font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.05em">${escapeXml(displayLang)}</text>
+  <line x1="0" y1="${headerHeight}" x2="${cardWidth}" y2="${headerHeight}" stroke="#27272a" stroke-width="1" />
+${textSvg}</svg>`;
+
+  const base64 = toBase64(svg);
+  const dataUrl = `data:image/svg+xml;base64,${base64}`;
+  return { dataUrl, width: cardWidth, height: cardHeight };
+}

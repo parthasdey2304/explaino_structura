@@ -25,6 +25,7 @@ import CodeEditorPanel from "./CodeEditorPanel";
 import DataStructuresPanel from "./DataStructuresPanel";
 import CanvasStructureControls, { type ViewportBox } from "./CanvasStructureControls";
 import AITextSidebar from "./AITextSidebar";
+import { createCodeCardSvg } from "@/lib/ai/highlight";
 import TodoPanel, { TodoCornerButton } from "./TodoOverlay";
 import LaserOverlay from "./LaserOverlay";
 import {
@@ -452,9 +453,12 @@ export default function ExcalidrawWrapper() {
           {};
         for (const [fileId, file] of Object.entries(scene.files)) {
           if (file.dataURL) {
+            const isSvg =
+              file.mimeType === "image/svg+xml" ||
+              file.dataURL.startsWith("data:image/svg");
             filesAsDataURL[fileId] = {
               dataURL: file.dataURL,
-              mimeType: file.mimeType || "image/png",
+              mimeType: isSvg ? "image/svg+xml" : (file.mimeType || "image/png"),
             };
           }
         }
@@ -504,15 +508,20 @@ export default function ExcalidrawWrapper() {
             elements: sanitizeElements(saved.elements as unknown[]),
             appState: saved.appState as Partial<AppState>,
             files: Object.fromEntries(
-              Object.entries(saved.files || {}).map(([id, f]) => [
-                id,
-                {
+              Object.entries(saved.files || {}).map(([id, f]) => {
+                const isSvg =
+                  f.mimeType === "image/svg+xml" ||
+                  f.dataURL?.startsWith("data:image/svg");
+                return [
                   id,
-                  dataURL: f.dataURL,
-                  mimeType: f.mimeType || "image/png",
-                  created: Date.now(),
-                },
-              ])
+                  {
+                    id,
+                    dataURL: f.dataURL,
+                    mimeType: isSvg ? "image/svg+xml" : (f.mimeType || "image/png"),
+                    created: Date.now(),
+                  },
+                ];
+              })
             ) as unknown as BinaryFiles,
           });
           return;
@@ -525,10 +534,24 @@ export default function ExcalidrawWrapper() {
           if (!parsed || !Array.isArray(parsed.elements)) throw new Error("Invalid scene");
           // Sanitize elements to avoid Excalidraw normalization crashes
           const validElements = sanitizeElements(parsed.elements);
+          const restoredFiles: Record<string, any> = {};
+          if (parsed.files) {
+            for (const [id, f] of Object.entries(parsed.files as Record<string, any>)) {
+              if (f && f.dataURL) {
+                const isSvg =
+                  f.mimeType === "image/svg+xml" ||
+                  f.dataURL.startsWith("data:image/svg");
+                restoredFiles[id] = {
+                  ...f,
+                  mimeType: isSvg ? "image/svg+xml" : (f.mimeType || "image/png"),
+                };
+              }
+            }
+          }
           setInitialData({
             elements: validElements,
             appState: parsed.appState as Partial<AppState>,
-            files: parsed.files as BinaryFiles,
+            files: restoredFiles as BinaryFiles,
           });
           return;
         } catch {
@@ -559,9 +582,12 @@ export default function ExcalidrawWrapper() {
       {};
     for (const [fileId, file] of Object.entries(scene.files)) {
       if (file.dataURL) {
+        const isSvg =
+          file.mimeType === "image/svg+xml" ||
+          file.dataURL.startsWith("data:image/svg");
         filesAsDataURL[fileId] = {
           dataURL: file.dataURL,
-          mimeType: file.mimeType || "image/png",
+          mimeType: isSvg ? "image/svg+xml" : (file.mimeType || "image/png"),
         };
       }
     }
@@ -859,6 +885,159 @@ export default function ExcalidrawWrapper() {
     const def = findStructureDef("table");
     if (def) handleInsertDataStructure(def, def.defaultData());
   }, [handleInsertDataStructure]);
+
+  // --- Insert syntax-highlighted code card from AI Text panel onto canvas
+  const handleInsertCodeToCanvas = useCallback(
+    (code: string, lang: string) => {
+      const api = excalidrawAPI.current;
+      if (!api) return;
+      const appState = api.getAppState();
+      const { x, y } = viewportCoordsToSceneCoords(
+        { clientX: appState.width / 2, clientY: appState.height / 2 },
+        {
+          zoom: appState.zoom,
+          offsetLeft: appState.offsetLeft,
+          offsetTop: appState.offsetTop,
+          scrollX: appState.scrollX,
+          scrollY: appState.scrollY,
+        }
+      );
+
+      const isDark =
+        theme === "dark" ||
+        appState.theme === "dark" ||
+        (typeof document !== "undefined" &&
+          document.documentElement.classList.contains("dark"));
+
+      const { dataUrl, width, height } = createCodeCardSvg(code, lang, isDark);
+      const fileId = `code-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+
+      const newElements = convertToExcalidrawElements([
+        {
+          type: "image",
+          fileId: fileId as any,
+          status: "saved",
+          x: Math.round(x - width / 2),
+          y: Math.round(y - height / 2),
+          width,
+          height,
+          customData: {
+            isCodeCard: true,
+            code,
+            lang,
+          },
+        },
+      ]);
+
+      const selectedElementIds: Record<string, true> = {};
+      for (const el of newElements) {
+        selectedElementIds[el.id] = true;
+      }
+
+      api.updateScene({
+        elements: [...api.getSceneElements(), ...newElements],
+        appState: {
+          selectedElementIds,
+        } as unknown as AppState,
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      });
+
+      api.addFiles([
+        {
+          id: fileId as any,
+          dataURL: dataUrl as any,
+          mimeType: "image/svg+xml",
+          created: Date.now(),
+        },
+      ]);
+
+      api.scrollToContent(newElements, { fitToContent: false });
+    },
+    [theme]
+  );
+
+  // Keep code cards synced with current theme (white border in dark mode, dark border in light mode)
+  useEffect(() => {
+    const api = excalidrawAPI.current;
+    if (!api) return;
+    const elements = api.getSceneElements();
+    const isDark = theme === "dark";
+    const filesToAdd: any[] = [];
+    let hasChanges = false;
+
+    const nextElements = elements.map((el) => {
+      if (!el.isDeleted && el.type === "image" && (el.customData as any)?.isCodeCard) {
+        const data = el.customData as { isCodeCard: boolean; code: string; lang: string };
+        if (!data?.code) return el;
+        const newFileId = `code-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+        const { dataUrl } = createCodeCardSvg(data.code, data.lang, isDark);
+        filesToAdd.push({
+          id: newFileId,
+          dataURL: dataUrl,
+          mimeType: "image/svg+xml",
+          created: Date.now(),
+        });
+        hasChanges = true;
+        return {
+          ...el,
+          fileId: newFileId,
+        };
+      }
+      return el;
+    });
+
+    if (hasChanges && filesToAdd.length > 0) {
+      api.updateScene({ elements: nextElements as any });
+      api.addFiles(filesToAdd);
+    }
+  }, [theme]);
+
+  // --- Insert plain text from AI Text panel onto canvas (Excalidraw Text tool T / 8)
+  const handleInsertTextToCanvas = useCallback(
+    (text: string) => {
+      const api = excalidrawAPI.current;
+      if (!api) return;
+      const appState = api.getAppState();
+      const { x, y } = viewportCoordsToSceneCoords(
+        { clientX: appState.width / 2, clientY: appState.height / 2 },
+        {
+          zoom: appState.zoom,
+          offsetLeft: appState.offsetLeft,
+          offsetTop: appState.offsetTop,
+          scrollX: appState.scrollX,
+          scrollY: appState.scrollY,
+        }
+      );
+
+      const cleanText = text.trim();
+      const newElements = convertToExcalidrawElements([
+        {
+          type: "text",
+          x: Math.round(x - 120),
+          y: Math.round(y - 40),
+          text: cleanText,
+          fontSize: 16,
+          fontFamily: 3,
+          strokeColor: theme === "dark" ? "#e4e4e7" : "#18181b",
+        },
+      ]);
+
+      const selectedElementIds: Record<string, true> = {};
+      for (const el of newElements) {
+        selectedElementIds[el.id] = true;
+      }
+
+      api.updateScene({
+        elements: [...api.getSceneElements(), ...newElements],
+        appState: {
+          selectedElementIds,
+        } as unknown as AppState,
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      });
+      api.scrollToContent(newElements, { fitToContent: false });
+    },
+    [theme]
+  );
 
 
 
@@ -1255,7 +1434,13 @@ export default function ExcalidrawWrapper() {
       </div>
 
       {/* AI Text sidebar — slides in from the right at half the Code width */}
-      {showAiTextPanel && <AITextSidebar onClose={() => setShowAiTextPanel(false)} />}
+      {showAiTextPanel && (
+        <AITextSidebar
+          onClose={() => setShowAiTextPanel(false)}
+          onInsertCode={handleInsertCodeToCanvas}
+          onInsertText={handleInsertTextToCanvas}
+        />
+      )}
 
       {/* Data Structures Panel */}
       {showDataStructuresPanel && (

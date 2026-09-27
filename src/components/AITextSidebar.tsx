@@ -3,7 +3,21 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Marked, type Tokens } from "marked";
 import DOMPurify from "dompurify";
-import { Bot, Check, Copy, Loader2, Mic, MicOff, Send, User, X } from "lucide-react";
+import {
+  Bot,
+  Check,
+  Copy,
+  Loader2,
+  Mic,
+  MicOff,
+  Pencil,
+  Plus,
+  Send,
+  Trash2,
+  Type,
+  User,
+  X,
+} from "lucide-react";
 import {
   MistralError,
   chatStreamAuto,
@@ -11,13 +25,13 @@ import {
 } from "@/lib/ai/mistral";
 import { highlightCode } from "@/lib/ai/highlight";
 
-/** Pinned model for this panel per spec — always Mistral Large. */
-const AI_TEXT_MODEL = "mistral-large-latest";
+/** Pinned models: Open Mistral Nemo is the main model, Codestral is for /code. */
+const MAIN_MODEL = "open-mistral-nemo";
+const CODE_MODEL = "codestral-latest";
 
 /**
- * Strict scope + multi-output contract. The route only prepends its generic
- * prompt when the caller sends no system message, so this one wins: exactly
- * four complete solutions (Java, Python, C, C++), fenced for tab parsing,
+ * Strict scope + multi-output contract for /code requests:
+ * Exactly four complete solutions (Java, Python, C, C++), fenced for tab parsing,
  * zero conversational filler.
  */
 const CODE_SYSTEM_PROMPT =
@@ -30,6 +44,24 @@ const CODE_SYSTEM_PROMPT =
   "short bold label line, then exactly one fenced code block tagged java, " +
   "python, c, or cpp. No other code blocks. No greetings, introductions, or " +
   "conversational filler — at most one terse line per solution.";
+
+/**
+ * Direct plain text system prompt for normal / canvas text requests:
+ * Data is directly inserted onto an Excalidraw drawing canvas, so ABSOLUTELY NO
+ * conversational filler, greetings, introductions, commentary, notes, or explanations.
+ */
+const CANVAS_TEXT_SYSTEM_PROMPT =
+  "You are Explaino Canvas Text Generator. Your output will be directly inserted as text elements onto an Excalidraw drawing canvas. " +
+  "CRITICAL RULES: " +
+  "1. Output ONLY the raw content, text, list, ASCII table, values, or data requested. " +
+  "2. NEVER include conversational filler, greetings, introductions, or pleasantries (e.g. do NOT write 'Here is...', 'Sure!', 'Hope this helps', 'Note:', etc.). " +
+  "3. NEVER add explanations, summaries, markdown commentary, or chit-chat. " +
+  "4. Do NOT output four-language solution tabs. " +
+  "5. Every single line you output must be pure content intended directly for placement on the canvas.";
+
+// LocalStorage cache key and 7-day retention limit
+const STORAGE_KEY = "explaino_ai_text_history_v1";
+const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Isolated Marked instance so this sidebar's code blocks can be syntax
 // highlighted without changing how other panels render Markdown.
@@ -91,6 +123,8 @@ interface UiMessage {
   id: string;
   role: "user" | "assistant" | "error";
   text: string;
+  timestamp?: number;
+  mode?: "code" | "text";
 }
 
 let msgCounter = 0;
@@ -161,20 +195,64 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
+function loadCachedMessages(): UiMessage[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const list = JSON.parse(raw);
+    if (!Array.isArray(list)) return [];
+    const cutoff = Date.now() - ONE_WEEK_MS;
+    return list.filter(
+      (m: any) =>
+        m &&
+        typeof m.id === "string" &&
+        typeof m.text === "string" &&
+        (m.role === "user" || m.role === "assistant" || m.role === "error") &&
+        (!m.timestamp || m.timestamp >= cutoff)
+    );
+  } catch (err) {
+    console.warn("Failed to load AI text history:", err);
+    return [];
+  }
+}
+
+function saveCachedMessages(messages: UiMessage[]) {
+  if (typeof window === "undefined") return;
+  try {
+    const cutoff = Date.now() - ONE_WEEK_MS;
+    const toSave = messages
+      .filter((m) => !m.timestamp || m.timestamp >= cutoff)
+      .slice(-50);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+  } catch (err) {
+    console.warn("Failed to save AI text history:", err);
+  }
+}
+
 /**
  * Tabbed solution view: one tab per fenced code block (Java/Python/C/C++
- * first), syntax-highlighted, each with its own copy-to-clipboard button.
+ * first), syntax-highlighted, with copy button and add-to-canvas button.
  */
-function SolutionTabs({ solutions }: { solutions: Solution[] }) {
+function SolutionTabs({
+  solutions,
+  onInsertCode,
+}: {
+  solutions: Solution[];
+  onInsertCode?: (code: string, lang: string) => void;
+}) {
   const [active, setActive] = useState(0);
   const [copied, setCopied] = useState<number | null>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     return () => {
       if (copyTimer.current) clearTimeout(copyTimer.current);
     };
   }, []);
+
   const current = solutions[Math.min(active, solutions.length - 1)];
+
   const onCopy = useCallback(async () => {
     const ok = await copyText(current.code);
     if (!ok) return;
@@ -183,6 +261,7 @@ function SolutionTabs({ solutions }: { solutions: Solution[] }) {
     if (copyTimer.current) clearTimeout(copyTimer.current);
     copyTimer.current = setTimeout(() => setCopied(null), 1500);
   }, [current, solutions]);
+
   return (
     <div className="ai-text__solutions">
       <div className="ai-text__tabbar" role="tablist" aria-label="Solutions">
@@ -204,20 +283,34 @@ function SolutionTabs({ solutions }: { solutions: Solution[] }) {
         </span>
       </div>
       <div className="ai-text__codewrap">
-        <button
-          type="button"
-          className="ai-text__copy"
-          onClick={onCopy}
-          title="Copy solution to clipboard"
-          aria-label={`Copy ${current.label} solution`}
-        >
-          {copied === solutions.indexOf(current) ? (
-            <Check size={13} strokeWidth={2.5} />
-          ) : (
-            <Copy size={13} strokeWidth={2.2} />
+        <div className="ai-text__code-actions">
+          {onInsertCode && (
+            <button
+              type="button"
+              className="ai-text__canvas-btn"
+              onClick={() => onInsertCode(current.code, current.lang)}
+              title="Add syntax-highlighted code card to canvas"
+              aria-label={`Add ${current.label} code to canvas`}
+            >
+              <Plus size={13} strokeWidth={2.2} />
+              <span>Add to Canvas</span>
+            </button>
           )}
-          <span>{copied === solutions.indexOf(current) ? "Copied" : "Copy"}</span>
-        </button>
+          <button
+            type="button"
+            className="ai-text__copy"
+            onClick={onCopy}
+            title="Copy solution to clipboard"
+            aria-label={`Copy ${current.label} solution`}
+          >
+            {copied === solutions.indexOf(current) ? (
+              <Check size={13} strokeWidth={2.5} />
+            ) : (
+              <Copy size={13} strokeWidth={2.2} />
+            )}
+            <span>{copied === solutions.indexOf(current) ? "Copied" : "Copy"}</span>
+          </button>
+        </div>
         <pre className="ai-text__pre">
           <code
             className={`language-${current.lang}`}
@@ -233,34 +326,107 @@ function SolutionTabs({ solutions }: { solutions: Solution[] }) {
   );
 }
 
-/** Assistant bubble: tabbed solutions when the reply has code fences. */
-function AssistantBody({ text }: { text: string }) {
-  const solutions = useMemo(() => extractSolutions(text), [text]);
+/** Assistant bubble: tabbed solutions when code, or direct text with Add to Canvas. */
+function AssistantBody({
+  text,
+  mode,
+  onInsertCode,
+  onInsertText,
+}: {
+  text: string;
+  mode?: "code" | "text";
+  onInsertCode?: (code: string, lang: string) => void;
+  onInsertText?: (text: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+    };
+  }, []);
+
+  const handleCopy = useCallback(async () => {
+    const ok = await copyText(text);
+    if (!ok) return;
+    setCopied(true);
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => setCopied(false), 1500);
+  }, [text]);
+
+  const solutions = useMemo(() => {
+    if (mode === "text") return [];
+    return extractSolutions(text);
+  }, [text, mode]);
+
   if (solutions.length === 0) {
     return (
-      <div
-        className="ai-text-panel__msg-text ai-text-panel__msg-text--markdown"
-        dangerouslySetInnerHTML={{
-          __html: renderMarkdown(text || "…"),
-        }}
-      />
+      <div className="ai-text-panel__msg-body-inner">
+        <div
+          className="ai-text-panel__msg-text ai-text-panel__msg-text--markdown"
+          dangerouslySetInnerHTML={{
+            __html: renderMarkdown(text || "…"),
+          }}
+        />
+        {text && (
+          <div className="ai-text__actions-row">
+            {onInsertText && (
+              <button
+                type="button"
+                className="ai-text__canvas-btn"
+                onClick={() => onInsertText(text)}
+                title="Add text to canvas (Excalidraw Text tool T / 8)"
+              >
+                <Type size={12} strokeWidth={2.2} />
+                <span>Add to Canvas (T)</span>
+              </button>
+            )}
+            <button
+              type="button"
+              className="ai-text__canvas-btn"
+              onClick={handleCopy}
+              title="Copy text"
+            >
+              {copied ? <Check size={12} strokeWidth={2.5} /> : <Copy size={12} strokeWidth={2.2} />}
+              <span>{copied ? "Copied" : "Copy"}</span>
+            </button>
+          </div>
+        )}
+      </div>
     );
   }
-  return <SolutionTabs solutions={solutions} />;
+
+  return <SolutionTabs solutions={solutions} onInsertCode={onInsertCode} />;
+}
+
+export interface AITextSidebarProps {
+  onClose: () => void;
+  onInsertCode?: (code: string, lang: string) => void;
+  onInsertText?: (text: string) => void;
 }
 
 /**
- * Right-hand AI Text sidebar: multi-line composer with voice dictation and a
- * Mistral-backed chat rendered as Markdown (code blocks syntax highlighted).
- * Slides in/out from the right edge at half the Code sidebar's width.
+ * Right-hand AI Text sidebar:
+ * - Open Mistral Nemo for normal / canvas text messages (clean, raw text output)
+ * - Codestral for /code messages (4-language runnable tabs)
+ * - 1-line auto-expanding textarea up to 4 lines with hidden scrollbar
+ * - Microphone embedded inside the placeholder on the right
+ * - Word wrap enabled in all code blocks
+ * - 1-week LocalStorage chat persistence and user message actions
  */
-export default function AITextSidebar({ onClose }: { onClose: () => void }) {
+export default function AITextSidebar({
+  onClose,
+  onInsertCode,
+  onInsertText,
+}: AITextSidebarProps) {
   const [entered, setEntered] = useState(false);
-  const [messages, setMessages] = useState<UiMessage[]>([]);
+  const [messages, setMessages] = useState<UiMessage[]>(() => loadCachedMessages());
   const [draft, setDraft] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  // Lazy init — this sidebar mounts client-side only, after a click.
+  const [copiedUserMsgId, setCopiedUserMsgId] = useState<string | null>(null);
+
   const [speechSupported] = useState(() => {
     if (typeof window === "undefined") return false;
     const w = window as unknown as {
@@ -275,6 +441,27 @@ export default function AITextSidebar({ onClose }: { onClose: () => void }) {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const listenBaseRef = useRef("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const userCopyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Initialize convoRef from cached messages
+  useEffect(() => {
+    const valid = messages
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.text,
+      }))
+      .slice(-12);
+    convoRef.current = valid;
+  }, []);
+
+  // Save messages to LocalStorage
+  useEffect(() => {
+    if (messages.length > 0) {
+      saveCachedMessages(messages);
+    }
+  }, [messages]);
 
   // Mount → slide in; close → slide out, then unmount via onClose.
   useEffect(() => {
@@ -284,7 +471,15 @@ export default function AITextSidebar({ onClose }: { onClose: () => void }) {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // Close = slide out first, then let the parent unmount us.
+  // Auto-grow textarea from 1 line (~36px) up to 4 lines (~102px), then scroll with hidden scrollbar
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const nextHeight = Math.min(el.scrollHeight, 102);
+    el.style.height = `${Math.max(36, nextHeight)}px`;
+  }, [draft]);
+
   const close = useCallback(() => {
     setEntered(false);
     recognitionRef.current?.stop();
@@ -303,6 +498,14 @@ export default function AITextSidebar({ onClose }: { onClose: () => void }) {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
+
+  const clearHistory = useCallback(() => {
+    setMessages([]);
+    convoRef.current = [];
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {}
+  }, []);
 
   // ── Voice input ────────────────────────────────────────────────────────
   const stopListening = useCallback(() => {
@@ -334,39 +537,72 @@ export default function AITextSidebar({ onClose }: { onClose: () => void }) {
     setIsListening(true);
   }, [speechSupported, draft]);
 
+  // ── User action handlers ─────────────────────────────────────────────────
+  const handleCopyUserPrompt = useCallback(async (id: string, text: string) => {
+    const ok = await copyText(text);
+    if (!ok) return;
+    setCopiedUserMsgId(id);
+    if (userCopyTimer.current) clearTimeout(userCopyTimer.current);
+    userCopyTimer.current = setTimeout(() => setCopiedUserMsgId(null), 1500);
+  }, []);
+
+  const handleEditUserPrompt = useCallback((text: string) => {
+    setDraft(text);
+    inputRef.current?.focus();
+  }, []);
+
   // ── Send ───────────────────────────────────────────────────────────────
   const send = useCallback(async () => {
-    const text = draft.trim();
-    if (!text || isStreaming) return;
+    const raw = draft.trim();
+    if (!raw || isStreaming) return;
     stopListening();
 
+    const isCode = /\/code\b/i.test(raw);
+    const mode: "code" | "text" = isCode ? "code" : "text";
+    const modelToUse = isCode ? CODE_MODEL : MAIN_MODEL;
+    const systemPromptToUse = isCode ? CODE_SYSTEM_PROMPT : CANVAS_TEXT_SYSTEM_PROMPT;
+
+    // Strip /code or /text command tags for clean model processing
+    const cleanPrompt =
+      raw.replace(/(?:^|\s)\/(?:text|code)(?:\s|$)/gi, " ").trim() || raw;
+
     const assistantId = nextId();
-    setMessages((prev) => [
-      ...prev,
-      { id: nextId(), role: "user", text },
-      { id: assistantId, role: "assistant", text: "" },
-    ]);
+    const now = Date.now();
+    const userMsg: UiMessage = {
+      id: nextId(),
+      role: "user",
+      text: raw,
+      timestamp: now,
+      mode,
+    };
+    const assistantMsg: UiMessage = {
+      id: assistantId,
+      role: "assistant",
+      text: "",
+      timestamp: now,
+      mode,
+    };
+
+    setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setDraft("");
     setIsStreaming(true);
 
     const controller = new AbortController();
     abortRef.current = controller;
-    // Pinned model + strict 4-language system prompt (see CODE_SYSTEM_PROMPT).
-    // The system message is prepended fresh every turn and never stored in
-    // the conversation history.
+
     const history: ChatMessage[] = [
       ...convoRef.current,
-      { role: "user", content: text },
+      { role: "user", content: cleanPrompt },
     ];
     const outgoing: ChatMessage[] = [
-      { role: "system", content: CODE_SYSTEM_PROMPT },
+      { role: "system", content: systemPromptToUse },
       ...history,
     ];
 
     try {
       const full = await chatStreamAuto(
         outgoing,
-        AI_TEXT_MODEL,
+        modelToUse,
         (delta) => {
           setMessages((prev) =>
             prev.map((m) =>
@@ -382,7 +618,9 @@ export default function AITextSidebar({ onClose }: { onClose: () => void }) {
       if (controller.signal.aborted) {
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === assistantId && !m.text ? { ...m, role: "error", text: "Stopped." } : m
+            m.id === assistantId && !m.text
+              ? { ...m, role: "error", text: "Stopped." }
+              : m
           )
         );
       } else {
@@ -405,6 +643,8 @@ export default function AITextSidebar({ onClose }: { onClose: () => void }) {
     stopListening();
   }, [stopListening]);
 
+  const isDraftCode = /\/code\b/i.test(draft);
+
   return (
     <aside
       className={`ai-text-panel excalidraw-island${entered ? " ai-text-panel--open" : ""}`}
@@ -413,26 +653,46 @@ export default function AITextSidebar({ onClose }: { onClose: () => void }) {
       <div className="ai-text-panel__header">
         <div className="ai-text-panel__header-left">
           <span className="ai-text-panel__title">AI Text</span>
-          <span className="ai-text-panel__badge">Mistral</span>
+          <span className="ai-text-panel__badge">
+            {isDraftCode ? "Codestral (/code)" : "Open Mistral Nemo"}
+          </span>
         </div>
-        <button
-          type="button"
-          className="ai-text-panel__close"
-          onClick={close}
-          title="Close"
-          aria-label="Close AI Text"
-        >
-          <X size={14} strokeWidth={2.5} />
-        </button>
+        <div className="ai-text-panel__header-actions">
+          {messages.length > 0 && (
+            <button
+              type="button"
+              className="ai-text-panel__header-btn"
+              onClick={clearHistory}
+              title="Clear chat history"
+              aria-label="Clear chat history"
+            >
+              <Trash2 size={13} strokeWidth={2.2} />
+            </button>
+          )}
+          <button
+            type="button"
+            className="ai-text-panel__close"
+            onClick={close}
+            title="Close"
+            aria-label="Close AI Text"
+          >
+            <X size={14} strokeWidth={2.5} />
+          </button>
+        </div>
       </div>
 
       <div className="ai-text-panel__messages" ref={scrollRef}>
         {messages.length === 0 ? (
           <div className="ai-text-panel__empty">
             <Bot size={22} strokeWidth={1.8} />
-            <p>Ask for code — every answer ships Java, Python, C and C++ solutions in copy-ready tabs.</p>
+            <p>
+              Canvas text generation powered by <strong>Open Mistral Nemo</strong>.
+            </p>
+            <p>
+              Type <strong>/code</strong> for <strong>Codestral</strong> 4-language runnable tabs (Java, Python, C, C++).
+            </p>
             <p className="ai-text-panel__empty-hint">
-              Enter to send, Shift + Enter for a new line. Use the mic to dictate.
+              Enter to send, Shift + Enter for newline. Use the microphone inside placeholder to dictate.
             </p>
           </div>
         ) : (
@@ -441,18 +701,47 @@ export default function AITextSidebar({ onClose }: { onClose: () => void }) {
               key={m.id}
               className={`ai-text-panel__msg ai-text-panel__msg--${m.role}`}
             >
-              <div className="ai-text-panel__msg-icon">
-                {m.role === "user" ? (
-                  <User size={13} />
-                ) : m.role === "error" ? (
-                  <X size={13} />
-                ) : (
-                  <Bot size={13} />
-                )}
-              </div>
+              {m.role === "user" ? (
+                <div className="ai-text-panel__msg-left">
+                  <div className="ai-text-panel__msg-icon" title="You">
+                    <User size={13} />
+                  </div>
+                  <button
+                    type="button"
+                    className="ai-text__user-circle-btn"
+                    onClick={() => handleCopyUserPrompt(m.id, m.text)}
+                    title="Copy prompt"
+                    aria-label="Copy prompt"
+                  >
+                    {copiedUserMsgId === m.id ? (
+                      <Check size={12} strokeWidth={2.5} />
+                    ) : (
+                      <Copy size={12} strokeWidth={2.2} />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    className="ai-text__user-circle-btn"
+                    onClick={() => handleEditUserPrompt(m.text)}
+                    title="Edit and modify prompt"
+                    aria-label="Edit and modify prompt"
+                  >
+                    <Pencil size={12} strokeWidth={2.2} />
+                  </button>
+                </div>
+              ) : (
+                <div className="ai-text-panel__msg-icon">
+                  {m.role === "error" ? <X size={13} /> : <Bot size={13} />}
+                </div>
+              )}
               <div className="ai-text-panel__msg-body">
                 {m.role === "assistant" ? (
-                  <AssistantBody text={m.text} />
+                  <AssistantBody
+                    text={m.text}
+                    mode={m.mode}
+                    onInsertCode={onInsertCode}
+                    onInsertText={onInsertText}
+                  />
                 ) : (
                   <div className="ai-text-panel__msg-text">{m.text}</div>
                 )}
@@ -464,35 +753,38 @@ export default function AITextSidebar({ onClose }: { onClose: () => void }) {
 
       <div className="ai-text-panel__composer">
         <div className="ai-text-panel__input-row">
-          <button
-            type="button"
-            className={`ai-text-panel__mic${isListening ? " ai-text-panel__mic--active" : ""}`}
-            onClick={isListening ? stopListening : startListening}
-            disabled={!speechSupported}
-            title={
-              speechSupported
-                ? isListening
-                  ? "Stop recording"
-                  : "Voice input"
-                : "Voice input isn't supported in this browser"
-            }
-          >
-            {isListening ? <MicOff size={14} /> : <Mic size={14} />}
-          </button>
-          <textarea
-            className="ai-text-panel__input"
-            rows={3}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
+          <div className="ai-text-panel__input-box">
+            <textarea
+              ref={inputRef}
+              className="ai-text-panel__input"
+              rows={1}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+              placeholder="Ask anything (canvas text) or /code for 4 languages…"
+              aria-label="Message"
+            />
+            <button
+              type="button"
+              className={`ai-text-panel__mic-inside${isListening ? " ai-text-panel__mic-inside--active" : ""}`}
+              onClick={isListening ? stopListening : startListening}
+              disabled={!speechSupported}
+              title={
+                speechSupported
+                  ? isListening
+                    ? "Stop recording"
+                    : "Voice input"
+                  : "Voice input isn't supported in this browser"
               }
-            }}
-            placeholder="Ask Mistral anything…"
-            aria-label="Message"
-          />
+            >
+              {isListening ? <MicOff size={15} /> : <Mic size={15} />}
+            </button>
+          </div>
           {isStreaming ? (
             <button
               type="button"
@@ -500,7 +792,7 @@ export default function AITextSidebar({ onClose }: { onClose: () => void }) {
               onClick={stop}
               title="Stop"
             >
-              <Loader2 size={14} className="ai-text-panel__spin" />
+              <Loader2 size={15} className="ai-text-panel__spin" />
             </button>
           ) : (
             <button
@@ -510,7 +802,7 @@ export default function AITextSidebar({ onClose }: { onClose: () => void }) {
               disabled={!draft.trim()}
               title="Send (Enter)"
             >
-              <Send size={14} />
+              <Send size={15} />
             </button>
           )}
         </div>

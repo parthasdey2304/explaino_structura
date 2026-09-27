@@ -21,9 +21,9 @@ export interface MistralModel {
 // A short, current curated list rather than every model Mistral hosts —
 // these are the ones actually suited to a coding assistant.
 export const MISTRAL_MODELS: MistralModel[] = [
-  { id: "mistral-large-latest", label: "Mistral Large", description: "Strongest reasoning and code quality" },
-  { id: "mistral-small-latest", label: "Mistral Small", description: "Fast and inexpensive" },
   { id: "codestral-latest", label: "Codestral", description: "Tuned specifically for code generation" },
+  { id: "open-mistral-nemo", label: "Open Mistral Nemo", description: "Fast, high-performance general and canvas text model" },
+  { id: "mistral-large-latest", label: "Mistral Large", description: "Strongest reasoning and code quality" },
 ];
 
 const KEY_STORAGE = "explaino-mistral-api-key";
@@ -50,7 +50,18 @@ export function setStoredApiKey(key: string): void {
 export function getStoredModel(): string {
   if (typeof window === "undefined") return MISTRAL_MODELS[0].id;
   try {
-    return window.localStorage.getItem(MODEL_STORAGE) ?? MISTRAL_MODELS[0].id;
+    const stored = window.localStorage.getItem(MODEL_STORAGE);
+    if (stored === "mistral-large-latest") {
+      // Auto-migrate to codestral-latest
+      window.localStorage.setItem(MODEL_STORAGE, "codestral-latest");
+      return "codestral-latest";
+    }
+    if (stored === "mistral-small-latest") {
+      // Auto-migrate to open-mistral-nemo
+      window.localStorage.setItem(MODEL_STORAGE, "open-mistral-nemo");
+      return "open-mistral-nemo";
+    }
+    return stored ?? MISTRAL_MODELS[0].id;
   } catch {
     return MISTRAL_MODELS[0].id;
   }
