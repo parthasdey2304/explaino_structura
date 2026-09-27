@@ -11,8 +11,8 @@ import {
 } from "@/lib/ai/mistral";
 import { highlightCode } from "@/lib/ai/highlight";
 
-/** Pinned model for this panel per spec — always Mistral Large. */
-const AI_TEXT_MODEL = "mistral-large-latest";
+/** Pinned model for this panel — Codestral. */
+const AI_TEXT_MODEL = "codestral-latest";
 
 /**
  * Strict scope + multi-output contract. The route only prepends its generic
