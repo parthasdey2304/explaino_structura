@@ -484,6 +484,10 @@ canvas {
   box-shadow: var(--shadow-popover);
 }
 
+.theme-dark .code-editor-panel {
+  background-color: #1e1e1e;
+}
+
 .code-editor__header {
   display: flex;
   align-items: center;
@@ -492,6 +496,11 @@ canvas {
   border-bottom: 1px solid var(--color-surface-high);
   flex-shrink: 0;
   background-color: var(--island-bg-color);
+}
+
+.theme-dark .code-editor__header {
+  background-color: #252526;
+  border-bottom-color: #333;
 }
 
 .code-editor__header-left {
@@ -521,6 +530,11 @@ canvas {
   background: var(--island-bg-color);
   color: var(--color-on-surface);
   cursor: pointer;
+}
+
+.theme-dark .code-editor__lang-select {
+  background: #2d2d2d;
+  border-color: #444;
 }
 
 .code-editor__lang-select:focus {
