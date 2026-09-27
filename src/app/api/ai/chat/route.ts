@@ -1,20 +1,27 @@
 import { NextResponse } from "next/server";
 
 /**
- * Mistral chat-completions proxy.
+ * Mistral chat-completions proxy (server-side only — no client-side leak).
  *
- * Bring-your-own-key: the caller's Mistral API key travels in the
- * `X-Mistral-Key` request header for this single request only. It is never
- * logged, stored, or written to any datastore on this server — it's read
- * once, forwarded to Mistral, and discarded when the response is returned.
- * The key lives in the browser's localStorage (see src/lib/ai/mistral.ts),
- * so each user supplies and owns their own key rather than sharing a
- * server-side secret.
+ * Key resolution order:
+ *   1. `X-Mistral-Key` request header — optional bring-your-own-key override;
+ *      read once, forwarded to Mistral, never logged or stored.
+ *   2. `process.env.MISTRAL_API_KEY` — the server secret. It is NOT prefixed
+ *      with NEXT_PUBLIC_/VITE_, so Next.js never inlines it into the client
+ *      bundle; it only ever exists in this Route Handler.
+ *
+ * Every request also gets the assistant system prompt below prepended (unless
+ * the caller already sent a system message), so replies stay concise.
  */
 
 const MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions";
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_CHARS = 20000;
+
+const SYSTEM_PROMPT =
+  "You are an expert coding assistant. Provide concise, direct, copy-paste-ready code and " +
+  "solutions. Eliminate conversational filler, pleasantries, or verbose introductions unless " +
+  "specifically requested.";
 
 interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -31,10 +38,15 @@ function isChatMessage(value: unknown): value is ChatMessage {
 }
 
 export async function POST(request: Request) {
-  const apiKey = request.headers.get("x-mistral-key")?.trim();
+  const headerKey = request.headers.get("x-mistral-key")?.trim();
+  const apiKey = headerKey || process.env.MISTRAL_API_KEY?.trim();
   if (!apiKey) {
     return NextResponse.json(
-      { error: "Missing Mistral API key. Add one in the AI panel's settings." },
+      {
+        error:
+          "No Mistral API key. Set MISTRAL_API_KEY in the server environment " +
+          "(Vercel Project Settings) or add one in the AI panel's settings.",
+      },
       { status: 401 }
     );
   }
@@ -79,6 +91,12 @@ export async function POST(request: Request) {
 
   const wantsStream = stream === true;
 
+  // Prepend the coding-assistant system prompt unless the caller supplied one.
+  const outgoing: ChatMessage[] =
+    messages[0].role === "system"
+      ? messages
+      : [{ role: "system", content: SYSTEM_PROMPT }, ...messages];
+
   let upstream: Response;
   try {
     upstream = await fetch(MISTRAL_URL, {
@@ -89,7 +107,7 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         model,
-        messages,
+        messages: outgoing,
         temperature: typeof temperature === "number" ? temperature : 0.3,
         stream: wantsStream,
       }),
