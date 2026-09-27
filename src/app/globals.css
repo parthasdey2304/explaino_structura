@@ -217,6 +217,14 @@ canvas {
   border-color: #d2d0ff;
 }
 
+/* ── Laser pointer mode ───────────────────────────────────────
+   Crosshair over the drawing surface while lasering. Scoped with
+   !important because Excalidraw sets canvas cursors inline. */
+.explaino-laser-active .excalidraw,
+.explaino-laser-active .excalidraw canvas {
+  cursor: crosshair !important;
+}
+
 /* ── Toolbar Layout ───────────────────────────────────────── */
 
 /* App wrapper */
