@@ -1037,7 +1037,7 @@ export default function ExcalidrawWrapper() {
   }, [apiReady]);
 
   return (
-    <div className="w-full h-screen overflow-hidden relative" style={{ fontFamily: "var(--ui-font, 'Assistant', sans-serif)" }}>
+    <div className={`w-full h-screen overflow-hidden relative${laserActive ? " explaino-laser-active" : ""}`} style={{ fontFamily: "var(--ui-font, 'Assistant', sans-serif)" }}>
       {!loaded || initialData === null ? (
         <div className="w-full h-screen flex items-center justify-center" style={{ background: "var(--default-bg-color)" }}>
           <div className="text-sm text-gray-400">Loading canvas…</div>

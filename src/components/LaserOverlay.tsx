@@ -7,9 +7,14 @@ import { useEffect, useRef } from "react";
  *
  * A dedicated transient canvas layered above the whiteboard drawing surface
  * (z-index 3: above Excalidraw's canvases at 1–2, below its toolbar UI at 4).
- * While laser mode is active it captures all pointer input, so the underlying
- * Excalidraw document state is never touched and nothing is pushed to the
- * undo/redo history.
+ * The canvas itself is click-through (`pointer-events: none`), so wheel
+ * scrolling/zooming and every other Excalidraw interaction keep working.
+ * While laser mode is active, a window capture-phase `pointerdown` listener
+ * intercepts only primary-button presses that land on the drawing canvases
+ * and stops them before Excalidraw's own handlers run — the document state
+ * is never touched and nothing is pushed to the undo/redo history.
+ * Deliberately NOT intercepted (so they keep working in laser mode):
+ * middle/right-button presses (pan, context menu) and Space+drag panning.
  *
  * Rendering: vivid red strokes (`#ff3b30` core over a `#ef4444` aura) with a
  * glow, smoothed with quadratic bezier segments through the recorded pointer
@@ -42,13 +47,7 @@ export default function LaserOverlay({ active }: { active: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const trailsRef = useRef<Trail[]>([]);
   const rafRef = useRef<number>(0);
-  const activeRef = useRef(active);
   const kickRef = useRef(() => {});
-
-  // Sync the mode flag for event handlers without re-subscribing them.
-  useEffect(() => {
-    activeRef.current = active;
-  });
 
   // Keep the canvas matched to its parent box at device pixel ratio.
   useEffect(() => {
@@ -90,40 +89,96 @@ export default function LaserOverlay({ active }: { active: boolean }) {
     };
   }, []);
 
-  const kick = () => {
-    kickRef.current();
-  };
-
-  const toLocal = (clientX: number, clientY: number): TrailPoint => {
-    const rect = canvasRef.current?.getBoundingClientRect();
-    return {
-      x: clientX - (rect?.left ?? 0),
-      y: clientY - (rect?.top ?? 0),
+  // Laser input interception. Window capture phase runs before Excalidraw's
+  // own (bubble-phase, container-level) pointer handlers, so stopping a
+  // canvas-targeted press here keeps the stroke out of the document while
+  // wheel events and all non-canvas UI keep flowing untouched.
+  useEffect(() => {
+    if (!active) return;
+    const toLocal = (clientX: number, clientY: number): TrailPoint => {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      return {
+        x: clientX - (rect?.left ?? 0),
+        y: clientY - (rect?.top ?? 0),
+      };
     };
-  };
-
-  const appendFromEvent = (
-    native: PointerEvent & { getCoalescedEvents?: () => PointerEvent[] }
-  ) => {
-    const current = trailsRef.current[trailsRef.current.length - 1];
-    if (!current || current.finishedAt !== null) return;
-    const events =
-      typeof native.getCoalescedEvents === "function"
-        ? native.getCoalescedEvents()
-        : [native];
-    for (const ev of events) {
-      current.points.push(toLocal(ev.clientX, ev.clientY));
-    }
-    kick();
-  };
-
-  const finishStroke = () => {
-    const current = trailsRef.current[trailsRef.current.length - 1];
-    if (current && current.finishedAt === null) {
-      current.finishedAt = performance.now();
+    const kick = () => {
+      kickRef.current();
+    };
+    const appendPoints = (clientX: number, clientY: number) => {
+      const current = trailsRef.current[trailsRef.current.length - 1];
+      if (!current || current.finishedAt !== null) return;
+      current.points.push(toLocal(clientX, clientY));
       kick();
-    }
-  };
+    };
+    const finishStroke = () => {
+      const current = trailsRef.current[trailsRef.current.length - 1];
+      if (current && current.finishedAt === null) {
+        current.finishedAt = performance.now();
+        kick();
+      }
+    };
+    let spaceHeld = false;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space") spaceHeld = true;
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") spaceHeld = false;
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      // Let pan (middle button / Space+drag), context menu and multi-touch
+      // gestures reach Excalidraw; laser only owns primary-button presses.
+      if (e.button !== 0 || !e.isPrimary || spaceHeld) return;
+      const target = e.target as HTMLElement | null;
+      // Only presses landing on the drawing canvases become laser strokes —
+      // toolbar buttons, panels and the text editor keep working normally.
+      if (
+        !target ||
+        target.tagName !== "CANVAS" ||
+        !canvasRef.current?.parentElement?.contains(target)
+      ) {
+        return;
+      }
+      e.stopPropagation();
+      trailsRef.current.push({
+        points: [toLocal(e.clientX, e.clientY)],
+        finishedAt: null,
+      });
+      kick();
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      if (e.buttons === 0) return;
+      const native = e as PointerEvent & {
+        getCoalescedEvents?: () => PointerEvent[];
+      };
+      const events =
+        typeof native.getCoalescedEvents === "function"
+          ? native.getCoalescedEvents()
+          : [native];
+      for (const ev of events) {
+        appendPoints(ev.clientX, ev.clientY);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("pointerdown", onPointerDown, { capture: true });
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", finishStroke);
+    window.addEventListener("pointercancel", finishStroke);
+    window.addEventListener("blur", finishStroke);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("pointerdown", onPointerDown, {
+        capture: true,
+      });
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", finishStroke);
+      window.removeEventListener("pointercancel", finishStroke);
+      window.removeEventListener("blur", finishStroke);
+      spaceHeld = false;
+    };
+  }, [active]);
 
   return (
     <canvas
@@ -135,33 +190,10 @@ export default function LaserOverlay({ active }: { active: boolean }) {
         width: "100%",
         height: "100%",
         zIndex: 3,
-        pointerEvents: active ? "auto" : "none",
-        touchAction: active ? "none" : "auto",
-        cursor: active ? "crosshair" : "default",
+        // Click-through: wheel/scroll/zoom and all Excalidraw UI keep
+        // working; laser input is intercepted in the capture phase above.
+        pointerEvents: "none",
       }}
-      onPointerDown={(e) => {
-        if (!activeRef.current) return;
-        try {
-          (e.target as Element).setPointerCapture(e.pointerId);
-        } catch {
-          // setPointerCapture may throw for mouse in some browsers — ignore.
-        }
-        trailsRef.current.push({
-          points: [toLocal(e.clientX, e.clientY)],
-          finishedAt: null,
-        });
-        kick();
-      }}
-      onPointerMove={(e) => {
-        if (!activeRef.current || e.buttons === 0) return;
-        appendFromEvent(
-          e.nativeEvent as PointerEvent & {
-            getCoalescedEvents?: () => PointerEvent[];
-          }
-        );
-      }}
-      onPointerUp={finishStroke}
-      onPointerCancel={finishStroke}
     />
   );
 }
