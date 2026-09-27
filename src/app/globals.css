@@ -3339,3 +3339,652 @@ canvas {
   color: var(--color-gray-60, #888);
   margin-top: 4px;
 }
+
+
+/* ============================================================
+   TODO OVERLAY — top-right toolbar dropdown
+   ============================================================ */
+@keyframes todoPopoverIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.todo-panel {
+  position: fixed;
+  top: calc(var(--toolbar-height) + 6px);
+  right: 12px;
+  z-index: 60;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - var(--toolbar-height) - 70px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-surface-high);
+  animation: todoPopoverIn 0.16s ease-out;
+}
+
+.todo-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-surface-high);
+  background-color: var(--island-bg-color);
+  flex-shrink: 0;
+}
+
+.todo-panel__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+.todo-panel__close,
+.ai-text-panel__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  background: transparent;
+  color: var(--color-gray-60, #888);
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.todo-panel__close:hover,
+.ai-text-panel__close:hover {
+  background: var(--color-surface-high);
+  color: var(--color-on-surface);
+}
+
+.todo-panel__composer {
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-surface-high);
+  flex-shrink: 0;
+}
+
+.todo-panel__input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--color-on-surface);
+  background: var(--color-surface-low, #ececf4);
+  border: 1px solid var(--color-border-outline-variant, #c5c5d0);
+  border-radius: var(--border-radius-md);
+  outline: none;
+  transition: border-color 0.12s ease, background-color 0.12s ease;
+}
+
+.todo-panel__input:focus {
+  border-color: var(--color-primary);
+  background: var(--island-bg-color);
+}
+
+.todo-panel__add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--border-radius-md);
+  background: var(--color-surface-primary-container, #e0dfff);
+  color: var(--color-on-primary-container, #030064);
+  cursor: pointer;
+  transition: background-color 0.12s ease, opacity 0.12s ease;
+}
+
+.todo-panel__add:hover:not(:disabled) {
+  background: #d2d0ff;
+}
+
+.todo-panel__add:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.todo-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.todo-panel__empty {
+  padding: 16px 10px;
+  font-size: 12.5px;
+  color: var(--color-gray-60, #888);
+  text-align: center;
+}
+
+.todo-panel__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: var(--border-radius-md);
+  transition: background-color 0.1s ease;
+}
+
+.todo-panel__item:hover {
+  background: var(--color-surface-high);
+}
+
+.todo-panel__check {
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+  margin-top: 1px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--color-gray-40, #b8b8b8);
+  border-radius: 4px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.todo-panel__check:hover {
+  border-color: var(--color-primary);
+}
+
+.todo-panel__item--done .todo-panel__check {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.todo-panel__text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-on-surface);
+  word-break: break-word;
+}
+
+.todo-panel__item--done .todo-panel__text {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+.todo-panel__delete {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--color-gray-50, #999);
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, background-color 0.12s ease, color 0.12s ease;
+}
+
+.todo-panel__item:hover .todo-panel__delete,
+.todo-panel__delete:focus-visible {
+  opacity: 1;
+}
+
+.todo-panel__delete:hover {
+  background: rgba(224, 49, 49, 0.12);
+  color: #e03131;
+}
+
+@media (hover: none) {
+  .todo-panel__delete {
+    opacity: 1;
+  }
+}
+
+.todo-panel__footer {
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--color-gray-60, #888);
+  border-top: 1px solid var(--color-surface-high);
+  flex-shrink: 0;
+  text-align: center;
+}
+
+
+/* ============================================================
+   AI TEXT SIDEBAR — right edge, half the Code sidebar's width
+   ============================================================ */
+.ai-text-panel {
+  position: fixed;
+  top: var(--toolbar-height);
+  right: 12px;
+  bottom: 44px;
+  z-index: 41;
+  /* Code sidebar is 50vw → this is exactly 50% of that. */
+  width: 25vw;
+  /* Adaptive floor for narrower viewports (50vw of Code would be unusable). */
+  min-width: 340px;
+  max-width: calc(100vw - 24px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-surface-high);
+  box-shadow: var(--shadow-popover);
+  transform: translateX(calc(100% + 16px));
+  transition: transform 0.25s ease;
+  will-change: transform;
+}
+
+.ai-text-panel--open {
+  transform: translateX(0);
+}
+
+.ai-text-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-surface-high);
+  flex-shrink: 0;
+  background-color: var(--island-bg-color);
+}
+
+.ai-text-panel__header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-text-panel__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+.ai-text-panel__badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--color-surface-primary-container, #e0dfff);
+  color: var(--color-on-primary-container, #030064);
+}
+
+.ai-text-panel__messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ai-text-panel__empty {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-gray-60, #888);
+}
+
+.ai-text-panel__empty-hint {
+  font-size: 11px;
+  color: var(--color-gray-50, #999);
+  margin-top: 2px;
+}
+
+.ai-text-panel__msg {
+  display: flex;
+  gap: 8px;
+}
+
+.ai-text-panel__msg-icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-high);
+  color: var(--color-gray-70, #5c5c5c);
+  margin-top: 2px;
+}
+
+.ai-text-panel__msg--user .ai-text-panel__msg-icon {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.ai-text-panel__msg--error .ai-text-panel__msg-icon {
+  background: rgba(224, 49, 49, 0.14);
+  color: #e03131;
+}
+
+.ai-text-panel__msg-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ai-text-panel__msg-text {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--color-on-surface);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ai-text-panel__msg--user .ai-text-panel__msg-text {
+  background: var(--color-surface-high);
+  border-radius: var(--border-radius-md);
+  padding: 7px 10px;
+}
+
+.ai-text-panel__msg--error .ai-text-panel__msg-text {
+  background: rgba(224, 49, 49, 0.12);
+  color: #e03131;
+  border-radius: var(--border-radius-md);
+  padding: 7px 10px;
+}
+
+/* Markdown output */
+.ai-text-panel__msg-text--markdown {
+  white-space: normal;
+}
+
+.ai-text-panel__msg-text--markdown p {
+  margin: 0 0 8px;
+}
+
+.ai-text-panel__msg-text--markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.ai-text-panel__msg-text--markdown h1,
+.ai-text-panel__msg-text--markdown h2,
+.ai-text-panel__msg-text--markdown h3,
+.ai-text-panel__msg-text--markdown h4 {
+  margin: 10px 0 6px;
+  font-size: 1.05em;
+  font-weight: 650;
+}
+
+.ai-text-panel__msg-text--markdown ul,
+.ai-text-panel__msg-text--markdown ol {
+  margin: 4px 0 8px;
+  padding-left: 18px;
+}
+
+.ai-text-panel__msg-text--markdown li {
+  margin: 2px 0;
+}
+
+.ai-text-panel__msg-text--markdown a {
+  color: var(--color-primary);
+}
+
+.ai-text-panel__msg-text--markdown blockquote {
+  margin: 6px 0;
+  padding: 2px 10px;
+  border-left: 3px solid var(--color-border-outline-variant, #c5c5d0);
+  color: var(--color-gray-60, #888);
+}
+
+.ai-text-panel__msg-text--markdown table {
+  border-collapse: collapse;
+  margin: 6px 0;
+  font-size: 12px;
+}
+
+.ai-text-panel__msg-text--markdown th,
+.ai-text-panel__msg-text--markdown td {
+  border: 1px solid var(--color-border-outline-variant, #c5c5d0);
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.ai-text-panel__msg-text--markdown hr {
+  border: none;
+  border-top: 1px solid var(--color-surface-high);
+  margin: 10px 0;
+}
+
+.ai-text-panel__msg-text--markdown code {
+  background: rgba(127, 127, 127, 0.22);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", Menlo, Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.ai-text-panel__msg-text--markdown pre {
+  background: rgba(127, 127, 127, 0.18);
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  margin: 6px 0;
+}
+
+.ai-text-panel__msg-text--markdown pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* Syntax highlighting — light theme */
+.ai-text-panel__msg-text--markdown .tok-comment { color: #6a737d; }
+.ai-text-panel__msg-text--markdown .tok-keyword { color: #cf222e; }
+.ai-text-panel__msg-text--markdown .tok-string,
+.ai-text-panel__msg-text--markdown .tok-string2 { color: #0a3069; }
+.ai-text-panel__msg-text--markdown .tok-number { color: #0550ae; }
+.ai-text-panel__msg-text--markdown .tok-bool,
+.ai-text-panel__msg-text--markdown .tok-atom,
+.ai-text-panel__msg-text--markdown .tok-literal,
+.ai-text-panel__msg-text--markdown .tok-meta { color: #0550ae; }
+.ai-text-panel__msg-text--markdown .tok-typeName,
+.ai-text-panel__msg-text--markdown .tok-className,
+.ai-text-panel__msg-text--markdown .tok-namespace,
+.ai-text-panel__msg-text--markdown .tok-macroName { color: #953800; }
+.ai-text-panel__msg-text--markdown .tok-variableName,
+.ai-text-panel__msg-text--markdown .tok-variableName2,
+.ai-text-panel__msg-text--markdown .tok-propertyName { color: #0550ae; }
+.ai-text-panel__msg-text--markdown .tok-variableName.tok-definition { color: #8250df; }
+.ai-text-panel__msg-text--markdown .tok-operator,
+.ai-text-panel__msg-text--markdown .tok-punctuation,
+.ai-text-panel__msg-text--markdown .tok-labelName { color: #57606a; }
+.ai-text-panel__msg-text--markdown .tok-invalid { color: #cf222e; }
+
+/* Syntax highlighting — dark theme */
+.theme-dark .ai-text-panel__msg-text--markdown .tok-comment { color: #6a9955; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-keyword { color: #569cd6; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-string,
+.theme-dark .ai-text-panel__msg-text--markdown .tok-string2 { color: #ce9178; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-number { color: #b5cea8; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-bool,
+.theme-dark .ai-text-panel__msg-text--markdown .tok-atom,
+.theme-dark .ai-text-panel__msg-text--markdown .tok-literal { color: #569cd6; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-meta { color: #c586c0; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-typeName,
+.theme-dark .ai-text-panel__msg-text--markdown .tok-className,
+.theme-dark .ai-text-panel__msg-text--markdown .tok-namespace,
+.theme-dark .ai-text-panel__msg-text--markdown .tok-macroName { color: #4ec9b0; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-variableName,
+.theme-dark .ai-text-panel__msg-text--markdown .tok-variableName2,
+.theme-dark .ai-text-panel__msg-text--markdown .tok-propertyName { color: #9cdcfe; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-variableName.tok-definition { color: #dcdcaa; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-operator,
+.theme-dark .ai-text-panel__msg-text--markdown .tok-punctuation,
+.theme-dark .ai-text-panel__msg-text--markdown .tok-labelName { color: #d4d4d4; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-invalid { color: #f44747; }
+
+/* Composer */
+.ai-text-panel__composer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--color-surface-high);
+  padding: 10px 12px;
+  background: var(--island-bg-color);
+}
+
+.ai-text-panel__input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.ai-text-panel__input {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  padding: 9px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.45;
+  color: var(--color-on-surface);
+  background: var(--color-surface-low, #ececf4);
+  border: 1px solid var(--color-border-outline-variant, #c5c5d0);
+  border-radius: var(--border-radius-md);
+  outline: none;
+  max-height: 160px;
+  transition: border-color 0.12s ease, background-color 0.12s ease;
+}
+
+.ai-text-panel__input:focus {
+  border-color: var(--color-primary);
+  background: var(--island-bg-color);
+}
+
+.ai-text-panel__mic {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--color-border-outline-variant, #c5c5d0);
+  background: transparent;
+  color: var(--color-gray-60, #888);
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.ai-text-panel__mic:hover:not(:disabled) {
+  background: var(--color-surface-high);
+  color: var(--color-on-surface);
+}
+
+.ai-text-panel__mic:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ai-text-panel__mic--active {
+  background: #e03131;
+  border-color: #e03131;
+  color: #fff;
+  animation: ai-chat-pulse 1.4s ease-in-out infinite;
+}
+
+.ai-text-panel__send {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 0.12s ease, opacity 0.12s ease;
+}
+
+.ai-text-panel__send:hover:not(:disabled) {
+  background: var(--color-primary-hover, #5753d0);
+}
+
+.ai-text-panel__send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ai-text-panel__send--stop {
+  background: #e03131;
+}
+
+.ai-text-panel__spin {
+  animation: spin 1s linear infinite;
+}
+
+
+/* ============================================================
+   RESPONSIVE — keep the AI Text launcher reachable on mobile
+   ============================================================ */
+@media (max-width: 768px) {
+  /* `.bottom-controls-right` is hidden on mobile; the AI Text dock is the
+     exception so the sidebar stays reachable above Excalidraw's bottom bar. */
+  .bottom-controls-right.ai-text-dock {
+    display: flex !important;
+    bottom: 76px;
+    right: 12px;
+  }
+
+  .todo-panel {
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: none;
+    max-height: calc(100vh - 24px);
+  }
+
+  /* Sidebar becomes a bottom sheet that slides up instead of in. */
+  .ai-text-panel {
+    top: auto;
+    bottom: 70px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    height: min(64vh, 520px);
+    transform: translateY(calc(100% + 80px));
+  }
+
+  .ai-text-panel--open {
+    transform: translateY(0);
+  }
+}

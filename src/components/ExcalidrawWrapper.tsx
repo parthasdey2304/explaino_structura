@@ -24,6 +24,8 @@ import { saveDrawing, loadDrawing } from "@/lib/firestore";
 import CodeEditorPanel from "./CodeEditorPanel";
 import DataStructuresPanel from "./DataStructuresPanel";
 import CanvasStructureControls, { type ViewportBox } from "./CanvasStructureControls";
+import AITextSidebar from "./AITextSidebar";
+import TodoPanel, { TodoToolbarButton } from "./TodoOverlay";
 import {
   DATA_STRUCTURES,
   applyAction,
@@ -35,7 +37,7 @@ import {
   type DataStructureDef,
   type StructureId,
 } from "@/lib/dataStructures";
-import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3 } from "lucide-react";
+import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles } from "lucide-react";
 
 /**
  * Metadata attached to every element of an inserted diagram via Excalidraw's
@@ -144,6 +146,28 @@ function sameBox(a: SceneBox | null, b: SceneBox | null): boolean {
 }
 
 const REPO_URL = "https://github.com/parthasdey2304/explaino_structura";
+
+/**
+ * Shared visual style for the panel launcher buttons ("Code" top-right,
+ * "AI Text" bottom-right) so both keep identical typography, border, size
+ * and hover behaviour (hover comes from the `excalidraw-button` class).
+ */
+const PANEL_BUTTON_STYLE: React.CSSProperties = {
+  height: "2rem",
+  padding: "0 1.25rem",
+  minWidth: "5rem",
+  fontSize: "0.8rem",
+  borderRadius: "0.5rem",
+  background: "var(--color-surface-primary-container, #e0dfff)",
+  color: "var(--color-on-primary-container, #030064)",
+  border: "none",
+  cursor: "pointer",
+  fontWeight: 500,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 4,
+};
 
 /** GitHub mark, inlined because this lucide version dropped brand icons. */
 function GithubIcon() {
@@ -282,6 +306,8 @@ export default function ExcalidrawWrapper() {
   const [showCodePanel, setShowCodePanel] = useState(false);
   const showCodePanelRef = useRef(false);
   const [showDataStructuresPanel, setShowDataStructuresPanel] = useState(false);
+  const [showTodos, setShowTodos] = useState(false);
+  const [showAiTextPanel, setShowAiTextPanel] = useState(false);
   const showDataStructuresPanelRef = useRef(false);
   const [drawingName, setDrawingName] = useState("Untitled");
   const [drawingId, setDrawingId] = useState<string | null>(null);
@@ -911,25 +937,11 @@ export default function ExcalidrawWrapper() {
                   excalidrawAPI.current.updateScene({ appState: { showLibrary: false } as unknown as AppState });
                   if (showDataStructuresPanel) setShowDataStructuresPanel(false);
                 }
+                if (!showCodePanel) setShowAiTextPanel(false);
                 setShowCodePanel(!showCodePanel);
               }}
               className="excalidraw-button"
-              style={{
-                height: "2rem",
-                padding: "0 1.25rem",
-                minWidth: "5rem",
-                fontSize: "0.8rem",
-                borderRadius: "0.5rem",
-                background: "var(--color-surface-primary-container, #e0dfff)",
-                color: "var(--color-on-primary-container, #030064)",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 500,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 4,
-              }}
+              style={PANEL_BUTTON_STYLE}
               title="Open code editor"
             >
               <Code size={16} strokeWidth={2.2} />
@@ -1015,6 +1027,10 @@ export default function ExcalidrawWrapper() {
             >
               <Grid3x3 size={16} strokeWidth={2.2} />
             </button>
+            <TodoToolbarButton
+              open={showTodos}
+              onToggle={() => setShowTodos((v) => !v)}
+            />
           </div>
         )}
       >
@@ -1056,10 +1072,37 @@ export default function ExcalidrawWrapper() {
       </div>
       )}
 
+      {/* Todo overlay — toggled by the toolbar button after the utility icons */}
+      {showTodos && <TodoPanel onClose={() => setShowTodos(false)} />}
+
       {/* Code Editor Panel */}
       {showCodePanel && (
         <CodeEditorPanel onClose={() => setShowCodePanel(false)} />
       )}
+
+      {/* AI Text launcher — bottom-right, identical styling to the Code button */}
+      <div className="bottom-controls-right ai-text-dock">
+        <button
+          type="button"
+          className="excalidraw-button"
+          style={PANEL_BUTTON_STYLE}
+          onClick={() => {
+            if (!showAiTextPanel) {
+              setShowCodePanel(false);
+              setShowDataStructuresPanel(false);
+            }
+            setShowAiTextPanel(!showAiTextPanel);
+          }}
+          title="Open AI text assistant"
+          aria-label="AI Text"
+        >
+          <Sparkles size={16} strokeWidth={2.2} />
+          <span style={{ marginLeft: 4 }}>AI Text</span>
+        </button>
+      </div>
+
+      {/* AI Text sidebar — slides in from the right at half the Code width */}
+      {showAiTextPanel && <AITextSidebar onClose={() => setShowAiTextPanel(false)} />}
 
       {/* Data Structures Panel */}
       {showDataStructuresPanel && (
