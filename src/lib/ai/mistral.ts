@@ -91,22 +91,19 @@ export async function chatComplete(
   return content;
 }
 
-/**
- * Streaming chat call. Invokes `onToken` with each incremental chunk of
- * text as it arrives, so the panel can render tokens live.
- */
-export async function chatStream(
+/** Open a streaming chat request. Sends the caller's key only when one exists. */
+async function openChatStream(
   messages: ChatMessage[],
   model: string,
-  onToken: (delta: string) => void,
+  apiKey: string,
   signal?: AbortSignal
-): Promise<string> {
-  const apiKey = getStoredApiKey();
-  if (!apiKey) throw new MistralError("No Mistral API key configured.");
+): Promise<Response> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (apiKey) headers["X-Mistral-Key"] = apiKey;
 
   const res = await fetch("/api/ai/chat", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Mistral-Key": apiKey },
+    headers,
     body: JSON.stringify({ model, messages, stream: true }),
     signal,
   });
@@ -118,8 +115,15 @@ export async function chatStream(
   if (!res.body) {
     throw new MistralError("Streaming isn't supported in this environment.");
   }
+  return res;
+}
 
-  const reader = res.body.getReader();
+/** Consume an SSE chat stream, invoking `onToken` per incremental delta. */
+async function readSseStream(
+  res: Response,
+  onToken: (delta: string) => void
+): Promise<string> {
+  const reader = res.body!.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let full = "";
@@ -152,6 +156,39 @@ export async function chatStream(
   }
 
   return full;
+}
+
+/**
+ * Streaming chat call. Invokes `onToken` with each incremental chunk of
+ * text as it arrives, so the panel can render tokens live. Requires a
+ * client-stored key (bring-your-own-key flow).
+ */
+export async function chatStream(
+  messages: ChatMessage[],
+  model: string,
+  onToken: (delta: string) => void,
+  signal?: AbortSignal
+): Promise<string> {
+  const apiKey = getStoredApiKey();
+  if (!apiKey) throw new MistralError("No Mistral API key configured.");
+
+  const res = await openChatStream(messages, model, apiKey, signal);
+  return readSseStream(res, onToken);
+}
+
+/**
+ * Streaming chat call that works without a client key: when none is stored
+ * the request is sent bare and the server authenticates with its own
+ * `MISTRAL_API_KEY` (never exposed to the browser).
+ */
+export async function chatStreamAuto(
+  messages: ChatMessage[],
+  model: string,
+  onToken: (delta: string) => void,
+  signal?: AbortSignal
+): Promise<string> {
+  const res = await openChatStream(messages, model, getStoredApiKey(), signal);
+  return readSseStream(res, onToken);
 }
 
 /**
