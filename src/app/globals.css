@@ -3739,10 +3739,17 @@ canvas {
   overflow: hidden;
 }
 
-.ai-text__copy {
+.ai-text__code-actions {
   position: absolute;
   top: 6px;
   right: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 2;
+}
+
+.ai-text__canvas-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -3755,17 +3762,48 @@ canvas {
   padding: 3px 8px;
   border-radius: 0.4rem;
   cursor: pointer;
-  z-index: 1;
+  transition: all 0.12s ease;
+}
+
+.ai-text__canvas-btn:hover {
+  background: var(--color-surface-high);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.ai-text__copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--color-surface-high);
+  background: var(--island-bg-color);
+  color: var(--color-on-surface);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 0.4rem;
+  cursor: pointer;
+  transition: all 0.12s ease;
 }
 
 .ai-text__copy:hover {
   background: var(--color-surface-high);
 }
 
+.ai-text__actions-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--color-surface-high);
+}
+
 .ai-text__pre {
   margin: 0;
   padding: 10px 12px;
-  padding-top: 34px;
+  padding-top: 36px;
   overflow: auto;
   max-height: 320px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -3839,9 +3877,64 @@ canvas {
   margin-top: 2px;
 }
 
+.ai-text-panel__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ai-text-panel__header-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  color: var(--color-gray-60, #888);
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.ai-text-panel__header-btn:hover {
+  background: var(--color-surface-high);
+  color: var(--color-on-surface);
+}
+
 .ai-text-panel__msg {
   display: flex;
   gap: 8px;
+}
+
+.ai-text-panel__msg-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.ai-text__user-circle-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--island-bg-color);
+  border: 1px solid var(--color-border-outline-variant, #c5c5d0);
+  color: var(--color-gray-70, #5c5c5c);
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s ease;
+}
+
+.ai-text__user-circle-btn:hover {
+  background: var(--color-surface-high);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  transform: scale(1.08);
 }
 
 .ai-text-panel__msg-icon {
@@ -3979,50 +4072,92 @@ canvas {
 }
 
 /* Syntax highlighting — light theme */
-.ai-text-panel__msg-text--markdown .tok-comment { color: #6a737d; }
-.ai-text-panel__msg-text--markdown .tok-keyword { color: #cf222e; }
+.ai-text-panel__msg-text--markdown .tok-comment,
+.ai-text__codewrap .tok-comment { color: #6a737d; }
+.ai-text-panel__msg-text--markdown .tok-keyword,
+.ai-text__codewrap .tok-keyword { color: #cf222e; }
 .ai-text-panel__msg-text--markdown .tok-string,
-.ai-text-panel__msg-text--markdown .tok-string2 { color: #0a3069; }
-.ai-text-panel__msg-text--markdown .tok-number { color: #0550ae; }
+.ai-text-panel__msg-text--markdown .tok-string2,
+.ai-text__codewrap .tok-string,
+.ai-text__codewrap .tok-string2 { color: #0a3069; }
+.ai-text-panel__msg-text--markdown .tok-number,
+.ai-text__codewrap .tok-number { color: #0550ae; }
 .ai-text-panel__msg-text--markdown .tok-bool,
 .ai-text-panel__msg-text--markdown .tok-atom,
 .ai-text-panel__msg-text--markdown .tok-literal,
-.ai-text-panel__msg-text--markdown .tok-meta { color: #0550ae; }
+.ai-text-panel__msg-text--markdown .tok-meta,
+.ai-text__codewrap .tok-bool,
+.ai-text__codewrap .tok-atom,
+.ai-text__codewrap .tok-literal,
+.ai-text__codewrap .tok-meta { color: #0550ae; }
 .ai-text-panel__msg-text--markdown .tok-typeName,
 .ai-text-panel__msg-text--markdown .tok-className,
 .ai-text-panel__msg-text--markdown .tok-namespace,
-.ai-text-panel__msg-text--markdown .tok-macroName { color: #953800; }
+.ai-text-panel__msg-text--markdown .tok-macroName,
+.ai-text__codewrap .tok-typeName,
+.ai-text__codewrap .tok-className,
+.ai-text__codewrap .tok-namespace,
+.ai-text__codewrap .tok-macroName { color: #953800; }
 .ai-text-panel__msg-text--markdown .tok-variableName,
 .ai-text-panel__msg-text--markdown .tok-variableName2,
-.ai-text-panel__msg-text--markdown .tok-propertyName { color: #0550ae; }
-.ai-text-panel__msg-text--markdown .tok-variableName.tok-definition { color: #8250df; }
+.ai-text-panel__msg-text--markdown .tok-propertyName,
+.ai-text__codewrap .tok-variableName,
+.ai-text__codewrap .tok-variableName2,
+.ai-text__codewrap .tok-propertyName { color: #0550ae; }
+.ai-text-panel__msg-text--markdown .tok-variableName.tok-definition,
+.ai-text__codewrap .tok-variableName.tok-definition { color: #8250df; }
 .ai-text-panel__msg-text--markdown .tok-operator,
 .ai-text-panel__msg-text--markdown .tok-punctuation,
-.ai-text-panel__msg-text--markdown .tok-labelName { color: #57606a; }
-.ai-text-panel__msg-text--markdown .tok-invalid { color: #cf222e; }
+.ai-text-panel__msg-text--markdown .tok-labelName,
+.ai-text__codewrap .tok-operator,
+.ai-text__codewrap .tok-punctuation,
+.ai-text__codewrap .tok-labelName { color: #57606a; }
+.ai-text-panel__msg-text--markdown .tok-invalid,
+.ai-text__codewrap .tok-invalid { color: #cf222e; }
 
 /* Syntax highlighting — dark theme */
-.theme-dark .ai-text-panel__msg-text--markdown .tok-comment { color: #6a9955; }
-.theme-dark .ai-text-panel__msg-text--markdown .tok-keyword { color: #569cd6; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-comment,
+.theme-dark .ai-text__codewrap .tok-comment { color: #6a9955; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-keyword,
+.theme-dark .ai-text__codewrap .tok-keyword { color: #569cd6; }
 .theme-dark .ai-text-panel__msg-text--markdown .tok-string,
-.theme-dark .ai-text-panel__msg-text--markdown .tok-string2 { color: #ce9178; }
-.theme-dark .ai-text-panel__msg-text--markdown .tok-number { color: #b5cea8; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-string2,
+.theme-dark .ai-text__codewrap .tok-string,
+.theme-dark .ai-text__codewrap .tok-string2 { color: #ce9178; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-number,
+.theme-dark .ai-text__codewrap .tok-number { color: #b5cea8; }
 .theme-dark .ai-text-panel__msg-text--markdown .tok-bool,
 .theme-dark .ai-text-panel__msg-text--markdown .tok-atom,
-.theme-dark .ai-text-panel__msg-text--markdown .tok-literal { color: #569cd6; }
-.theme-dark .ai-text-panel__msg-text--markdown .tok-meta { color: #c586c0; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-literal,
+.theme-dark .ai-text__codewrap .tok-bool,
+.theme-dark .ai-text__codewrap .tok-atom,
+.theme-dark .ai-text__codewrap .tok-literal { color: #569cd6; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-meta,
+.theme-dark .ai-text__codewrap .tok-meta { color: #c586c0; }
 .theme-dark .ai-text-panel__msg-text--markdown .tok-typeName,
 .theme-dark .ai-text-panel__msg-text--markdown .tok-className,
 .theme-dark .ai-text-panel__msg-text--markdown .tok-namespace,
-.theme-dark .ai-text-panel__msg-text--markdown .tok-macroName { color: #4ec9b0; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-macroName,
+.theme-dark .ai-text__codewrap .tok-typeName,
+.theme-dark .ai-text__codewrap .tok-className,
+.theme-dark .ai-text__codewrap .tok-namespace,
+.theme-dark .ai-text__codewrap .tok-macroName { color: #4ec9b0; }
 .theme-dark .ai-text-panel__msg-text--markdown .tok-variableName,
 .theme-dark .ai-text-panel__msg-text--markdown .tok-variableName2,
-.theme-dark .ai-text-panel__msg-text--markdown .tok-propertyName { color: #9cdcfe; }
-.theme-dark .ai-text-panel__msg-text--markdown .tok-variableName.tok-definition { color: #dcdcaa; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-propertyName,
+.theme-dark .ai-text__codewrap .tok-variableName,
+.theme-dark .ai-text__codewrap .tok-variableName2,
+.theme-dark .ai-text__codewrap .tok-propertyName { color: #9cdcfe; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-variableName.tok-definition,
+.theme-dark .ai-text__codewrap .tok-variableName.tok-definition { color: #dcdcaa; }
 .theme-dark .ai-text-panel__msg-text--markdown .tok-operator,
 .theme-dark .ai-text-panel__msg-text--markdown .tok-punctuation,
-.theme-dark .ai-text-panel__msg-text--markdown .tok-labelName { color: #d4d4d4; }
-.theme-dark .ai-text-panel__msg-text--markdown .tok-invalid { color: #f44747; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-labelName,
+.theme-dark .ai-text__codewrap .tok-operator,
+.theme-dark .ai-text__codewrap .tok-punctuation,
+.theme-dark .ai-text__codewrap .tok-labelName { color: #d4d4d4; }
+.theme-dark .ai-text-panel__msg-text--markdown .tok-invalid,
+.theme-dark .ai-text__codewrap .tok-invalid { color: #f44747; }
 
 /* Composer */
 .ai-text-panel__composer {

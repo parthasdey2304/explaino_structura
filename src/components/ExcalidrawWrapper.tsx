@@ -25,6 +25,7 @@ import CodeEditorPanel from "./CodeEditorPanel";
 import DataStructuresPanel from "./DataStructuresPanel";
 import CanvasStructureControls, { type ViewportBox } from "./CanvasStructureControls";
 import AITextSidebar from "./AITextSidebar";
+import { createCodeCardSvg } from "@/lib/ai/highlight";
 import TodoPanel, { TodoCornerButton } from "./TodoOverlay";
 import LaserOverlay from "./LaserOverlay";
 import {
@@ -860,6 +861,111 @@ export default function ExcalidrawWrapper() {
     if (def) handleInsertDataStructure(def, def.defaultData());
   }, [handleInsertDataStructure]);
 
+  // --- Insert syntax-highlighted code card from AI Text panel onto canvas
+  const handleInsertCodeToCanvas = useCallback(
+    (code: string, lang: string) => {
+      const api = excalidrawAPI.current;
+      if (!api) return;
+      const appState = api.getAppState();
+      const { x, y } = viewportCoordsToSceneCoords(
+        { clientX: appState.width / 2, clientY: appState.height / 2 },
+        {
+          zoom: appState.zoom,
+          offsetLeft: appState.offsetLeft,
+          offsetTop: appState.offsetTop,
+          scrollX: appState.scrollX,
+          scrollY: appState.scrollY,
+        }
+      );
+
+      const { dataUrl, width, height } = createCodeCardSvg(code, lang);
+      const fileId = `code-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+
+      api.addFiles([
+        {
+          id: fileId as any,
+          dataURL: dataUrl as any,
+          mimeType: "image/svg+xml",
+          created: Date.now(),
+        },
+      ]);
+
+      const newElements = convertToExcalidrawElements([
+        {
+          type: "image",
+          fileId: fileId as any,
+          status: "saved",
+          x: Math.round(x - width / 2),
+          y: Math.round(y - height / 2),
+          width,
+          height,
+        },
+      ]);
+
+      const selectedElementIds: Record<string, true> = {};
+      for (const el of newElements) {
+        selectedElementIds[el.id] = true;
+      }
+
+      api.updateScene({
+        elements: [...api.getSceneElements(), ...newElements],
+        appState: {
+          selectedElementIds,
+        } as unknown as AppState,
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      });
+      api.scrollToContent(newElements, { fitToContent: false });
+    },
+    []
+  );
+
+  // --- Insert plain text from AI Text panel onto canvas (Excalidraw Text tool T / 8)
+  const handleInsertTextToCanvas = useCallback(
+    (text: string) => {
+      const api = excalidrawAPI.current;
+      if (!api) return;
+      const appState = api.getAppState();
+      const { x, y } = viewportCoordsToSceneCoords(
+        { clientX: appState.width / 2, clientY: appState.height / 2 },
+        {
+          zoom: appState.zoom,
+          offsetLeft: appState.offsetLeft,
+          offsetTop: appState.offsetTop,
+          scrollX: appState.scrollX,
+          scrollY: appState.scrollY,
+        }
+      );
+
+      const cleanText = text.trim();
+      const newElements = convertToExcalidrawElements([
+        {
+          type: "text",
+          x: Math.round(x - 120),
+          y: Math.round(y - 40),
+          text: cleanText,
+          fontSize: 16,
+          fontFamily: 3,
+          strokeColor: theme === "dark" ? "#e4e4e7" : "#18181b",
+        },
+      ]);
+
+      const selectedElementIds: Record<string, true> = {};
+      for (const el of newElements) {
+        selectedElementIds[el.id] = true;
+      }
+
+      api.updateScene({
+        elements: [...api.getSceneElements(), ...newElements],
+        appState: {
+          selectedElementIds,
+        } as unknown as AppState,
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      });
+      api.scrollToContent(newElements, { fitToContent: false });
+    },
+    [theme]
+  );
+
 
 
   // --- Drag-and-drop from the Data Structures panel onto the canvas
@@ -1255,7 +1361,13 @@ export default function ExcalidrawWrapper() {
       </div>
 
       {/* AI Text sidebar — slides in from the right at half the Code width */}
-      {showAiTextPanel && <AITextSidebar onClose={() => setShowAiTextPanel(false)} />}
+      {showAiTextPanel && (
+        <AITextSidebar
+          onClose={() => setShowAiTextPanel(false)}
+          onInsertCode={handleInsertCodeToCanvas}
+          onInsertText={handleInsertTextToCanvas}
+        />
+      )}
 
       {/* Data Structures Panel */}
       {showDataStructuresPanel && (
