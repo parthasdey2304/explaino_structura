@@ -1,10 +1,10 @@
 import type { ExecutionResult } from "./types";
 
-// Java is compiled and run remotely via the free Judge0 CE API (ce.judge0.com).
-// No Java installation and no API key are required — the code is sent to
-// Judge0's servers, compiled there, and stdout/stderr is returned.
-const JUDGE0_URL = "https://ce.judge0.com/submissions?base64_encoded=false&wait=true";
-const JAVA_LANGUAGE_ID = 62; // Java 11
+// Java is compiled and run remotely via Judge0 through our own server-side
+// `/api/execute` proxy — the browser never contacts Judge0 directly, and the
+// endpoint/credentials live in server env vars (JUDGE0_BASE_URL,
+// JUDGE0_API_KEY, JUDGE0_API_HOST). No API key is needed for the default
+// free CE cloud.
 
 interface Judge0Response {
   stdout: string | null;
@@ -26,14 +26,13 @@ export async function executeJava(code: string): Promise<ExecutionResult> {
   const start = performance.now();
 
   try {
-    const res = await fetch(JUDGE0_URL, {
+    const res = await fetch("/api/execute", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        language: "java",
         source_code: code,
-        language_id: JAVA_LANGUAGE_ID,
         stdin: "",
-        cpu_time_limit: 5,
         filename: `${extractPublicClassName(code)}.java`,
       }),
     });

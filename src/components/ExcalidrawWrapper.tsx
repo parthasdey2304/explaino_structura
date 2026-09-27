@@ -25,7 +25,7 @@ import CodeEditorPanel from "./CodeEditorPanel";
 import DataStructuresPanel from "./DataStructuresPanel";
 import CanvasStructureControls, { type ViewportBox } from "./CanvasStructureControls";
 import AITextSidebar from "./AITextSidebar";
-import TodoPanel, { TodoToolbarButton } from "./TodoOverlay";
+import TodoPanel, { TodoCornerButton } from "./TodoOverlay";
 import LaserOverlay from "./LaserOverlay";
 import {
   recognizeShape,
@@ -1175,10 +1175,6 @@ export default function ExcalidrawWrapper() {
             >
               <Grid3x3 size={16} strokeWidth={2.2} />
             </button>
-            <TodoToolbarButton
-              open={showTodos}
-              onToggle={() => setShowTodos((v) => !v)}
-            />
           </div>
         )}
       >
@@ -1220,10 +1216,16 @@ export default function ExcalidrawWrapper() {
       {/* Transient laser-pointer layer: screen-space only, never touches the
           scene or the undo/redo history. */}
       <LaserOverlay active={laserActive} />
+      {/* Todo toggle — docked top-left, immediately right of the hamburger
+          menu button (mirrors its box/border/icon sizing). */}
+      <TodoCornerButton
+        open={showTodos}
+        onToggle={() => setShowTodos((v) => !v)}
+      />
       </div>
       )}
 
-      {/* Todo overlay — toggled by the toolbar button after the utility icons */}
+      {/* Todo overlay — toggled by the top-left corner button */}
       {showTodos && <TodoPanel onClose={() => setShowTodos(false)} />}
 
       {/* Code Editor Panel */}
