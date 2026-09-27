@@ -39,10 +39,12 @@ function nextTodoId(): string {
 }
 
 /**
- * Toolbar toggle for the todo overlay. Rendered inside Excalidraw's top-right
- * button row, immediately after the existing utility buttons.
+ * Corner toggle for the todo overlay. Rendered as a floating button docked
+ * immediately to the right of Excalidraw's top-left hamburger (main menu)
+ * button, mirroring its box, border, icon sizing and gap tokens
+ * (see `.todo-corner-dock` / `.todo-corner-btn` in globals.css).
  */
-export function TodoToolbarButton({
+export function TodoCornerButton({
   open,
   onToggle,
 }: {
@@ -50,31 +52,18 @@ export function TodoToolbarButton({
   onToggle: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className={`excalidraw-button${open ? " excalidraw-button--primary" : ""}`}
-      style={{
-        height: "2rem",
-        padding: "0 0.6rem",
-        minWidth: "2.6rem",
-        fontSize: "0.8rem",
-        borderRadius: "0.5rem",
-        background: open ? undefined : "var(--color-surface-primary-container, #e0dfff)",
-        color: open ? undefined : "var(--color-on-primary-container, #030064)",
-        border: "none",
-        cursor: "pointer",
-        fontWeight: 500,
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-      title="Todo list"
-      aria-expanded={open}
-      aria-label="Todo list"
-    >
-      <ListTodo size={16} strokeWidth={2.2} />
-    </button>
+    <div className="todo-corner-dock">
+      <button
+        type="button"
+        onClick={onToggle}
+        className={`todo-corner-btn${open ? " todo-corner-btn--open" : ""}`}
+        title="Todo list"
+        aria-expanded={open}
+        aria-label="Todo list"
+      >
+        <ListTodo size={16} strokeWidth={2.2} />
+      </button>
+    </div>
   );
 }
 

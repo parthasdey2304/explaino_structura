@@ -1,16 +1,35 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Marked, type Tokens } from "marked";
 import DOMPurify from "dompurify";
-import { Bot, Loader2, Mic, MicOff, Send, User, X } from "lucide-react";
+import { Bot, Check, Copy, Loader2, Mic, MicOff, Send, User, X } from "lucide-react";
 import {
   MistralError,
   chatStreamAuto,
-  getStoredModel,
   type ChatMessage,
 } from "@/lib/ai/mistral";
 import { highlightCode } from "@/lib/ai/highlight";
+
+/** Pinned model for this panel per spec — always Mistral Large. */
+const AI_TEXT_MODEL = "mistral-large-latest";
+
+/**
+ * Strict scope + multi-output contract. The route only prepends its generic
+ * prompt when the caller sends no system message, so this one wins: exactly
+ * four complete solutions (Java, Python, C, C++), fenced for tab parsing,
+ * zero conversational filler.
+ */
+const CODE_SYSTEM_PROMPT =
+  "You are Explaino Code, a programming-only assistant. Every reply must " +
+  "contain exactly four complete, runnable, copy-paste-ready solutions — one " +
+  "each in Java, Python, C, and C++ in that order — even if the request " +
+  "names a single language or none at all. If the request is not " +
+  "programming-related, answer with the closest reasonable code " +
+  "interpretation across the four languages. Format: for each language, one " +
+  "short bold label line, then exactly one fenced code block tagged java, " +
+  "python, c, or cpp. No other code blocks. No greetings, introductions, or " +
+  "conversational filler — at most one terse line per solution.";
 
 // Isolated Marked instance so this sidebar's code blocks can be syntax
 // highlighted without changing how other panels render Markdown.
@@ -76,6 +95,159 @@ interface UiMessage {
 
 let msgCounter = 0;
 const nextId = () => `at${++msgCounter}-${Date.now().toString(36)}`;
+
+interface Solution {
+  lang: string;
+  label: string;
+  code: string;
+}
+
+const CANONICAL_ORDER = ["java", "python", "c", "cpp"];
+
+function solutionLabel(lang: string, index: number): string {
+  const key = lang.toLowerCase();
+  if (key === "java") return "Java";
+  if (key === "python") return "Python";
+  if (key === "c") return "C";
+  if (key === "cpp" || key === "c++" || key === "cxx") return "C++";
+  if (key) return lang.length <= 12 ? lang.toUpperCase() : `Solution ${index + 1}`;
+  return `Solution ${index + 1}`;
+}
+
+/** Pull every fenced code block out of a reply for the tabbed solution view. */
+function extractSolutions(markdown: string): Solution[] {
+  const out: Solution[] = [];
+  const fence = /```([a-zA-Z0-9_+#-]+)?[^\S\n]*\n([\s\S]*?)```/g;
+  let match: RegExpExecArray | null;
+  let index = 0;
+  while ((match = fence.exec(markdown)) !== null) {
+    index++;
+    const lang = (match[1] ?? "").trim();
+    out.push({
+      lang,
+      label: solutionLabel(lang, index),
+      code: match[2].replace(/\n$/, ""),
+    });
+  }
+  // Canonical language order first (Java/Python/C/C++), extras in place.
+  const rank = (s: Solution) => {
+    const i = CANONICAL_ORDER.indexOf(s.lang.toLowerCase());
+    return i === -1 ? CANONICAL_ORDER.length : i;
+  };
+  return out
+    .map((s, i) => ({ s, i }))
+    .sort((a, b) => rank(a.s) - rank(b.s) || a.i - b.i)
+    .map(({ s }) => s);
+}
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
+/**
+ * Tabbed solution view: one tab per fenced code block (Java/Python/C/C++
+ * first), syntax-highlighted, each with its own copy-to-clipboard button.
+ */
+function SolutionTabs({ solutions }: { solutions: Solution[] }) {
+  const [active, setActive] = useState(0);
+  const [copied, setCopied] = useState<number | null>(null);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+    };
+  }, []);
+  const current = solutions[Math.min(active, solutions.length - 1)];
+  const onCopy = useCallback(async () => {
+    const ok = await copyText(current.code);
+    if (!ok) return;
+    const index = solutions.indexOf(current);
+    setCopied(index);
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => setCopied(null), 1500);
+  }, [current, solutions]);
+  return (
+    <div className="ai-text__solutions">
+      <div className="ai-text__tabbar" role="tablist" aria-label="Solutions">
+        {solutions.map((s, i) => (
+          <button
+            key={`${s.label}-${i}`}
+            type="button"
+            role="tab"
+            aria-selected={i === Math.min(active, solutions.length - 1)}
+            className={`ai-text__tab${i === Math.min(active, solutions.length - 1) ? " ai-text__tab--active" : ""}`}
+            onClick={() => setActive(i)}
+            title={s.label}
+          >
+            {s.label}
+          </button>
+        ))}
+        <span className="ai-text__count">
+          {solutions.length} solution{solutions.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      <div className="ai-text__codewrap">
+        <button
+          type="button"
+          className="ai-text__copy"
+          onClick={onCopy}
+          title="Copy solution to clipboard"
+          aria-label={`Copy ${current.label} solution`}
+        >
+          {copied === solutions.indexOf(current) ? (
+            <Check size={13} strokeWidth={2.5} />
+          ) : (
+            <Copy size={13} strokeWidth={2.2} />
+          )}
+          <span>{copied === solutions.indexOf(current) ? "Copied" : "Copy"}</span>
+        </button>
+        <pre className="ai-text__pre">
+          <code
+            className={`language-${current.lang}`}
+            dangerouslySetInnerHTML={{
+              __html: DOMPurify.sanitize(
+                highlightCode(current.code, current.lang)
+              ),
+            }}
+          />
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+/** Assistant bubble: tabbed solutions when the reply has code fences. */
+function AssistantBody({ text }: { text: string }) {
+  const solutions = useMemo(() => extractSolutions(text), [text]);
+  if (solutions.length === 0) {
+    return (
+      <div
+        className="ai-text-panel__msg-text ai-text-panel__msg-text--markdown"
+        dangerouslySetInnerHTML={{
+          __html: renderMarkdown(text || "…"),
+        }}
+      />
+    );
+  }
+  return <SolutionTabs solutions={solutions} />;
+}
 
 /**
  * Right-hand AI Text sidebar: multi-line composer with voice dictation and a
@@ -179,15 +351,22 @@ export default function AITextSidebar({ onClose }: { onClose: () => void }) {
 
     const controller = new AbortController();
     abortRef.current = controller;
-    const outgoing: ChatMessage[] = [
+    // Pinned model + strict 4-language system prompt (see CODE_SYSTEM_PROMPT).
+    // The system message is prepended fresh every turn and never stored in
+    // the conversation history.
+    const history: ChatMessage[] = [
       ...convoRef.current,
       { role: "user", content: text },
+    ];
+    const outgoing: ChatMessage[] = [
+      { role: "system", content: CODE_SYSTEM_PROMPT },
+      ...history,
     ];
 
     try {
       const full = await chatStreamAuto(
         outgoing,
-        getStoredModel(),
+        AI_TEXT_MODEL,
         (delta) => {
           setMessages((prev) =>
             prev.map((m) =>
@@ -197,7 +376,7 @@ export default function AITextSidebar({ onClose }: { onClose: () => void }) {
         },
         controller.signal
       );
-      convoRef.current = [...outgoing, { role: "assistant", content: full }];
+      convoRef.current = [...history, { role: "assistant", content: full }];
       if (convoRef.current.length > 24) convoRef.current = convoRef.current.slice(-24);
     } catch (err) {
       if (controller.signal.aborted) {
@@ -251,7 +430,7 @@ export default function AITextSidebar({ onClose }: { onClose: () => void }) {
         {messages.length === 0 ? (
           <div className="ai-text-panel__empty">
             <Bot size={22} strokeWidth={1.8} />
-            <p>Ask anything — code, explanations, rewrites.</p>
+            <p>Ask for code — every answer ships Java, Python, C and C++ solutions in copy-ready tabs.</p>
             <p className="ai-text-panel__empty-hint">
               Enter to send, Shift + Enter for a new line. Use the mic to dictate.
             </p>
@@ -273,12 +452,7 @@ export default function AITextSidebar({ onClose }: { onClose: () => void }) {
               </div>
               <div className="ai-text-panel__msg-body">
                 {m.role === "assistant" ? (
-                  <div
-                    className="ai-text-panel__msg-text ai-text-panel__msg-text--markdown"
-                    dangerouslySetInnerHTML={{
-                      __html: renderMarkdown(m.text || "…"),
-                    }}
-                  />
+                  <AssistantBody text={m.text} />
                 ) : (
                   <div className="ai-text-panel__msg-text">{m.text}</div>
                 )}

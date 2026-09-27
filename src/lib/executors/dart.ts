@@ -1,10 +1,11 @@
 import type { ExecutionResult } from "./types";
 
-// Dart is compiled and run remotely via the free Judge0 CE API (ce.judge0.com).
-// No Dart SDK installation and no API key are required — the code is sent to
-// Judge0's servers, compiled there, and stdout/stderr is returned.
-const JUDGE0_URL = "https://ce.judge0.com/submissions?base64_encoded=false&wait=true";
-const DART_LANGUAGE_ID = 90; // Dart 2.19.2
+// Dart is compiled and run remotely via Judge0 through our own
+// server-side `/api/execute` proxy — the browser never contacts Judge0
+// directly, and the endpoint/credentials live in server env vars
+// (JUDGE0_BASE_URL, JUDGE0_API_KEY, JUDGE0_API_HOST). No API key is needed
+// for the default free CE cloud.
+const DART_FILENAME = "main.dart";
 
 interface Judge0Response {
   stdout: string | null;
@@ -19,15 +20,14 @@ export async function executeDart(code: string): Promise<ExecutionResult> {
   const start = performance.now();
 
   try {
-    const res = await fetch(JUDGE0_URL, {
+    const res = await fetch("/api/execute", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        language: "dart",
         source_code: code,
-        language_id: DART_LANGUAGE_ID,
         stdin: "",
-        cpu_time_limit: 5,
-        filename: "main.dart",
+        filename: DART_FILENAME,
       }),
     });
 

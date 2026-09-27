@@ -225,6 +225,81 @@ canvas {
   cursor: crosshair !important;
 }
 
+/* ── Todo corner toggle (top-left, right of the hamburger menu) ────────
+   Mirrors Excalidraw's `.dropdown-menu-button.main-menu-trigger` box model:
+   2.25rem box / 1rem icon / lg radius / island surface tokens, with the same
+   0.5rem gap the app's own button rows use. The hamburger sits at a 1rem
+   inset (`--editor-container-padding`), so this docks right beside it. */
+.todo-corner-dock {
+  position: absolute;
+  top: 1rem;
+  left: calc(1rem + 2.25rem + 0.5rem);
+  z-index: 5;
+}
+
+.todo-corner-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--border-radius-lg);
+  box-shadow: 0 0 0 1px var(--color-surface-lowest);
+  background-color: var(--color-surface-low);
+  color: var(--color-on-surface);
+  cursor: pointer;
+}
+
+.todo-corner-btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.todo-corner-btn:hover {
+  box-shadow: 0 0 0 1px var(--color-brand-active);
+}
+
+.todo-corner-btn--open {
+  background-color: var(--color-surface-primary-container);
+  color: var(--color-on-primary-container);
+  box-shadow: 0 0 0 1px var(--color-surface-primary-container);
+}
+
+/* Extra-large displays: Excalidraw scales the hamburger to 2.5rem. */
+@media screen and (min-device-width: 1921px) {
+  .todo-corner-dock {
+    left: calc(1rem + 2.5rem + 0.5rem);
+  }
+
+  .todo-corner-btn {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .todo-corner-btn svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+}
+
+/* Mobile: Excalidraw swaps the hamburger to its borderless 2rem variant
+   (flagged by the `excalidraw--mobile` class on the canvas root, which is a
+   preceding sibling of this dock). */
+.excalidraw--mobile ~ .todo-corner-dock {
+  left: calc(1rem + 2rem + 0.5rem);
+}
+
+.excalidraw--mobile ~ .todo-corner-dock .todo-corner-btn {
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  margin: 0;
+  box-shadow: none;
+  background-color: var(--color-surface-mid);
+}
+
 /* ── Toolbar Layout ───────────────────────────────────────── */
 
 /* App wrapper */
@@ -3365,8 +3440,8 @@ canvas {
 
 .todo-panel {
   position: fixed;
-  top: calc(var(--toolbar-height) + 6px);
-  right: 12px;
+  top: calc(1rem + 2.25rem + 8px);
+  left: 12px;
   z-index: 60;
   width: 320px;
   max-width: calc(100vw - 24px);
@@ -3609,6 +3684,98 @@ canvas {
 
 .ai-text-panel--open {
   transform: translateX(0);
+}
+
+/* ── AI Text solution tabs (Java / Python / C / C++) ─────────────────── */
+.ai-text__solutions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ai-text__tabbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.ai-text__tab {
+  border: 1px solid var(--color-surface-high);
+  background: var(--island-bg-color);
+  color: var(--color-on-surface);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.ai-text__tab:hover {
+  background: var(--color-surface-high);
+}
+
+.ai-text__tab--active {
+  background: var(--color-surface-primary-container);
+  border-color: var(--color-surface-primary-container);
+  color: var(--color-on-primary-container);
+}
+
+.ai-text__count {
+  margin-left: auto;
+  font-size: 0.68rem;
+  color: var(--color-gray-50);
+  white-space: nowrap;
+}
+
+.ai-text__codewrap {
+  position: relative;
+  border: 1px solid var(--color-surface-high);
+  border-radius: var(--border-radius-lg);
+  background: var(--color-surface-lowest);
+  overflow: hidden;
+}
+
+.ai-text__copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--color-surface-high);
+  background: var(--island-bg-color);
+  color: var(--color-on-surface);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 0.4rem;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.ai-text__copy:hover {
+  background: var(--color-surface-high);
+}
+
+.ai-text__pre {
+  margin: 0;
+  padding: 10px 12px;
+  padding-top: 34px;
+  overflow: auto;
+  max-height: 320px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+.ai-text__pre code {
+  font-family: inherit;
+  white-space: pre;
 }
 
 .ai-text-panel__header {
@@ -3971,7 +4138,7 @@ canvas {
   }
 
   .todo-panel {
-    top: 12px;
+    top: calc(1rem + 2rem + 8px);
     left: 12px;
     right: 12px;
     width: auto;
