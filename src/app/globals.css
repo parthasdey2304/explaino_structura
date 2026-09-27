@@ -3667,10 +3667,9 @@ canvas {
   right: 12px;
   bottom: 44px;
   z-index: 41;
-  /* Code sidebar is 50vw → this is exactly 50% of that. */
-  width: 25vw;
-  /* Adaptive floor for narrower viewports (50vw of Code would be unusable). */
-  min-width: 340px;
+  /* Width increased by 10% more for comfortable reading, code tabs, and canvas workflows */
+  width: clamp(380px, 35vw, 620px);
+  min-width: 380px;
   max-width: calc(100vw - 24px);
   display: flex;
   flex-direction: column;
@@ -3804,16 +3803,22 @@ canvas {
   margin: 0;
   padding: 10px 12px;
   padding-top: 36px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   max-height: 320px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.74rem;
   line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .ai-text__pre code {
   font-family: inherit;
-  white-space: pre;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .ai-text-panel__header {
@@ -3905,6 +3910,15 @@ canvas {
 .ai-text-panel__msg {
   display: flex;
   gap: 8px;
+}
+
+.ai-text-panel__msg--user {
+  margin-left: 24px;
+}
+
+.ai-text-panel__msg--assistant,
+.ai-text-panel__msg--error {
+  margin-right: 24px;
 }
 
 .ai-text-panel__msg-left {
@@ -4061,14 +4075,21 @@ canvas {
   background: rgba(127, 127, 127, 0.18);
   border-radius: 8px;
   padding: 10px 12px;
-  overflow-x: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   margin: 6px 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .ai-text-panel__msg-text--markdown pre code {
   background: transparent;
   padding: 0;
   border-radius: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 /* Syntax highlighting — light theme */
@@ -4173,11 +4194,20 @@ canvas {
   gap: 8px;
 }
 
-.ai-text-panel__input {
+.ai-text-panel__input-box {
+  position: relative;
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: flex-end;
+}
+
+.ai-text-panel__input {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
   resize: none;
-  padding: 9px 10px;
+  padding: 8px 36px 8px 12px;
   font-size: 13px;
   font-family: inherit;
   line-height: 1.45;
@@ -4186,8 +4216,18 @@ canvas {
   border: 1px solid var(--color-border-outline-variant, #c5c5d0);
   border-radius: var(--border-radius-md);
   outline: none;
-  max-height: 160px;
+  min-height: 36px;
+  max-height: 104px;
+  overflow-y: auto;
   transition: border-color 0.12s ease, background-color 0.12s ease;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.ai-text-panel__input::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .ai-text-panel__input:focus {
@@ -4195,42 +4235,44 @@ canvas {
   background: var(--island-bg-color);
 }
 
-.ai-text-panel__mic {
-  flex-shrink: 0;
-  width: 34px;
-  height: 34px;
-  display: inline-flex;
+.ai-text-panel__mic-inside {
+  position: absolute;
+  right: 6px;
+  bottom: 5px;
+  width: 26px;
+  height: 26px;
+  display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  border: 1px solid var(--color-border-outline-variant, #c5c5d0);
+  border: none;
   background: transparent;
   color: var(--color-gray-60, #888);
+  border-radius: 50%;
   cursor: pointer;
-  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  transition: background-color 0.12s ease, color 0.12s ease, transform 0.12s ease;
+  z-index: 2;
 }
 
-.ai-text-panel__mic:hover:not(:disabled) {
+.ai-text-panel__mic-inside:hover:not(:disabled) {
   background: var(--color-surface-high);
   color: var(--color-on-surface);
 }
 
-.ai-text-panel__mic:disabled {
-  opacity: 0.4;
+.ai-text-panel__mic-inside:disabled {
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
-.ai-text-panel__mic--active {
+.ai-text-panel__mic-inside--active {
   background: #e03131;
-  border-color: #e03131;
   color: #fff;
   animation: ai-chat-pulse 1.4s ease-in-out infinite;
 }
 
 .ai-text-panel__send {
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;

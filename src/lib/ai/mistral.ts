@@ -22,7 +22,7 @@ export interface MistralModel {
 // these are the ones actually suited to a coding assistant.
 export const MISTRAL_MODELS: MistralModel[] = [
   { id: "codestral-latest", label: "Codestral", description: "Tuned specifically for code generation" },
-  { id: "mistral-small-latest", label: "Mistral Small", description: "Fast and inexpensive" },
+  { id: "open-mistral-nemo", label: "Open Mistral Nemo", description: "Fast, high-performance general and canvas text model" },
   { id: "mistral-large-latest", label: "Mistral Large", description: "Strongest reasoning and code quality" },
 ];
 
@@ -55,6 +55,11 @@ export function getStoredModel(): string {
       // Auto-migrate to codestral-latest
       window.localStorage.setItem(MODEL_STORAGE, "codestral-latest");
       return "codestral-latest";
+    }
+    if (stored === "mistral-small-latest") {
+      // Auto-migrate to open-mistral-nemo
+      window.localStorage.setItem(MODEL_STORAGE, "open-mistral-nemo");
+      return "open-mistral-nemo";
     }
     return stored ?? MISTRAL_MODELS[0].id;
   } catch {

@@ -25,9 +25,9 @@ import {
 } from "@/lib/ai/mistral";
 import { highlightCode } from "@/lib/ai/highlight";
 
-/** Pinned models for this panel. */
+/** Pinned models: Open Mistral Nemo is the main model, Codestral is for /code. */
+const MAIN_MODEL = "open-mistral-nemo";
 const CODE_MODEL = "codestral-latest";
-const TEXT_MODEL = "mistral-small-latest";
 
 /**
  * Strict scope + multi-output contract for /code requests:
@@ -46,14 +46,18 @@ const CODE_SYSTEM_PROMPT =
   "conversational filler — at most one terse line per solution.";
 
 /**
- * Direct plain text system prompt for /text requests:
- * No code tabs, no multi-solution wrappers, direct plain text/data/ASCII output.
+ * Direct plain text system prompt for normal / canvas text requests:
+ * Data is directly inserted onto an Excalidraw drawing canvas, so ABSOLUTELY NO
+ * conversational filler, greetings, introductions, commentary, notes, or explanations.
  */
-const TEXT_SYSTEM_PROMPT =
-  "You are Explaino Text, a concise, direct, text-only assistant. " +
-  "You provide clean, direct plain text responses without any conversational filler, chit-chat, introductions, or pleasantries. " +
-  "Never output code tabs, never format with multiple language tabs, and do not wrap your answer in code blocks unless specifically requested. " +
-  "Output directly the requested text, lists, ASCII values, or data tables cleanly.";
+const CANVAS_TEXT_SYSTEM_PROMPT =
+  "You are Explaino Canvas Text Generator. Your output will be directly inserted as text elements onto an Excalidraw drawing canvas. " +
+  "CRITICAL RULES: " +
+  "1. Output ONLY the raw content, text, list, ASCII table, values, or data requested. " +
+  "2. NEVER include conversational filler, greetings, introductions, or pleasantries (e.g. do NOT write 'Here is...', 'Sure!', 'Hope this helps', 'Note:', etc.). " +
+  "3. NEVER add explanations, summaries, markdown commentary, or chit-chat. " +
+  "4. Do NOT output four-language solution tabs. " +
+  "5. Every single line you output must be pure content intended directly for placement on the canvas.";
 
 // LocalStorage cache key and 7-day retention limit
 const STORAGE_KEY = "explaino_ai_text_history_v1";
@@ -403,9 +407,13 @@ export interface AITextSidebarProps {
 }
 
 /**
- * Right-hand AI Text sidebar: multi-line composer with voice dictation,
- * Codestral (/code) vs Mistral Small (/text) routing, 1-week LocalStorage chat
- * persistence, user message actions (Copy & Edit/Modify), and canvas insertion.
+ * Right-hand AI Text sidebar:
+ * - Open Mistral Nemo for normal / canvas text messages (clean, raw text output)
+ * - Codestral for /code messages (4-language runnable tabs)
+ * - 1-line auto-expanding textarea up to 4 lines with hidden scrollbar
+ * - Microphone embedded inside the placeholder on the right
+ * - Word wrap enabled in all code blocks
+ * - 1-week LocalStorage chat persistence and user message actions
  */
 export default function AITextSidebar({
   onClose,
@@ -462,6 +470,15 @@ export default function AITextSidebar({
     });
     return () => cancelAnimationFrame(raf);
   }, []);
+
+  // Auto-grow textarea from 1 line (~36px) up to 4 lines (~102px), then scroll with hidden scrollbar
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const nextHeight = Math.min(el.scrollHeight, 102);
+    el.style.height = `${Math.max(36, nextHeight)}px`;
+  }, [draft]);
 
   const close = useCallback(() => {
     setEntered(false);
@@ -540,12 +557,12 @@ export default function AITextSidebar({
     if (!raw || isStreaming) return;
     stopListening();
 
-    const isTextMode = /\/text\b/i.test(raw);
-    const mode: "code" | "text" = isTextMode ? "text" : "code";
-    const modelToUse = isTextMode ? TEXT_MODEL : CODE_MODEL;
-    const systemPromptToUse = isTextMode ? TEXT_SYSTEM_PROMPT : CODE_SYSTEM_PROMPT;
+    const isCode = /\/code\b/i.test(raw);
+    const mode: "code" | "text" = isCode ? "code" : "text";
+    const modelToUse = isCode ? CODE_MODEL : MAIN_MODEL;
+    const systemPromptToUse = isCode ? CODE_SYSTEM_PROMPT : CANVAS_TEXT_SYSTEM_PROMPT;
 
-    // Strip /code or /text token for clean prompt sent to model
+    // Strip /code or /text command tags for clean model processing
     const cleanPrompt =
       raw.replace(/(?:^|\s)\/(?:text|code)(?:\s|$)/gi, " ").trim() || raw;
 
@@ -626,7 +643,7 @@ export default function AITextSidebar({
     stopListening();
   }, [stopListening]);
 
-  const isDraftText = /\/text\b/i.test(draft);
+  const isDraftCode = /\/code\b/i.test(draft);
 
   return (
     <aside
@@ -637,7 +654,7 @@ export default function AITextSidebar({
         <div className="ai-text-panel__header-left">
           <span className="ai-text-panel__title">AI Text</span>
           <span className="ai-text-panel__badge">
-            {isDraftText ? "Mistral Small (/text)" : "Codestral (/code)"}
+            {isDraftCode ? "Codestral (/code)" : "Open Mistral Nemo"}
           </span>
         </div>
         <div className="ai-text-panel__header-actions">
@@ -669,13 +686,13 @@ export default function AITextSidebar({
           <div className="ai-text-panel__empty">
             <Bot size={22} strokeWidth={1.8} />
             <p>
-              Use <strong>/code</strong> for Codestral tabbed solutions (Java, Python, C, C++).
+              Canvas text generation powered by <strong>Open Mistral Nemo</strong>.
             </p>
             <p>
-              Use <strong>/text</strong> for Mistral Small direct text output with canvas insertion (T).
+              Type <strong>/code</strong> for <strong>Codestral</strong> 4-language runnable tabs (Java, Python, C, C++).
             </p>
             <p className="ai-text-panel__empty-hint">
-              Enter to send, Shift + Enter for newline. Use mic for dictation.
+              Enter to send, Shift + Enter for newline. Use the microphone inside placeholder to dictate.
             </p>
           </div>
         ) : (
@@ -736,36 +753,38 @@ export default function AITextSidebar({
 
       <div className="ai-text-panel__composer">
         <div className="ai-text-panel__input-row">
-          <button
-            type="button"
-            className={`ai-text-panel__mic${isListening ? " ai-text-panel__mic--active" : ""}`}
-            onClick={isListening ? stopListening : startListening}
-            disabled={!speechSupported}
-            title={
-              speechSupported
-                ? isListening
-                  ? "Stop recording"
-                  : "Voice input"
-                : "Voice input isn't supported in this browser"
-            }
-          >
-            {isListening ? <MicOff size={14} /> : <Mic size={14} />}
-          </button>
-          <textarea
-            ref={inputRef}
-            className="ai-text-panel__input"
-            rows={3}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
+          <div className="ai-text-panel__input-box">
+            <textarea
+              ref={inputRef}
+              className="ai-text-panel__input"
+              rows={1}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+              placeholder="Ask anything (canvas text) or /code for 4 languages…"
+              aria-label="Message"
+            />
+            <button
+              type="button"
+              className={`ai-text-panel__mic-inside${isListening ? " ai-text-panel__mic-inside--active" : ""}`}
+              onClick={isListening ? stopListening : startListening}
+              disabled={!speechSupported}
+              title={
+                speechSupported
+                  ? isListening
+                    ? "Stop recording"
+                    : "Voice input"
+                  : "Voice input isn't supported in this browser"
               }
-            }}
-            placeholder="Type /code or /text (e.g. /text list ASCII values)…"
-            aria-label="Message"
-          />
+            >
+              {isListening ? <MicOff size={15} /> : <Mic size={15} />}
+            </button>
+          </div>
           {isStreaming ? (
             <button
               type="button"
@@ -773,7 +792,7 @@ export default function AITextSidebar({
               onClick={stop}
               title="Stop"
             >
-              <Loader2 size={14} className="ai-text-panel__spin" />
+              <Loader2 size={15} className="ai-text-panel__spin" />
             </button>
           ) : (
             <button
@@ -783,7 +802,7 @@ export default function AITextSidebar({
               disabled={!draft.trim()}
               title="Send (Enter)"
             >
-              <Send size={14} />
+              <Send size={15} />
             </button>
           )}
         </div>
