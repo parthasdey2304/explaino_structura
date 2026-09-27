@@ -26,6 +26,14 @@ import DataStructuresPanel from "./DataStructuresPanel";
 import CanvasStructureControls, { type ViewportBox } from "./CanvasStructureControls";
 import AITextSidebar from "./AITextSidebar";
 import TodoPanel, { TodoToolbarButton } from "./TodoOverlay";
+import LaserOverlay from "./LaserOverlay";
+import {
+  recognizeShape,
+  buildShapeElement,
+  HOLD_MS as QUICKSHAPE_HOLD_MS,
+  HOLD_TOL_PX as QUICKSHAPE_HOLD_TOL_PX,
+  type QPoint,
+} from "@/lib/quickshape";
 import {
   DATA_STRUCTURES,
   applyAction,
@@ -37,7 +45,7 @@ import {
   type DataStructureDef,
   type StructureId,
 } from "@/lib/dataStructures";
-import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles } from "lucide-react";
+import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap } from "lucide-react";
 
 /**
  * Metadata attached to every element of an inserted diagram via Excalidraw's
@@ -308,6 +316,7 @@ export default function ExcalidrawWrapper() {
   const [showDataStructuresPanel, setShowDataStructuresPanel] = useState(false);
   const [showTodos, setShowTodos] = useState(false);
   const [showAiTextPanel, setShowAiTextPanel] = useState(false);
+  const [laserActive, setLaserActive] = useState(false);
   const showDataStructuresPanelRef = useRef(false);
   const [drawingName, setDrawingName] = useState("Untitled");
   const [drawingId, setDrawingId] = useState<string | null>(null);
@@ -907,6 +916,126 @@ export default function ExcalidrawWrapper() {
     };
   }, [selectedInstance, viewport]);
 
+  // Escape exits laser-pointer mode.
+  useEffect(() => {
+    if (!laserActive) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLaserActive(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [laserActive]);
+
+  // QuickShape: while the freedraw tool is down, a stationary hold
+  // (< 5px for ~500ms) snaps the in-progress stroke into a clean geometric
+  // shape. The swap goes through updateScene with EVENTUALLY capture, so the
+  // pointerup finalize records the whole stroke-to-shape as ONE undo entry.
+  // Afterwards Excalidraw's native drag machinery keeps resizing the new
+  // shape (generic elements via maybeDragNewGenericElement, lines/arrows via
+  // the linear branch) until the pointer is released.
+  useEffect(() => {
+    const api = excalidrawAPI.current;
+    if (!apiReady || !api) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let drawing = false;
+    let snapped = false;
+    let last: { x: number; y: number } | null = null;
+
+    const clearTimer = () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+
+    const fireHold = () => {
+      timer = null;
+      if (!drawing || snapped) return;
+      const inner = excalidrawAPI.current;
+      if (!inner) return;
+      const inProgress = (
+        inner.getAppState() as unknown as {
+          newElement?: ExcalidrawElement | null;
+        }
+      ).newElement;
+      if (!inProgress || inProgress.isDeleted || inProgress.type !== "freedraw") {
+        return;
+      }
+      const raw = inProgress as unknown as {
+        x: number;
+        y: number;
+        points?: readonly (readonly [number, number])[];
+      };
+      if (!raw.points || raw.points.length < 2) return;
+      const scenePts: QPoint[] = [];
+      for (const p of raw.points) {
+        if (!Array.isArray(p) || typeof p[0] !== "number" || typeof p[1] !== "number") {
+          continue;
+        }
+        scenePts.push({ x: raw.x + p[0], y: raw.y + p[1] });
+      }
+      const recognized = recognizeShape(scenePts);
+      if (!recognized) return; // leave ambiguous scribbles as freedraw
+      const shape = buildShapeElement(inProgress, recognized);
+      const elements = inner.getSceneElements();
+      inner.updateScene({
+        elements: elements.map((el) => (el.id === inProgress.id ? shape : el)),
+        appState: {
+          newElement: shape as unknown as AppState["newElement"],
+        },
+        captureUpdate: CaptureUpdateAction.EVENTUALLY,
+      });
+      snapped = true;
+    };
+
+    const armTimer = () => {
+      clearTimer();
+      timer = setTimeout(fireHold, QUICKSHAPE_HOLD_MS);
+    };
+
+    const onDown: Parameters<
+      ExcalidrawImperativeAPI["onPointerDown"]
+    >[0] = (tool, _pointerDownState, e) => {
+      if (tool.type !== "freedraw") return;
+      drawing = true;
+      snapped = false;
+      last = { x: e.clientX, y: e.clientY };
+      armTimer();
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!drawing || snapped) return;
+      if (!last) {
+        last = { x: e.clientX, y: e.clientY };
+        return;
+      }
+      if (
+        Math.hypot(e.clientX - last.x, e.clientY - last.y) >=
+        QUICKSHAPE_HOLD_TOL_PX
+      ) {
+        last = { x: e.clientX, y: e.clientY };
+        armTimer();
+      }
+    };
+    const onUp = () => {
+      drawing = false;
+      snapped = false;
+      last = null;
+      clearTimer();
+    };
+
+    const unsubs = [api.onPointerDown(onDown), api.onPointerUp(onUp)];
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      unsubs.forEach((unsub) => unsub());
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      clearTimer();
+    };
+  }, [apiReady]);
+
   return (
     <div className="w-full h-screen overflow-hidden relative" style={{ fontFamily: "var(--ui-font, 'Assistant', sans-serif)" }}>
       {!loaded || initialData === null ? (
@@ -930,6 +1059,25 @@ export default function ExcalidrawWrapper() {
         theme={theme}
         renderTopRightUI={() => (
           <div className="flex items-center gap-2" style={{ marginLeft: 8 }}>
+            <button
+              type="button"
+              onClick={() => setLaserActive((v) => !v)}
+              className="excalidraw-button"
+              style={
+                laserActive
+                  ? {
+                      ...PANEL_BUTTON_STYLE,
+                      background: "var(--color-on-primary-container, #030064)",
+                      color: "#ffffff",
+                    }
+                  : PANEL_BUTTON_STYLE
+              }
+              title="Laser pointer — transient red marks that fade away (never saved, never undoable). Esc to exit."
+              aria-pressed={laserActive}
+            >
+              <Zap size={16} strokeWidth={2.2} />
+              <span style={{ marginLeft: 4 }}>Laser</span>
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -1068,7 +1216,10 @@ export default function ExcalidrawWrapper() {
           <MainMenu.Separator />
           <MainMenu.DefaultItems.ChangeCanvasBackground />
         </MainMenu>
-      </ExcalidrawComponent>
+        </ExcalidrawComponent>
+      {/* Transient laser-pointer layer: screen-space only, never touches the
+          scene or the undo/redo history. */}
+      <LaserOverlay active={laserActive} />
       </div>
       )}
 
