@@ -115,13 +115,32 @@ export function highlightCode(code: string, lang?: string): string {
   return out;
 }
 
+function toBase64(str: string): string {
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(str, "utf-8").toString("base64");
+  }
+  if (typeof window !== "undefined" && typeof window.btoa === "function") {
+    if (typeof TextEncoder !== "undefined") {
+      const bytes = new TextEncoder().encode(str);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return window.btoa(binary);
+    }
+    return window.btoa(unescape(encodeURIComponent(str)));
+  }
+  return "";
+}
+
 /**
  * Generate a standalone syntax-highlighted code card as an SVG data URL for
  * embedding on the Excalidraw canvas as an image element.
  */
 export function createCodeCardSvg(
   code: string,
-  lang: string
+  lang: string,
+  isDark: boolean = false
 ): { dataUrl: string; width: number; height: number } {
   const language = resolveLanguage(lang);
   const cleanCode = code.replace(/\r\n/g, "\n");
@@ -245,15 +264,19 @@ export function createCodeCardSvg(
     textSvg += `  <text x="${paddingX}" y="${y}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="13" xml:space="preserve">${lineContent}</text>\n`;
   }
 
+  const borderColor = isDark ? "rgba(255, 255, 255, 0.85)" : "#3f3f46";
+  const borderWidth = isDark ? 1.5 : 1.2;
+
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${cardWidth}" height="${cardHeight}" viewBox="0 0 ${cardWidth} ${cardHeight}">
-  <rect width="${cardWidth}" height="${cardHeight}" rx="8" fill="#18181b" stroke="#3f3f46" stroke-width="1.2" />
-  <circle cx="18" cy="20" r="5" fill="#ef4444" />
-  <circle cx="33" cy="20" r="5" fill="#eab308" />
-  <circle cx="48" cy="20" r="5" fill="#22c55e" />
+  <rect x="0.75" y="0.75" width="${cardWidth - 1.5}" height="${cardHeight - 1.5}" rx="16" ry="16" fill="#18181b" stroke="${borderColor}" stroke-width="${borderWidth}" />
+  <circle cx="20" cy="20" r="5" fill="#ef4444" />
+  <circle cx="35" cy="20" r="5" fill="#eab308" />
+  <circle cx="50" cy="20" r="5" fill="#22c55e" />
   <text x="${cardWidth - 18}" y="24" text-anchor="end" font-family="ui-monospace, monospace" font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.05em">${escapeXml(displayLang)}</text>
   <line x1="0" y1="${headerHeight}" x2="${cardWidth}" y2="${headerHeight}" stroke="#27272a" stroke-width="1" />
 ${textSvg}</svg>`;
 
-  const dataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  const base64 = toBase64(svg);
+  const dataUrl = `data:image/svg+xml;base64,${base64}`;
   return { dataUrl, width: cardWidth, height: cardHeight };
 }

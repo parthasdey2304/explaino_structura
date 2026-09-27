@@ -453,9 +453,12 @@ export default function ExcalidrawWrapper() {
           {};
         for (const [fileId, file] of Object.entries(scene.files)) {
           if (file.dataURL) {
+            const isSvg =
+              file.mimeType === "image/svg+xml" ||
+              file.dataURL.startsWith("data:image/svg");
             filesAsDataURL[fileId] = {
               dataURL: file.dataURL,
-              mimeType: file.mimeType || "image/png",
+              mimeType: isSvg ? "image/svg+xml" : (file.mimeType || "image/png"),
             };
           }
         }
@@ -505,15 +508,20 @@ export default function ExcalidrawWrapper() {
             elements: sanitizeElements(saved.elements as unknown[]),
             appState: saved.appState as Partial<AppState>,
             files: Object.fromEntries(
-              Object.entries(saved.files || {}).map(([id, f]) => [
-                id,
-                {
+              Object.entries(saved.files || {}).map(([id, f]) => {
+                const isSvg =
+                  f.mimeType === "image/svg+xml" ||
+                  f.dataURL?.startsWith("data:image/svg");
+                return [
                   id,
-                  dataURL: f.dataURL,
-                  mimeType: f.mimeType || "image/png",
-                  created: Date.now(),
-                },
-              ])
+                  {
+                    id,
+                    dataURL: f.dataURL,
+                    mimeType: isSvg ? "image/svg+xml" : (f.mimeType || "image/png"),
+                    created: Date.now(),
+                  },
+                ];
+              })
             ) as unknown as BinaryFiles,
           });
           return;
@@ -526,10 +534,24 @@ export default function ExcalidrawWrapper() {
           if (!parsed || !Array.isArray(parsed.elements)) throw new Error("Invalid scene");
           // Sanitize elements to avoid Excalidraw normalization crashes
           const validElements = sanitizeElements(parsed.elements);
+          const restoredFiles: Record<string, any> = {};
+          if (parsed.files) {
+            for (const [id, f] of Object.entries(parsed.files as Record<string, any>)) {
+              if (f && f.dataURL) {
+                const isSvg =
+                  f.mimeType === "image/svg+xml" ||
+                  f.dataURL.startsWith("data:image/svg");
+                restoredFiles[id] = {
+                  ...f,
+                  mimeType: isSvg ? "image/svg+xml" : (f.mimeType || "image/png"),
+                };
+              }
+            }
+          }
           setInitialData({
             elements: validElements,
             appState: parsed.appState as Partial<AppState>,
-            files: parsed.files as BinaryFiles,
+            files: restoredFiles as BinaryFiles,
           });
           return;
         } catch {
@@ -560,9 +582,12 @@ export default function ExcalidrawWrapper() {
       {};
     for (const [fileId, file] of Object.entries(scene.files)) {
       if (file.dataURL) {
+        const isSvg =
+          file.mimeType === "image/svg+xml" ||
+          file.dataURL.startsWith("data:image/svg");
         filesAsDataURL[fileId] = {
           dataURL: file.dataURL,
-          mimeType: file.mimeType || "image/png",
+          mimeType: isSvg ? "image/svg+xml" : (file.mimeType || "image/png"),
         };
       }
     }
@@ -878,17 +903,14 @@ export default function ExcalidrawWrapper() {
         }
       );
 
-      const { dataUrl, width, height } = createCodeCardSvg(code, lang);
-      const fileId = `code-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+      const isDark =
+        theme === "dark" ||
+        appState.theme === "dark" ||
+        (typeof document !== "undefined" &&
+          document.documentElement.classList.contains("dark"));
 
-      api.addFiles([
-        {
-          id: fileId as any,
-          dataURL: dataUrl as any,
-          mimeType: "image/svg+xml",
-          created: Date.now(),
-        },
-      ]);
+      const { dataUrl, width, height } = createCodeCardSvg(code, lang, isDark);
+      const fileId = `code-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
       const newElements = convertToExcalidrawElements([
         {
@@ -899,6 +921,11 @@ export default function ExcalidrawWrapper() {
           y: Math.round(y - height / 2),
           width,
           height,
+          customData: {
+            isCodeCard: true,
+            code,
+            lang,
+          },
         },
       ]);
 
@@ -914,10 +941,56 @@ export default function ExcalidrawWrapper() {
         } as unknown as AppState,
         captureUpdate: CaptureUpdateAction.IMMEDIATELY,
       });
+
+      api.addFiles([
+        {
+          id: fileId as any,
+          dataURL: dataUrl as any,
+          mimeType: "image/svg+xml",
+          created: Date.now(),
+        },
+      ]);
+
       api.scrollToContent(newElements, { fitToContent: false });
     },
-    []
+    [theme]
   );
+
+  // Keep code cards synced with current theme (white border in dark mode, dark border in light mode)
+  useEffect(() => {
+    const api = excalidrawAPI.current;
+    if (!api) return;
+    const elements = api.getSceneElements();
+    const isDark = theme === "dark";
+    const filesToAdd: any[] = [];
+    let hasChanges = false;
+
+    const nextElements = elements.map((el) => {
+      if (!el.isDeleted && el.type === "image" && (el.customData as any)?.isCodeCard) {
+        const data = el.customData as { isCodeCard: boolean; code: string; lang: string };
+        if (!data?.code) return el;
+        const newFileId = `code-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+        const { dataUrl } = createCodeCardSvg(data.code, data.lang, isDark);
+        filesToAdd.push({
+          id: newFileId,
+          dataURL: dataUrl,
+          mimeType: "image/svg+xml",
+          created: Date.now(),
+        });
+        hasChanges = true;
+        return {
+          ...el,
+          fileId: newFileId,
+        };
+      }
+      return el;
+    });
+
+    if (hasChanges && filesToAdd.length > 0) {
+      api.updateScene({ elements: nextElements as any });
+      api.addFiles(filesToAdd);
+    }
+  }, [theme]);
 
   // --- Insert plain text from AI Text panel onto canvas (Excalidraw Text tool T / 8)
   const handleInsertTextToCanvas = useCallback(
