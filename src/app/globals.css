@@ -3578,64 +3578,6 @@ canvas {
   text-align: center;
 }
 
-.text-panel {
-  left: auto;
-  right: 12px;
-}
-
-.text-panel__ai {
-  display: flex;
-  gap: 8px;
-  padding: 10px 12px 6px;
-}
-
-.text-panel__ai .todo-panel__input {
-  flex: 1;
-}
-
-.text-panel__error {
-  padding: 0 12px;
-  color: #e03131;
-  font-size: 12px;
-}
-
-.text-panel__item {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 7px 8px;
-  border-radius: var(--border-radius-md);
-  border: none;
-  background: transparent;
-  color: var(--color-on-surface);
-  font-size: 12.5px;
-  cursor: pointer;
-}
-
-.text-panel__item:hover {
-  background: var(--color-surface-high);
-}
-
-.text-panel__item--active {
-  background: var(--color-surface-high);
-  border-left: 3px solid var(--color-primary);
-}
-
-.text-panel__editor {
-  width: calc(100% - 24px);
-  margin: 6px 12px 12px;
-  min-height: 90px;
-  max-height: 180px;
-  resize: vertical;
-  padding: 8px 10px;
-  border: 1px solid var(--color-surface-high);
-  border-radius: var(--border-radius-md);
-  background: transparent;
-  color: var(--color-on-surface);
-  font-size: 13px;
-  line-height: 1.4;
-}
-
 /* In-canvas text toolbar — anchored to the selected/editing text box. */
 .canvas-text-dock {
   position: fixed;
@@ -3726,10 +3668,8 @@ canvas {
 }
 
 @media (hover: none) {
-  .text-panel {
-    right: 12px;
-    left: 12px;
-    width: auto;
+  .todo-panel__drag {
+    opacity: 1;
   }
 }
 
