@@ -22,24 +22,43 @@
       "src_components_fileexplorer_renaming",
       "src_components_fileexplorer_treenode",
       "src_components_fileexplorer_treenodeprops",
-      "src_components_settingsmenu",
-      "src_components_settingsmenu_options",
-      "src_components_settingsmenu_settingsmenu",
-      "src_lib_editorsettings",
-      "src_lib_editorsettings_defaults",
-      "src_lib_editorsettings_editorsettings",
-      "src_lib_editorsettings_geteditorsettings",
-      "src_lib_editorsettings_readfromstorage",
-      "src_lib_editorsettings_seteditorsettings",
-      "src_lib_editorsettings_subscribeeditorsettings",
-      "src_lib_emmetextension",
-      "src_lib_emmetextension_createtabkeymap",
-      "src_lib_emmetextension_emmetexpansion",
-      "src_lib_emmetextension_expandemmetatcursor",
       "src_lib_emmetextension_snippetlanguagedata",
-      "src_lib_emmetextension_snippetsource",
-      "src_lib_emmetextension_tryexpandemmet",
-      "src_lib_snippets_snippetsforlanguage",
+      "src_lib_executors_clang",
+      "src_lib_executors_clang_cachedmodules",
+      "src_lib_executors_clang_executec",
+      "src_lib_executors_clang_executecpp",
+      "src_lib_executors_clang_getcompiler",
+      "src_lib_executors_clang_isclangloaded",
+      "src_lib_executors_clang_loadcdnmodule",
+      "src_lib_executors_clang_loadingmodules",
+      "src_lib_executors_clang_runclang",
+      "src_lib_executors_dart",
+      "src_lib_executors_dart_executedart",
+      "src_lib_executors_dart_judge0response",
+      "src_lib_executors_html",
+      "src_lib_executors_html_executehtml",
+      "src_lib_executors_index",
+      "src_lib_executors_index_executecode",
+      "src_lib_executors_index_executors",
+      "src_lib_executors_index_getexecutor",
+      "src_lib_executors_index_getsupportedlanguages",
+      "src_lib_executors_index_markpythonloaded",
+      "src_lib_executors_java",
+      "src_lib_executors_java_executejava",
+      "src_lib_executors_java_extractpublicclassname",
+      "src_lib_executors_java_judge0response",
+      "src_lib_executors_javascript",
+      "src_lib_executors_javascript_executejavascript",
+      "src_lib_executors_javascript_executejavascript_handler",
+      "src_lib_executors_python",
+      "src_lib_executors_python_ensurepyodide",
+      "src_lib_executors_python_executepython",
+      "src_lib_executors_python_getpyodideerror",
+      "src_lib_executors_python_ispyodideloaded",
+      "src_lib_executors_types",
+      "src_lib_executors_types_executionresult",
+      "src_lib_executors_types_executor",
+      "src_lib_executors_types_language",
       "src_lib_workspace",
       "src_lib_workspace_createnode",
       "src_lib_workspace_defaultworkspace",
@@ -70,7 +89,6 @@
       "src_components_canvasstructurecontrols",
       "src_components_canvasstructurecontrols_canvasstructurecontrols",
       "src_components_canvasstructurecontrols_canvasstructurecontrolsprops",
-      "src_components_canvasstructurecontrols_viewportbox",
       "src_components_datastructurespanel",
       "src_components_datastructurespanel_arraypreview",
       "src_components_datastructurespanel_binarytreepreview",
@@ -87,7 +105,6 @@
       "src_lib_datastructures",
       "src_lib_datastructures_actionsfor",
       "src_lib_datastructures_addchildat",
-      "src_lib_datastructures_anystructuredata",
       "src_lib_datastructures_applyaction",
       "src_lib_datastructures_applyactionoptions",
       "src_lib_datastructures_arrow",
@@ -180,7 +197,7 @@
       "zustand"
     ],
     "3": [
-      "excalidraw",
+      "src_components_canvasstructurecontrols_viewportbox",
       "src_components_excalidrawwrapper",
       "src_components_excalidrawwrapper_boxof",
       "src_components_excalidrawwrapper_dsmeta",
@@ -210,6 +227,7 @@
       "src_components_todooverlay_todoitem",
       "src_components_todooverlay_todopanel",
       "src_components_todooverlay_todostatus",
+      "src_lib_datastructures_anystructuredata",
       "src_lib_datastructures_valuecarrier",
       "src_lib_firestore",
       "src_lib_firestore_deletedrawing",
@@ -302,44 +320,6 @@
       "src_lib_visualizerstore_visualizerstate"
     ],
     "6": [
-      "src_lib_executors_clang",
-      "src_lib_executors_clang_cachedmodules",
-      "src_lib_executors_clang_executec",
-      "src_lib_executors_clang_executecpp",
-      "src_lib_executors_clang_getcompiler",
-      "src_lib_executors_clang_isclangloaded",
-      "src_lib_executors_clang_loadcdnmodule",
-      "src_lib_executors_clang_loadingmodules",
-      "src_lib_executors_clang_runclang",
-      "src_lib_executors_dart",
-      "src_lib_executors_dart_executedart",
-      "src_lib_executors_dart_judge0response",
-      "src_lib_executors_html",
-      "src_lib_executors_html_executehtml",
-      "src_lib_executors_index",
-      "src_lib_executors_index_executecode",
-      "src_lib_executors_index_executors",
-      "src_lib_executors_index_getexecutor",
-      "src_lib_executors_index_getsupportedlanguages",
-      "src_lib_executors_index_markpythonloaded",
-      "src_lib_executors_java",
-      "src_lib_executors_java_executejava",
-      "src_lib_executors_java_extractpublicclassname",
-      "src_lib_executors_java_judge0response",
-      "src_lib_executors_javascript",
-      "src_lib_executors_javascript_executejavascript",
-      "src_lib_executors_javascript_executejavascript_handler",
-      "src_lib_executors_python",
-      "src_lib_executors_python_ensurepyodide",
-      "src_lib_executors_python_executepython",
-      "src_lib_executors_python_getpyodideerror",
-      "src_lib_executors_python_ispyodideloaded",
-      "src_lib_executors_types",
-      "src_lib_executors_types_executionresult",
-      "src_lib_executors_types_executor",
-      "src_lib_executors_types_language"
-    ],
-    "7": [
       "eslint",
       "eslint_config_next",
       "lightningcss_win32_x64_msvc",
@@ -374,7 +354,7 @@
       "types_react_dom",
       "typescript"
     ],
-    "8": [
+    "7": [
       "src_components_aichatpanel",
       "src_components_aichatpanel_aichatpanel",
       "src_components_aichatpanel_aichatpanel_createspeechrecognition",
@@ -408,7 +388,7 @@
       "src_lib_ai_mistral_setstoredapikey",
       "src_lib_ai_mistral_setstoredmodel"
     ],
-    "9": [
+    "8": [
       "ref_dom",
       "ref_dom_iterable",
       "ref_esnext",
@@ -439,7 +419,7 @@
       "tsconfig_exclude",
       "tsconfig_include"
     ],
-    "10": [
+    "9": [
       "src_app_api_terminal_create_route",
       "src_app_api_terminal_create_route_post",
       "src_app_api_terminal_destroy_route",
@@ -468,7 +448,7 @@
       "src_lib_terminal_service_terminalservice_writefile",
       "src_lib_terminal_service_workspacesyncfile"
     ],
-    "11": [
+    "10": [
       "src_lib_quickshape",
       "src_lib_quickshape_anglebetween",
       "src_lib_quickshape_baseof",
@@ -496,6 +476,34 @@
       "src_lib_quickshape_roundness_box",
       "src_lib_quickshape_roundness_line",
       "src_lib_quickshape_sharpcorners"
+    ],
+    "11": [
+      "src_components_settingsmenu",
+      "src_components_settingsmenu_options",
+      "src_components_settingsmenu_settingsmenu",
+      "src_lib_editorsettings",
+      "src_lib_editorsettings_defaults",
+      "src_lib_editorsettings_editorsettings",
+      "src_lib_editorsettings_geteditorsettings",
+      "src_lib_editorsettings_readfromstorage",
+      "src_lib_editorsettings_seteditorsettings",
+      "src_lib_editorsettings_subscribeeditorsettings",
+      "src_lib_emmetextension",
+      "src_lib_emmetextension_createtabkeymap",
+      "src_lib_emmetextension_emmetexpansion",
+      "src_lib_emmetextension_expandemmetatcursor",
+      "src_lib_emmetextension_snippetsource",
+      "src_lib_emmetextension_tryexpandemmet",
+      "src_lib_snippets",
+      "src_lib_snippets_c_family_snippets",
+      "src_lib_snippets_cpp_snippets",
+      "src_lib_snippets_dart_snippets",
+      "src_lib_snippets_java_snippets",
+      "src_lib_snippets_javascript_snippets",
+      "src_lib_snippets_python_snippets",
+      "src_lib_snippets_snippetdef",
+      "src_lib_snippets_snippets_by_language",
+      "src_lib_snippets_snippetsforlanguage"
     ],
     "12": [
       "src_lib_ai_gemini_live_geminilivesession",
@@ -527,17 +535,6 @@
       "src_components_excalidrawerrorboundary_state"
     ],
     "14": [
-      "src_lib_snippets",
-      "src_lib_snippets_c_family_snippets",
-      "src_lib_snippets_cpp_snippets",
-      "src_lib_snippets_dart_snippets",
-      "src_lib_snippets_java_snippets",
-      "src_lib_snippets_javascript_snippets",
-      "src_lib_snippets_python_snippets",
-      "src_lib_snippets_snippetdef",
-      "src_lib_snippets_snippets_by_language"
-    ],
-    "15": [
       "src_components_laseroverlay",
       "src_components_laseroverlay_drawtipdot",
       "src_components_laseroverlay_laser_red",
@@ -547,72 +544,71 @@
       "src_components_laseroverlay_trail",
       "src_components_laseroverlay_trailpoint"
     ],
-    "16": [
+    "15": [
       "src_types_emmet_d",
       "src_types_emmet_d_emmet",
       "src_types_emmet_d_extractedabbreviation",
       "src_types_emmet_d_extractoptions",
       "src_types_emmet_d_userconfig"
     ],
-    "17": [
+    "16": [
       "src_app_api_ai_chat_route",
       "src_app_api_ai_chat_route_chatmessage",
       "src_app_api_ai_chat_route_ischatmessage",
       "src_app_api_ai_chat_route_post"
     ],
-    "18": [
+    "17": [
       "src_app_api_execute_route",
       "src_app_api_execute_route_executebody",
       "src_app_api_execute_route_language_ids",
       "src_app_api_execute_route_post"
     ],
-    "19": [
+    "18": [
       "src_app_layout",
       "src_app_layout_metadata",
       "src_app_layout_rootlayout"
     ],
-    "20": [
+    "19": [
       "eslint_config",
       "eslint_config_eslintconfig"
     ],
-    "21": [
+    "20": [
       "next_config",
       "next_config_nextconfig"
     ],
-    "22": [
+    "21": [
       "postcss_config",
       "postcss_config_config"
     ],
-    "23": [
+    "22": [
       "src_lib_firebase",
       "src_lib_firebase_firebaseconfig"
     ]
   },
   "cohesion": {
-    "0": 0.07093253968253968,
-    "1": 0.06892655367231638,
+    "0": 0.05495151337055539,
+    "1": 0.07259528130671507,
     "2": 0.04081632653061224,
-    "3": 0.08536585365853659,
+    "3": 0.08246225319396051,
     "4": 0.07827260458839407,
     "5": 0.09365079365079365,
-    "6": 0.10158730158730159,
-    "7": 0.06060606060606061,
-    "8": 0.13709677419354838,
-    "9": 0.06896551724137931,
-    "10": 0.1111111111111111,
-    "11": 0.1452991452991453,
+    "6": 0.06060606060606061,
+    "7": 0.13709677419354838,
+    "8": 0.06896551724137931,
+    "9": 0.1111111111111111,
+    "10": 0.1452991452991453,
+    "11": 0.12923076923076923,
     "12": 0.26373626373626374,
     "13": 0.2,
-    "14": 0.2222222222222222,
-    "15": 0.35714285714285715,
-    "16": 0.4,
-    "17": 0.6666666666666666,
-    "18": 0.5,
-    "19": 0.6666666666666666,
+    "14": 0.35714285714285715,
+    "15": 0.4,
+    "16": 0.6666666666666666,
+    "17": 0.5,
+    "18": 0.6666666666666666,
+    "19": 1.0,
     "20": 1.0,
     "21": 1.0,
-    "22": 1.0,
-    "23": 1.0
+    "22": 1.0
   },
   "gods": [
     {
@@ -626,13 +622,13 @@
       "degree": 17
     },
     {
-      "id": "tsconfig_compileroptions",
-      "label": "compilerOptions",
+      "id": "src_components_aichatpanel_aichatpanel",
+      "label": "AIChatPanel()",
       "degree": 16
     },
     {
-      "id": "src_components_aichatpanel_aichatpanel",
-      "label": "AIChatPanel()",
+      "id": "tsconfig_compileroptions",
+      "label": "compilerOptions",
       "degree": 16
     },
     {
@@ -702,10 +698,10 @@
     },
     {
       "source": "CodeEditorPanel()",
-      "target": "executeC()",
+      "target": "getEditorSettings()",
       "source_files": [
         "src/components/CodeEditorPanel.tsx",
-        "src/lib/executors/clang.ts"
+        "src/lib/editorSettings.ts"
       ],
       "confidence": "EXTRACTED",
       "relation": "calls",
@@ -713,10 +709,10 @@
     },
     {
       "source": "CodeEditorPanel()",
-      "target": "executeCpp()",
+      "target": "subscribeEditorSettings()",
       "source_files": [
         "src/components/CodeEditorPanel.tsx",
-        "src/lib/executors/clang.ts"
+        "src/lib/editorSettings.ts"
       ],
       "confidence": "EXTRACTED",
       "relation": "calls",
