@@ -114,10 +114,10 @@
     "semantic_hash": "57e598bcf4c5e62fd114d093b9974e38"
   },
   "src/components/ExcalidrawWrapper.tsx": {
-    "mtime": 1791129872.5392523,
-    "seen": 1791130796.9851406,
-    "ast_hash": "3aa75ff9e6720aaf584ede3fca2df4c1",
-    "semantic_hash": "3aa75ff9e6720aaf584ede3fca2df4c1"
+    "mtime": 1791133669.5404592,
+    "seen": 1791133791.6184154,
+    "ast_hash": "e294d06a4867c29ac74b03b96ecdabd9",
+    "semantic_hash": "e294d06a4867c29ac74b03b96ecdabd9"
   },
   "src/components/FileExplorer.tsx": {
     "mtime": 1791121432.8519895,
@@ -162,8 +162,8 @@
     "semantic_hash": "dd60d9724a835e367bfa578fccd397da"
   },
   "src/lib/ai/highlight.ts": {
-    "mtime": 1791129279.793983,
-    "seen": 1791130796.9857767,
+    "mtime": 1791130872.1817744,
+    "seen": 1791133791.619155,
     "ast_hash": "0828b9013568e201402ba1e51f1f26c4",
     "semantic_hash": "0828b9013568e201402ba1e51f1f26c4"
   },
@@ -311,10 +311,10 @@
     "ast_hash": "57d29251e76c0e7c24189453a5153408",
     "semantic_hash": "57d29251e76c0e7c24189453a5153408"
   },
-  "src/components/CanvasTextPanel.tsx": {
-    "mtime": 1791126186.8921552,
-    "seen": 1791126565.7283158,
-    "ast_hash": "55a68052d188fb4344eecd0338a5c31e",
-    "semantic_hash": "55a68052d188fb4344eecd0338a5c31e"
+  "src/components/ExplanioPanel.tsx": {
+    "mtime": 1791133514.7903445,
+    "seen": 1791133791.6184192,
+    "ast_hash": "369c5760127dbfc413ada1fb51ff360b",
+    "semantic_hash": "369c5760127dbfc413ada1fb51ff360b"
   }
 }
