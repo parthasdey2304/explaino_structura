@@ -1,14 +1,16 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ListTodo, Plus, Trash2, X } from "lucide-react";
+import { ArrowUpDown, Check, GripVertical, ListTodo, Minus, Plus, Trash2, X } from "lucide-react";
 
 const TODO_STORAGE_KEY = "explaino-todos";
+
+export type TodoStatus = "todo" | "done" | "inprogress";
 
 export interface TodoItem {
   id: string;
   text: string;
-  done: boolean;
+  status: TodoStatus;
 }
 
 function loadTodos(): TodoItem[] {
@@ -17,10 +19,21 @@ function loadTodos(): TodoItem[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (item): item is TodoItem =>
-        !!item && typeof item.id === "string" && typeof item.text === "string"
-    );
+    return parsed
+      .filter(
+        (item): item is { id: string; text: string; status?: TodoStatus; done?: boolean } =>
+          !!item && typeof item.id === "string" && typeof item.text === "string"
+      )
+      .map((item) => ({
+        id: item.id,
+        text: item.text,
+        status:
+          item.status === "done" || item.status === "inprogress" || item.status === "todo"
+            ? item.status
+            : item.done
+              ? "done"
+              : "todo",
+      }));
   } catch {
     return [];
   }
@@ -85,12 +98,40 @@ export default function TodoPanel({ onClose }: { onClose: () => void }) {
   const addTodo = useCallback(() => {
     const text = draft.trim();
     if (!text) return;
-    setTodos((prev) => [...prev, { id: nextTodoId(), text, done: false }]);
+    setTodos((prev) => [...prev, { id: nextTodoId(), text, status: "todo" }]);
     setDraft("");
   }, [draft]);
 
-  const toggleTodo = useCallback((id: string) => {
-    setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
+  const cycleTodo = useCallback((id: string) => {
+    setTodos((prev) =>
+      prev.map((t) =>
+        t.id === id
+          ? { ...t, status: t.status === "todo" ? "done" : t.status === "done" ? "inprogress" : "todo" }
+          : t
+      )
+    );
+  }, []);
+
+  const flipTodos = useCallback(() => {
+    setTodos((prev) => [...prev].reverse());
+  }, []);
+
+  const dragIndex = useRef<number | null>(null);
+
+  const onDragStart = useCallback((index: number) => {
+    dragIndex.current = index;
+  }, []);
+
+  const onDrop = useCallback((index: number) => {
+    setTodos((prev) => {
+      const from = dragIndex.current;
+      dragIndex.current = null;
+      if (from === null || from === index) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(index, 0, moved);
+      return next;
+    });
   }, []);
 
   const removeTodo = useCallback((id: string) => {
@@ -119,7 +160,7 @@ export default function TodoPanel({ onClose }: { onClose: () => void }) {
     };
   }, [onClose]);
 
-  const remaining = todos.filter((t) => !t.done).length;
+  const remaining = todos.filter((t) => t.status !== "done").length;
 
   return (
     <div
@@ -133,6 +174,15 @@ export default function TodoPanel({ onClose }: { onClose: () => void }) {
           <ListTodo size={14} strokeWidth={2.2} />
           Todos
         </span>
+        <button
+          type="button"
+          className="todo-panel__close"
+          onClick={flipTodos}
+          title="Flip order (top to bottom / bottom to top)"
+          aria-label="Flip todo order"
+        >
+          <ArrowUpDown size={14} strokeWidth={2.5} />
+        </button>
         <button
           type="button"
           className="todo-panel__close"
@@ -175,20 +225,31 @@ export default function TodoPanel({ onClose }: { onClose: () => void }) {
         {todos.length === 0 && (
           <li className="todo-panel__empty">Nothing here yet — add your first task above.</li>
         )}
-        {todos.map((todo) => (
+        {todos.map((todo, index) => (
           <li
             key={todo.id}
-            className={`todo-panel__item${todo.done ? " todo-panel__item--done" : ""}`}
+            className={`todo-panel__item${todo.status === "done" ? " todo-panel__item--done" : ""}${todo.status === "inprogress" ? " todo-panel__item--inprogress" : ""}`}
+            draggable
+            onDragStart={() => onDragStart(index)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={() => onDrop(index)}
           >
             <button
               type="button"
               role="checkbox"
-              aria-checked={todo.done}
-              className="todo-panel__check"
-              onClick={() => toggleTodo(todo.id)}
-              title={todo.done ? "Mark as not done" : "Mark as done"}
+              aria-checked={todo.status === "done"}
+              className={`todo-panel__check${todo.status === "inprogress" ? " todo-panel__check--inprogress" : ""}`}
+              onClick={() => cycleTodo(todo.id)}
+              title={
+                todo.status === "done"
+                  ? "Done — click for on the way"
+                  : todo.status === "inprogress"
+                    ? "On the way — click for not done"
+                    : "Not done — click for done"
+              }
             >
-              {todo.done && <Check size={11} strokeWidth={3} />}
+              {todo.status === "done" && <Check size={11} strokeWidth={3} />}
+              {todo.status === "inprogress" && <Minus size={11} strokeWidth={3} />}
             </button>
             <span className="todo-panel__text">{todo.text}</span>
             <button
@@ -200,6 +261,13 @@ export default function TodoPanel({ onClose }: { onClose: () => void }) {
             >
               <Trash2 size={13} />
             </button>
+            <span
+              className="todo-panel__drag"
+              title="Drag to reorder"
+              aria-label="Drag to reorder"
+            >
+              <GripVertical size={13} />
+            </span>
           </li>
         ))}
       </ul>

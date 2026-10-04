@@ -25,6 +25,7 @@ import CodeEditorPanel from "./CodeEditorPanel";
 import DataStructuresPanel from "./DataStructuresPanel";
 import CanvasStructureControls, { type ViewportBox } from "./CanvasStructureControls";
 import AITextSidebar from "./AITextSidebar";
+import CanvasTextPanel, { type CanvasTextItem } from "./CanvasTextPanel";
 import { createCodeCardSvg } from "@/lib/ai/highlight";
 import TodoPanel, { TodoCornerButton } from "./TodoOverlay";
 import LaserOverlay from "./LaserOverlay";
@@ -46,7 +47,7 @@ import {
   type DataStructureDef,
   type StructureId,
 } from "@/lib/dataStructures";
-import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap } from "lucide-react";
+import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List } from "lucide-react";
 
 /**
  * Metadata attached to every element of an inserted diagram via Excalidraw's
@@ -152,6 +153,25 @@ function sameBox(a: SceneBox | null, b: SceneBox | null): boolean {
     Math.round(a.maxX) === Math.round(b.maxX) &&
     Math.round(a.maxY) === Math.round(b.maxY)
   );
+}
+
+/** Strip common markdown syntax so canvas text renders the readable output. */
+function stripMarkdown(md: string): string {
+  let s = md;
+  s = s.replace(/```[\s\S]*?```/g, "");
+  s = s.replace(/^```.*$/gm, "");
+  s = s.replace(/^---+$/gm, "");
+  s = s.replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1");
+  s = s.replace(/^\s{0,3}#{1,6}\s*/gm, "");
+  s = s.replace(/\*\*([^*]+)\*\*/g, "$1");
+  s = s.replace(/__([^_]+)__/g, "$1");
+  s = s.replace(/\*([^*\n]+)\*/g, "$1");
+  s = s.replace(/_([^_\n]+)_/g, "$1");
+  s = s.replace(/~~([^~]+)~~/g, "$1");
+  s = s.replace(/`([^`]*)`/g, "$1");
+  s = s.replace(/^\s{0,3}>\s?/gm, "");
+  s = s.replace(/^\s*[*+]\s/gm, "• ");
+  return s.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 const REPO_URL = "https://github.com/parthasdey2304/explaino_structura";
@@ -317,6 +337,12 @@ export default function ExcalidrawWrapper() {
   const [showDataStructuresPanel, setShowDataStructuresPanel] = useState(false);
   const [showTodos, setShowTodos] = useState(false);
   const [showAiTextPanel, setShowAiTextPanel] = useState(false);
+  const [showTextPanel, setShowTextPanel] = useState(false);
+  const [activeTool, setActiveTool] = useState("selection");
+  const [textItems, setTextItems] = useState<CanvasTextItem[]>([]);
+  const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
+  const editingTextIdRef = useRef<string | null>(null);
+  const [listMode, setListMode] = useState<"ordered" | "bullet" | null>(null);
   const [laserActive, setLaserActive] = useState(false);
   const showDataStructuresPanelRef = useRef(false);
   const [drawingName, setDrawingName] = useState("Untitled");
@@ -432,6 +458,60 @@ export default function ExcalidrawWrapper() {
           setShowDataStructuresPanel(false);
           showDataStructuresPanelRef.current = false;
         }
+      }
+
+      // Track active tool + canvas text items for the Canvas Text panel.
+      const toolType = (appState as unknown as { activeTool?: { type?: string } }).activeTool?.type ?? "selection";
+      setActiveTool((prev) => (prev === toolType ? prev : toolType));
+      const texts: CanvasTextItem[] = [];
+      for (const el of elements) {
+        if (el.isDeleted || el.type !== "text") continue;
+        const t = el as unknown as { id: string; text?: string; customData?: { markdownRaw?: string } };
+        const text = typeof t.text === "string" ? t.text : "";
+        texts.push({ id: t.id, text, raw: typeof t.customData?.markdownRaw === "string" ? t.customData.markdownRaw : text });
+      }
+      setTextItems((prev) => {
+        if (prev.length === texts.length && prev.every((p, i) => p.id === texts[i].id && p.text === texts[i].text && p.raw === texts[i].raw)) return prev;
+        return texts;
+      });
+
+      // Markdown edit lifecycle: show raw markdown while the WYSIWYG editor is
+      // open on a text element; strip to rendered text when editing ends.
+      const editingId = (appState as unknown as { editingTextElement?: { id?: string } | null }).editingTextElement?.id ?? null;
+      const prevEditingId = editingTextIdRef.current;
+      if (editingId && editingId !== prevEditingId) {
+        const api = excalidrawAPI.current;
+        if (api) {
+          const target = api.getSceneElements().find((el) => el.id === editingId);
+          const raw = target ? (target as unknown as { customData?: { markdownRaw?: string } }).customData?.markdownRaw : undefined;
+          if (target && typeof raw === "string" && (target as unknown as { text?: string }).text !== raw) {
+            api.updateScene({
+              elements: api.getSceneElements().map((el) =>
+                el.id === editingId && !el.isDeleted && el.type === "text"
+                  ? ({ ...el, text: raw, originalText: raw } as typeof el)
+                  : el
+              ),
+            });
+          }
+        }
+        editingTextIdRef.current = editingId;
+      } else if (!editingId && prevEditingId) {
+        const api = excalidrawAPI.current;
+        if (api) {
+          const target = api.getSceneElements().find((el) => el.id === prevEditingId);
+          if (target && !target.isDeleted && target.type === "text") {
+            const raw = (target as unknown as { text?: string }).text ?? "";
+            const rendered = stripMarkdown(raw);
+            api.updateScene({
+              elements: api.getSceneElements().map((el) =>
+                el.id === prevEditingId && !el.isDeleted && el.type === "text"
+                  ? ({ ...el, text: rendered, originalText: rendered, customData: { ...((el as any).customData ?? {}), markdownRaw: raw } } as typeof el)
+                  : el
+              ),
+            });
+          }
+        }
+        editingTextIdRef.current = null;
       }
 
       // Immediate local backup
@@ -956,6 +1036,95 @@ export default function ExcalidrawWrapper() {
     [theme]
   );
 
+  // Auto-open the Canvas Text panel when the text tool is active.
+  useEffect(() => {
+    if (activeTool === "text") setShowTextPanel(true);
+  }, [activeTool]);
+
+  const handleUpdateCanvasText = useCallback((id: string, raw: string) => {
+    const api = excalidrawAPI.current;
+    if (!api) return;
+    const rendered = stripMarkdown(raw);
+    api.updateScene({
+      elements: api.getSceneElements().map((el) =>
+        el.id === id && !el.isDeleted && el.type === "text"
+          ? ({ ...el, text: rendered, originalText: rendered, customData: { ...((el as any).customData ?? {}), markdownRaw: raw } } as typeof el)
+          : el
+      ),
+    });
+  }, []);
+
+  // Ordered/bullet list mode: while writing a canvas text element, Enter adds
+  // the next list marker ("2. " / "• ") on a new line automatically.
+  useEffect(() => {
+    if (!listMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Enter" || e.shiftKey) return;
+      const ta = document.querySelector<HTMLTextAreaElement>(".excalidraw textarea");
+      if (!ta || document.activeElement !== ta) return;
+      e.preventDefault();
+      const v = ta.value;
+      const pos = ta.selectionStart ?? v.length;
+      let marker: string;
+      if (listMode === "ordered") {
+        let n = 0;
+        for (const line of v.split("\n")) if (/^\s*\d+\.\s/.test(line)) n++;
+        marker = `${n + 1}. `;
+      } else {
+        marker = "• ";
+      }
+      const next = v.slice(0, pos) + "\n" + marker + v.slice(ta.selectionEnd ?? pos);
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+      if (!setter) return;
+      setter.call(ta, next);
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+      const np = pos + 1 + marker.length;
+      ta.setSelectionRange(np, np);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [listMode]);
+
+  const handleInsertList = useCallback(
+    (kind: "ordered" | "bullet") => {
+      const api = excalidrawAPI.current;
+      if (!api) return;
+      const appState = api.getAppState();
+      const { x, y } = viewportCoordsToSceneCoords(
+        { clientX: appState.width / 2, clientY: appState.height / 2 },
+        {
+          zoom: appState.zoom,
+          offsetLeft: appState.offsetLeft,
+          offsetTop: appState.offsetTop,
+          scrollX: appState.scrollX,
+          scrollY: appState.scrollY,
+        }
+      );
+      const seed = kind === "ordered" ? "1. " : "• ";
+      const newElements = convertToExcalidrawElements([
+        {
+          type: "text",
+          x: Math.round(x - 120),
+          y: Math.round(y - 40),
+          text: seed,
+          fontSize: 16,
+          fontFamily: 3,
+          strokeColor: theme === "dark" ? "#e4e4e7" : "#18181b",
+        } as any,
+      ]);
+      const selectedElementIds: Record<string, true> = {};
+      for (const el of newElements) selectedElementIds[el.id] = true;
+      api.updateScene({
+        elements: [...api.getSceneElements(), ...newElements],
+        appState: { selectedElementIds },
+      });
+      setListMode(kind);
+      setShowTextPanel(true);
+      setSelectedTextId(newElements[0]?.id ?? null);
+    },
+    [theme]
+  );
+
   // Keep code cards synced with current theme (white border in dark mode, dark border in light mode)
   useEffect(() => {
     const api = excalidrawAPI.current;
@@ -1010,16 +1179,18 @@ export default function ExcalidrawWrapper() {
       );
 
       const cleanText = text.trim();
+      const renderedText = stripMarkdown(cleanText);
       const newElements = convertToExcalidrawElements([
         {
           type: "text",
           x: Math.round(x - 120),
           y: Math.round(y - 40),
-          text: cleanText,
+          text: renderedText,
           fontSize: 16,
           fontFamily: 3,
           strokeColor: theme === "dark" ? "#e4e4e7" : "#18181b",
-        },
+          customData: { markdownRaw: cleanText },
+        } as any,
       ]);
 
       const selectedElementIds: Record<string, true> = {};
@@ -1351,8 +1522,57 @@ export default function ExcalidrawWrapper() {
                 justifyContent: "center",
               }}
               title="Insert editable table"
+              aria-label="Insert editable table"
             >
               <Grid3x3 size={16} strokeWidth={2.2} />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleInsertList("ordered")}
+              className="excalidraw-button"
+              style={{
+                height: "2rem",
+                padding: "0 0.6rem",
+                minWidth: "2.6rem",
+                fontSize: "0.8rem",
+                borderRadius: "0.5rem",
+                background: "var(--color-surface-primary-container, #e0dfff)",
+                color: "var(--color-on-primary-container, #030064)",
+                border: "none",
+                cursor: "pointer",
+                fontWeight: 500,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              title="Ordered list"
+              aria-label="Ordered list"
+            >
+              <ListOrdered size={16} strokeWidth={2.2} />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleInsertList("bullet")}
+              className="excalidraw-button"
+              style={{
+                height: "2rem",
+                padding: "0 0.6rem",
+                minWidth: "2.6rem",
+                fontSize: "0.8rem",
+                borderRadius: "0.5rem",
+                background: "var(--color-surface-primary-container, #e0dfff)",
+                color: "var(--color-on-primary-container, #030064)",
+                border: "none",
+                cursor: "pointer",
+                fontWeight: 500,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              title="Unordered list"
+              aria-label="Unordered list"
+            >
+              <List size={16} strokeWidth={2.2} />
             </button>
           </div>
         )}
@@ -1406,6 +1626,18 @@ export default function ExcalidrawWrapper() {
 
       {/* Todo overlay — toggled by the top-left corner button */}
       {showTodos && <TodoPanel onClose={() => setShowTodos(false)} />}
+
+      {/* Canvas Text panel — opens when the text tool is active */}
+      {showTextPanel && (
+        <CanvasTextPanel
+          items={textItems}
+          selectedId={selectedTextId}
+          onSelect={setSelectedTextId}
+          onUpdateText={handleUpdateCanvasText}
+          onInsertText={handleInsertTextToCanvas}
+          onClose={() => setShowTextPanel(false)}
+        />
+      )}
 
       {/* Code Editor Panel */}
       {showCodePanel && (
