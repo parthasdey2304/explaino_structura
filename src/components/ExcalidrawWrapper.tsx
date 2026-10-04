@@ -26,6 +26,7 @@ import DataStructuresPanel from "./DataStructuresPanel";
 import CanvasStructureControls, { type ViewportBox } from "./CanvasStructureControls";
 import AITextSidebar from "./AITextSidebar";
 import CanvasTextPanel, { type CanvasTextItem } from "./CanvasTextPanel";
+import { chatStreamAuto, MistralError, type ChatMessage } from "@/lib/ai/mistral";
 import { createCodeCardSvg } from "@/lib/ai/highlight";
 import TodoPanel, { TodoCornerButton } from "./TodoOverlay";
 import LaserOverlay from "./LaserOverlay";
@@ -47,7 +48,7 @@ import {
   type DataStructureDef,
   type StructureId,
 } from "@/lib/dataStructures";
-import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List } from "lucide-react";
+import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2 } from "lucide-react";
 
 /**
  * Metadata attached to every element of an inserted diagram via Excalidraw's
@@ -343,6 +344,13 @@ export default function ExcalidrawWrapper() {
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
   const editingTextIdRef = useRef<string | null>(null);
   const [listMode, setListMode] = useState<"ordered" | "bullet" | null>(null);
+  const [textAnchor, setTextAnchor] = useState<{
+    id: string;
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+  } | null>(null);
   const [laserActive, setLaserActive] = useState(false);
   const showDataStructuresPanelRef = useRef(false);
   const [drawingName, setDrawingName] = useState("Untitled");
@@ -512,6 +520,35 @@ export default function ExcalidrawWrapper() {
           }
         }
         editingTextIdRef.current = null;
+      }
+
+      // Anchor for the in-canvas text toolbar: the editing text element, else
+      // the single selected text element.
+      const selIds = (appState as unknown as { selectedElementIds?: Record<string, boolean> }).selectedElementIds ?? {};
+      const selList = Object.keys(selIds).filter((k) => selIds[k]);
+      let anchorId: string | null = editingId;
+      if (!anchorId && selList.length === 1) {
+        const cand = elements.find((el) => el.id === selList[0]);
+        if (cand && !cand.isDeleted && cand.type === "text") anchorId = cand.id;
+      }
+      if (anchorId) {
+        const t = elements.find((el) => el.id === anchorId);
+        if (t && !t.isDeleted) {
+          const next = {
+            id: anchorId,
+            minX: t.x,
+            minY: t.y,
+            maxX: t.x + t.width,
+            maxY: t.y + t.height,
+          };
+          setTextAnchor((prev) =>
+            prev && prev.id === next.id && prev.minX === next.minX && prev.minY === next.minY && prev.maxX === next.maxX && prev.maxY === next.maxY
+              ? prev
+              : next
+          );
+        }
+      } else {
+        setTextAnchor((prev) => (prev === null ? prev : null));
       }
 
       // Immediate local backup
@@ -1036,6 +1073,24 @@ export default function ExcalidrawWrapper() {
     [theme]
   );
 
+  // Hide Excalidraw's built-in Library button (its class names drift between
+  // versions, so match on the rendered "Library" label text instead).
+  useEffect(() => {
+    const hide = () => {
+      document
+        .querySelectorAll(".excalidraw button")
+        .forEach((b) => {
+          if ((b.textContent ?? "").trim() === "Library") {
+            (b as HTMLElement).style.display = "none";
+          }
+        });
+    };
+    hide();
+    const obs = new MutationObserver(hide);
+    obs.observe(document.body, { childList: true, subtree: true });
+    return () => obs.disconnect();
+  }, []);
+
   // Auto-open the Canvas Text panel when the text tool is active.
   useEffect(() => {
     if (activeTool === "text") setShowTextPanel(true);
@@ -1085,45 +1140,101 @@ export default function ExcalidrawWrapper() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [listMode]);
 
-  const handleInsertList = useCallback(
-    (kind: "ordered" | "bullet") => {
+  // Set text content verbatim (markdown kept as-is, e.g. Codestral output).
+  const handleSetCanvasTextRaw = useCallback((id: string, text: string) => {
+    const api = excalidrawAPI.current;
+    if (!api) return;
+    api.updateScene({
+      elements: api.getSceneElements().map((el) =>
+        el.id === id && !el.isDeleted && el.type === "text"
+          ? ({ ...el, text, originalText: text, customData: { ...((el as unknown as { customData?: object }).customData ?? {}), markdownRaw: text } } as typeof el)
+          : el
+      ),
+    });
+  }, []);
+
+  // Apply ordered ("1. 2. 3.") or bullet ("•") list formatting to one text box.
+  const applyListToText = useCallback(
+    (id: string, kind: "ordered" | "bullet") => {
       const api = excalidrawAPI.current;
       if (!api) return;
-      const appState = api.getAppState();
-      const { x, y } = viewportCoordsToSceneCoords(
-        { clientX: appState.width / 2, clientY: appState.height / 2 },
-        {
-          zoom: appState.zoom,
-          offsetLeft: appState.offsetLeft,
-          offsetTop: appState.offsetTop,
-          scrollX: appState.scrollX,
-          scrollY: appState.scrollY,
-        }
-      );
-      const seed = kind === "ordered" ? "1. " : "• ";
-      const newElements = convertToExcalidrawElements([
-        {
-          type: "text",
-          x: Math.round(x - 120),
-          y: Math.round(y - 40),
-          text: seed,
-          fontSize: 16,
-          fontFamily: 3,
-          strokeColor: theme === "dark" ? "#e4e4e7" : "#18181b",
-        } as any,
-      ]);
-      const selectedElementIds: Record<string, true> = {};
-      for (const el of newElements) selectedElementIds[el.id] = true;
-      api.updateScene({
-        elements: [...api.getSceneElements(), ...newElements],
-        appState: { selectedElementIds },
-      });
+      const target = api.getSceneElements().find((el) => el.id === id);
+      if (!target || target.isDeleted || target.type !== "text") return;
+      const t = target as unknown as { text?: string; customData?: { markdownRaw?: string } };
+      const current = typeof t.customData?.markdownRaw === "string" ? t.customData.markdownRaw : (t.text ?? "");
+      const stripped = current.split("\n").map((l) => l.replace(/^\s*(?:\d+\.\s*|[•\-*]\s*)/, "").trimEnd());
+      const listed =
+        kind === "ordered"
+          ? stripped.map((l, i) => (l ? `${i + 1}. ${l}` : "")).join("\n")
+          : stripped.map((l) => (l ? `• ${l}` : "")).join("\n");
+      handleUpdateCanvasText(id, listed);
       setListMode(kind);
-      setShowTextPanel(true);
-      setSelectedTextId(newElements[0]?.id ?? null);
+      setSelectedTextId(id);
     },
-    [theme]
+    [handleUpdateCanvasText]
   );
+
+  // Per-text-box AI: mini chat anchored to the selected text element.
+  const [textAiFor, setTextAiFor] = useState<string | null>(null);
+  const [textAiMode, setTextAiMode] = useState<"text" | "code">("text");
+  const [textAiPrompt, setTextAiPrompt] = useState("");
+  const [textAiBusy, setTextAiBusy] = useState(false);
+  const [textAiError, setTextAiError] = useState<string | null>(null);
+  const textAiAbort = useRef<AbortController | null>(null);
+
+  const sendTextAi = useCallback(async () => {
+    const prompt = textAiPrompt.trim();
+    if (!prompt || textAiBusy || !textAiFor) return;
+    const api = excalidrawAPI.current;
+    if (!api) return;
+    const target = api.getSceneElements().find((el) => el.id === textAiFor);
+    if (!target || target.isDeleted || target.type !== "text") return;
+    const t = target as unknown as { text?: string; customData?: { markdownRaw?: string } };
+    const current = typeof t.customData?.markdownRaw === "string" ? t.customData.markdownRaw : (t.text ?? "");
+    setTextAiBusy(true);
+    setTextAiError(null);
+    const controller = new AbortController();
+    textAiAbort.current = controller;
+    const isCode = textAiMode === "code";
+    const model = isCode ? "codestral-latest" : "open-mistral-nemo";
+    const system = isCode
+      ? "You are Explaino Code. Output ONLY raw code Markdown (fenced code blocks) for the requested language(s), no explanations."
+      : "You are Explaino Canvas Text Editor. Output ONLY raw markdown content for direct placement on the canvas. No greetings, no explanations.";
+    const convo: ChatMessage[] = [
+      { role: "system", content: system },
+      { role: "user", content: `Current text:\n${current}\n\nInstruction: ${prompt}\n\nRewrite or extend the current text per the instruction. Output only the new content.` },
+    ];
+    try {
+      let acc = "";
+      await chatStreamAuto(
+        convo,
+        model,
+        (delta) => {
+          acc += delta;
+          if (isCode) handleSetCanvasTextRaw(textAiFor, acc);
+          else handleUpdateCanvasText(textAiFor, acc);
+        },
+        controller.signal
+      );
+      setTextAiPrompt("");
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        setTextAiError(err instanceof MistralError || err instanceof Error ? err.message : "Request failed.");
+      }
+    } finally {
+      setTextAiBusy(false);
+      textAiAbort.current = null;
+    }
+  }, [textAiPrompt, textAiBusy, textAiFor, textAiMode, handleUpdateCanvasText, handleSetCanvasTextRaw]);
+
+  useEffect(() => () => textAiAbort.current?.abort(), []);
+
+  // Viewport position of the in-canvas text toolbar (tracks pan/zoom).
+  const textToolbarPos = useMemo(() => {
+    if (!textAnchor) return null;
+    const p = sceneCoordsToViewportCoords({ sceneX: textAnchor.maxX, sceneY: textAnchor.minY }, viewport);
+    return { left: p.x + 8, top: p.y - 8 };
+  }, [textAnchor, viewport]);
 
   // Keep code cards synced with current theme (white border in dark mode, dark border in light mode)
   useEffect(() => {
@@ -1526,54 +1637,6 @@ export default function ExcalidrawWrapper() {
             >
               <Grid3x3 size={16} strokeWidth={2.2} />
             </button>
-            <button
-              type="button"
-              onClick={() => handleInsertList("ordered")}
-              className="excalidraw-button"
-              style={{
-                height: "2rem",
-                padding: "0 0.6rem",
-                minWidth: "2.6rem",
-                fontSize: "0.8rem",
-                borderRadius: "0.5rem",
-                background: "var(--color-surface-primary-container, #e0dfff)",
-                color: "var(--color-on-primary-container, #030064)",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 500,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-              title="Ordered list"
-              aria-label="Ordered list"
-            >
-              <ListOrdered size={16} strokeWidth={2.2} />
-            </button>
-            <button
-              type="button"
-              onClick={() => handleInsertList("bullet")}
-              className="excalidraw-button"
-              style={{
-                height: "2rem",
-                padding: "0 0.6rem",
-                minWidth: "2.6rem",
-                fontSize: "0.8rem",
-                borderRadius: "0.5rem",
-                background: "var(--color-surface-primary-container, #e0dfff)",
-                color: "var(--color-on-primary-container, #030064)",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 500,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-              title="Unordered list"
-              aria-label="Unordered list"
-            >
-              <List size={16} strokeWidth={2.2} />
-            </button>
           </div>
         )}
       >
@@ -1637,6 +1700,98 @@ export default function ExcalidrawWrapper() {
           onInsertText={handleInsertTextToCanvas}
           onClose={() => setShowTextPanel(false)}
         />
+      )}
+
+      {/* In-canvas text toolbar — anchored to the selected/editing text box */}
+      {textAnchor && textToolbarPos && (
+        <div
+          className="canvas-text-dock excalidraw-island"
+          style={{ left: textToolbarPos.left, top: textToolbarPos.top }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="canvas-text-dock__btn"
+            onClick={() => setTextAiFor((v) => (v === textAnchor.id ? null : textAnchor.id))}
+            title="AI assistant for this text"
+            aria-label="AI assistant for this text"
+          >
+            <Sparkles size={15} strokeWidth={2.2} />
+          </button>
+          <button
+            type="button"
+            className="canvas-text-dock__btn"
+            onClick={() => applyListToText(textAnchor.id, "ordered")}
+            title="Ordered list"
+            aria-label="Ordered list"
+          >
+            <ListOrdered size={15} strokeWidth={2.2} />
+          </button>
+          <button
+            type="button"
+            className="canvas-text-dock__btn"
+            onClick={() => applyListToText(textAnchor.id, "bullet")}
+            title="Unordered list"
+            aria-label="Unordered list"
+          >
+            <List size={15} strokeWidth={2.2} />
+          </button>
+          {textAiFor === textAnchor.id && (
+            <div className="canvas-text-dock__ai">
+              <div className="canvas-text-dock__modes" role="tablist" aria-label="AI mode">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={textAiMode === "text"}
+                  className={`canvas-text-dock__mode${textAiMode === "text" ? " canvas-text-dock__mode--active" : ""}`}
+                  onClick={() => setTextAiMode("text")}
+                >
+                  Text
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={textAiMode === "code"}
+                  className={`canvas-text-dock__mode${textAiMode === "code" ? " canvas-text-dock__mode--active" : ""}`}
+                  onClick={() => setTextAiMode("code")}
+                >
+                  Code
+                </button>
+              </div>
+              <div className="canvas-text-dock__row">
+                <input
+                  className="canvas-text-dock__input"
+                  value={textAiPrompt}
+                  onChange={(e) => setTextAiPrompt(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      sendTextAi();
+                    }
+                  }}
+                  placeholder={textAiMode === "code" ? "Ask Codestral…" : "Ask Mistral…"}
+                  aria-label="AI instruction"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  className="canvas-text-dock__btn"
+                  disabled={!textAiPrompt.trim() || textAiBusy}
+                  onClick={sendTextAi}
+                  title="Send"
+                  aria-label="Send"
+                >
+                  {textAiBusy ? <Loader2 size={14} className="ai-text-panel__spin" /> : <Send size={14} />}
+                </button>
+              </div>
+              {textAiError && <div className="canvas-text-dock__error">{textAiError}</div>}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Code Editor Panel */}
