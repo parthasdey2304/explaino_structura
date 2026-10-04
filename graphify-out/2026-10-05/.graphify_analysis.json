@@ -664,18 +664,18 @@
       "degree": 13
     },
     {
-      "id": "src_lib_editorsettings_geteditorsettings",
-      "label": "getEditorSettings()",
-      "degree": 11
-    },
-    {
       "id": "src_lib_ai_highlight_createcodecardsvg",
       "label": "createCodeCardSvg()",
       "degree": 11
     },
     {
-      "id": "src_lib_datastructures_applyaction",
-      "label": "applyAction()",
+      "id": "src_lib_editorsettings_geteditorsettings",
+      "label": "getEditorSettings()",
+      "degree": 11
+    },
+    {
+      "id": "src_components_explaniopanel_explaniopanel",
+      "label": "ExplanioPanel()",
       "degree": 10
     }
   ],

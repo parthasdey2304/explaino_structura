@@ -19,6 +19,15 @@ let db: Firestore;
 let storage: FirebaseStorage;
 
 if (typeof window !== 'undefined') {
+  // Debug: verify Vercel env wiring in the browser console (presence only, never values).
+  console.log('[firebase] env present:', {
+    apiKey: Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY),
+    authDomain: Boolean(process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN),
+    projectId: Boolean(process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID),
+    storageBucket: Boolean(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET),
+    messagingSenderId: Boolean(process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID),
+    appId: Boolean(process.env.NEXT_PUBLIC_FIREBASE_APP_ID),
+  });
   if (!getApps().length) {
     app = initializeApp(firebaseConfig);
   } else {
