@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": { "title": "Expla?no Structura", "output": "archify-out/architecture.html", "quality_profile": "showcase" },
+  "components": [
+    { "id": "user", "type": "external", "label": "User", "sublabel": "Browser", "pos": [40, 300], "size": [120, 60] },
+    { "id": "next", "type": "frontend", "label": "Next.js App", "sublabel": "src/app", "pos": [250, 300], "size": [140, 64] },
+    { "id": "components", "type": "frontend", "label": "Components", "sublabel": "canvas, chat, editor", "pos": [250, 150], "size": [140, 64] },
+    { "id": "api-ai", "type": "backend", "label": "AI Chat API", "sublabel": "/api/ai/chat", "pos": [500, 140], "size": [140, 64] },
+    { "id": "api-exec", "type": "backend", "label": "Execute API", "sublabel": "/api/execute", "pos": [500, 300], "size": [140, 64] },
+    { "id": "api-term", "type": "backend", "label": "Terminal API", "sublabel": "/api/terminal/*", "pos": [500, 460], "size": [140, 64] },
+    { "id": "lib-ai", "type": "backend", "label": "AI Models", "sublabel": "src/lib/ai", "pos": [720, 140], "size": [140, 64] },
+    { "id": "lib-exec", "type": "backend", "label": "Executors", "sublabel": "src/lib/executors", "pos": [720, 300], "size": [140, 64] },
+    { "id": "terminal", "type": "backend", "label": "Terminal Svc", "sublabel": "src/lib/terminal", "pos": [720, 460], "size": [140, 64] },
+    { "id": "firestore", "type": "database", "label": "Firestore", "sublabel": "persistence", "pos": [900, 300], "size": [130, 64] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "explaino_structura", "wraps": ["next", "components", "api-ai", "api-exec", "api-term", "lib-ai", "lib-exec", "terminal", "firestore"] }
+  ],
+  "connections": [
+    { "id": "user-next", "from": "user", "to": "next", "label": "HTTPS" },
+    { "id": "next-components", "from": "next", "to": "components", "label": "renders" },
+    { "id": "next-api-ai", "from": "next", "to": "api-ai" },
+    { "id": "next-api-exec", "from": "next", "to": "api-exec" },
+    { "id": "next-api-term", "from": "next", "to": "api-term" },
+    { "id": "api-ai-lib", "from": "api-ai", "to": "lib-ai" },
+    { "id": "api-exec-lib", "from": "api-exec", "to": "lib-exec" },
+    { "id": "api-term-lib", "from": "api-term", "to": "terminal" },
+    { "id": "next-firestore", "from": "next", "to": "firestore", "label": "SDK", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Frontend", "items": ["Next.js app router", "canvas + chat + editor components"] },
+    { "dot": "emerald", "title": "Backend", "items": ["AI chat, code execute, terminal APIs", "lib executors and terminal services"] },
+    { "dot": "rose", "title": "Data", "items": ["Firestore persistence"] }
+  ]
+}

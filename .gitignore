@@ -148,5 +148,3 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
-# graphify knowledge-graph artifacts (locally generated)
-graphify-out/
