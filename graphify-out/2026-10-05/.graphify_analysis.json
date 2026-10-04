@@ -675,8 +675,8 @@
       "degree": 11
     },
     {
-      "id": "src_components_explaniopanel_explaniopanel",
-      "label": "ExplanioPanel()",
+      "id": "src_lib_datastructures_applyaction",
+      "label": "applyAction()",
       "degree": 10
     }
   ],
@@ -737,41 +737,8 @@
       "why": "bridges separate communities"
     }
   ],
-  "questions": [
-    {
-      "type": "bridge_node",
-      "question": "Why does `GeminiLiveSession` connect `GeminiLiveSession` to `AIChatPanel.tsx`?",
-      "why": "High betweenness centrality (0.028) - this node is a cross-community bridge."
-    },
-    {
-      "type": "bridge_node",
-      "question": "Why does `createCodeCardSvg()` connect `AITextSidebar.tsx` to `ExcalidrawWrapper.tsx`?",
-      "why": "High betweenness centrality (0.018) - this node is a cross-community bridge."
-    },
-    {
-      "type": "isolated_nodes",
-      "question": "What connects `CodeEditorPanelProps`, `RunStatus`, `Creating` to the rest of the system?",
-      "why": "167 weakly-connected nodes found - possible documentation gaps or missing edges."
-    },
-    {
-      "type": "low_cohesion",
-      "question": "Should `CodeEditorPanel.tsx` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.05570611261668172 - nodes in this community are weakly interconnected."
-    },
-    {
-      "type": "low_cohesion",
-      "question": "Should `ExcalidrawWrapper.tsx` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.06393442622950819 - nodes in this community are weakly interconnected."
-    },
-    {
-      "type": "low_cohesion",
-      "question": "Should `dataStructures.ts` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.07071887784921099 - nodes in this community are weakly interconnected."
-    },
-    {
-      "type": "low_cohesion",
-      "question": "Should `dependencies` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.04081632653061224 - nodes in this community are weakly interconnected."
-    }
-  ]
+  "tokens": {
+    "input": 0,
+    "output": 0
+  }
 }

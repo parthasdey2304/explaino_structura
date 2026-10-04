@@ -3645,6 +3645,20 @@ canvas {
   background: rgba(105, 101, 219, 0.06);
 }
 
+.explanio-region--playing {
+  border-style: solid;
+  border-color: #a8a5ff;
+  box-shadow: 0 0 0 2px rgba(168, 165, 255, 0.35), 0 0 24px rgba(168, 165, 255, 0.25);
+}
+
+.explanio-replay {
+  position: fixed;
+  z-index: 43;
+  pointer-events: none;
+  border-radius: 6px;
+  background: var(--default-bg-color, #121212);
+}
+
 .explanio-dock {
   position: fixed;
   z-index: 46;
