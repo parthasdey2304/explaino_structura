@@ -731,6 +731,17 @@ export default function ExcalidrawWrapper() {
 
   // Mobile responsive listener removed (handled by CSS now)
 
+  // Firebase connectivity self-test (logs to console once).
+  useEffect(() => {
+    let cancelled = false;
+    void import("@/lib/firebase").then(({ checkFirebaseConnection }) => {
+      if (!cancelled) void checkFirebaseConnection();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Keep ref in sync with showCodePanel state
   useEffect(() => {
     showCodePanelRef.current = showCodePanel;
