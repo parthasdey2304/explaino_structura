@@ -3636,6 +3636,95 @@ canvas {
   line-height: 1.4;
 }
 
+/* In-canvas text toolbar — anchored to the selected/editing text box. */
+.canvas-text-dock {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--island-bg-color, #fff);
+  border: 1px solid var(--color-border-outline-variant, rgba(0, 0, 0, 0.12));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.canvas-text-dock__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-on-surface);
+  cursor: pointer;
+}
+
+.canvas-text-dock__btn:hover:not(:disabled) {
+  background: var(--color-surface-high);
+}
+
+.canvas-text-dock__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.canvas-text-dock__ai {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px;
+  min-width: 200px;
+}
+
+.canvas-text-dock__modes {
+  display: flex;
+  gap: 4px;
+}
+
+.canvas-text-dock__mode {
+  flex: 1;
+  border: 1px solid var(--color-surface-high);
+  background: transparent;
+  color: var(--color-on-surface);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.canvas-text-dock__mode--active {
+  background: var(--color-surface-primary-container);
+  border-color: var(--color-surface-primary-container);
+  color: var(--color-on-primary-container);
+}
+
+.canvas-text-dock__row {
+  display: flex;
+  gap: 4px;
+}
+
+.canvas-text-dock__input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid var(--color-surface-high);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-on-surface);
+}
+
+.canvas-text-dock__error {
+  font-size: 11px;
+  color: #e03131;
+}
+
 @media (hover: none) {
   .text-panel {
     right: 12px;

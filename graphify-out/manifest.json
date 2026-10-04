@@ -114,10 +114,10 @@
     "semantic_hash": "57e598bcf4c5e62fd114d093b9974e38"
   },
   "src/components/ExcalidrawWrapper.tsx": {
-    "mtime": 1791126186.8931632,
-    "seen": 1791126565.7285798,
-    "ast_hash": "ba88a238c158dd4b4e07c68e24db396d",
-    "semantic_hash": "ba88a238c158dd4b4e07c68e24db396d"
+    "mtime": 1791129872.5392523,
+    "seen": 1791130796.9851406,
+    "ast_hash": "3aa75ff9e6720aaf584ede3fca2df4c1",
+    "semantic_hash": "3aa75ff9e6720aaf584ede3fca2df4c1"
   },
   "src/components/FileExplorer.tsx": {
     "mtime": 1791121432.8519895,
@@ -162,10 +162,10 @@
     "semantic_hash": "dd60d9724a835e367bfa578fccd397da"
   },
   "src/lib/ai/highlight.ts": {
-    "mtime": 1791121432.854983,
-    "seen": 1791123594.0348775,
-    "ast_hash": "fb54e52dcb124d2483c2cee46f1fc0a2",
-    "semantic_hash": "fb54e52dcb124d2483c2cee46f1fc0a2"
+    "mtime": 1791129279.793983,
+    "seen": 1791130796.9857767,
+    "ast_hash": "0828b9013568e201402ba1e51f1f26c4",
+    "semantic_hash": "0828b9013568e201402ba1e51f1f26c4"
   },
   "src/lib/ai/mistral.ts": {
     "mtime": 1791121432.856135,

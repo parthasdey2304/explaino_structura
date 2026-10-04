@@ -218,6 +218,72 @@ export function createCodeCardSvg(
       .replace(/'/g, "&apos;");
   }
 
+  /**
+   * Excalidraw draws the scene on a canvas that carries the CSS filter
+   * `invert(93%) hue-rotate(180deg)` in dark mode, so a dark-authored card
+   * would display light. Pre-transform every card color through the exact
+   * inverse of that filter so the displayed card always matches the intended
+   * dark look (black background, theme-independent token colors).
+   */
+  function hexToRgb(hex: string): [number, number, number] {
+    const h = hex.replace("#", "");
+    const v =
+      h.length === 3
+        ? h.split("").map((c) => c + c).join("")
+        : h.slice(0, 6);
+    return [
+      parseInt(v.slice(0, 2), 16),
+      parseInt(v.slice(2, 4), 16),
+      parseInt(v.slice(4, 6), 16),
+    ];
+  }
+
+  function rgbToHex(r: number, g: number, b: number): string {
+    const c = (n: number) =>
+      Math.max(0, Math.min(255, Math.round(n)))
+        .toString(16)
+        .padStart(2, "0");
+    return `#${c(r)}${c(g)}${c(b)}`;
+  }
+
+  // 3x3 inverse of the hue-rotate(180deg) matrix (CSS filter-effects-1).
+  const HUE180: [number, number, number][] = [
+    [-0.574, 1.43, 0.144],
+    [0.426, 0.43, 0.144],
+    [0.426, 1.43, -0.856],
+  ];
+
+  function invert3x3(m: [number, number, number][]): [number, number, number][] {
+    const [a, b, c] = m[0];
+    const [d, e, f] = m[1];
+    const [g, h, i] = m[2];
+    const A = e * i - f * h;
+    const B = f * g - d * i;
+    const C = d * h - e * g;
+    const det = a * A + b * B + c * C;
+    if (!det) return m;
+    return [
+      [A / det, (c * h - b * i) / det, (b * f - c * e) / det],
+      [B / det, (a * i - c * g) / det, (c * d - a * f) / det],
+      [C / det, (b * g - a * h) / det, (a * e - b * d) / det],
+    ];
+  }
+
+  const HUE180_INV = invert3x3(HUE180);
+
+  function compensateForDarkCanvas(hex: string): string {
+    const [r, g, b] = hexToRgb(hex);
+    // Undo hue-rotate(180deg).
+    const v: [number, number, number] = [r, g, b].map((_, row) =>
+      HUE180_INV[row][0] * r + HUE180_INV[row][1] * g + HUE180_INV[row][2] * b
+    ) as [number, number, number];
+    // Undo invert(93%): displayed = 237.15 - 0.86 * src.
+    const src = v.map((x) => (237.15 - x) / 0.86);
+    return rgbToHex(src[0], src[1], src[2]);
+  }
+
+  const fix = (hex: string): string => (isDark ? compensateForDarkCanvas(hex) : hex);
+
   function getDarkTokenColor(classes: string): string {
     if (!classes) return "#d4d4d4";
     if (classes.includes("tok-comment")) return "#6a9955";
@@ -258,7 +324,7 @@ export function createCodeCardSvg(
     const y = headerHeight + 18 + idx * lineHeight;
     let lineContent = "";
     for (const t of l) {
-      const color = getDarkTokenColor(t.classes);
+      const color = fix(getDarkTokenColor(t.classes));
       lineContent += `<tspan fill="${color}">${escapeXml(t.text)}</tspan>`;
     }
     textSvg += `  <text x="${paddingX}" y="${y}" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="13" xml:space="preserve">${lineContent}</text>\n`;
@@ -266,14 +332,19 @@ export function createCodeCardSvg(
 
   const borderColor = isDark ? "rgba(255, 255, 255, 0.85)" : "#3f3f46";
   const borderWidth = isDark ? 1.5 : 1.2;
+  // The canvas filter inverts the border too, so target a white border by
+  // authoring its pre-image (dark) — it displays white in dark mode.
+  const borderStroke = isDark
+    ? `rgba(${hexToRgb(compensateForDarkCanvas("#ffffff")).join(", ")}, 0.85)`
+    : borderColor;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${cardWidth}" height="${cardHeight}" viewBox="0 0 ${cardWidth} ${cardHeight}">
-  <rect x="0.75" y="0.75" width="${cardWidth - 1.5}" height="${cardHeight - 1.5}" rx="16" ry="16" fill="#18181b" stroke="${borderColor}" stroke-width="${borderWidth}" />
-  <circle cx="20" cy="20" r="5" fill="#ef4444" />
-  <circle cx="35" cy="20" r="5" fill="#eab308" />
-  <circle cx="50" cy="20" r="5" fill="#22c55e" />
-  <text x="${cardWidth - 18}" y="24" text-anchor="end" font-family="ui-monospace, monospace" font-size="11" font-weight="700" fill="#a1a1aa" letter-spacing="0.05em">${escapeXml(displayLang)}</text>
-  <line x1="0" y1="${headerHeight}" x2="${cardWidth}" y2="${headerHeight}" stroke="#27272a" stroke-width="1" />
+  <rect x="0.75" y="0.75" width="${cardWidth - 1.5}" height="${cardHeight - 1.5}" rx="16" ry="16" fill="${fix("#18181b")}" stroke="${borderStroke}" stroke-width="${borderWidth}" />
+  <circle cx="20" cy="20" r="5" fill="${fix("#ef4444")}" />
+  <circle cx="35" cy="20" r="5" fill="${fix("#eab308")}" />
+  <circle cx="50" cy="20" r="5" fill="${fix("#22c55e")}" />
+  <text x="${cardWidth - 18}" y="24" text-anchor="end" font-family="ui-monospace, monospace" font-size="11" font-weight="700" fill="${fix("#a1a1aa")}" letter-spacing="0.05em">${escapeXml(displayLang)}</text>
+  <line x1="0" y1="${headerHeight}" x2="${cardWidth}" y2="${headerHeight}" stroke="${fix("#27272a")}" stroke-width="1" />
 ${textSvg}</svg>`;
 
   const base64 = toBase64(svg);
