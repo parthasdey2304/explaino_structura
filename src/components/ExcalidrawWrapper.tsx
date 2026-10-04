@@ -1526,11 +1526,17 @@ export default function ExcalidrawWrapper() {
               className="excalidraw-button"
               style={
                 laserActive
-                  ? {
-                      ...PANEL_BUTTON_STYLE,
-                      background: "var(--color-on-primary-container, #030064)",
-                      color: "#ffffff",
-                    }
+                  ? theme === "dark"
+                    ? {
+                        ...PANEL_BUTTON_STYLE,
+                        background: "#e0dfff",
+                        color: "#030064",
+                      }
+                    : {
+                        ...PANEL_BUTTON_STYLE,
+                        background: "var(--color-on-primary-container, #030064)",
+                        color: "#ffffff",
+                      }
                   : PANEL_BUTTON_STYLE
               }
               title="Laser pointer — transient red marks that fade away (never saved, never undoable). Esc to exit."
