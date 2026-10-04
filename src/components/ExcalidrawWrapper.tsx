@@ -25,7 +25,6 @@ import CodeEditorPanel from "./CodeEditorPanel";
 import DataStructuresPanel from "./DataStructuresPanel";
 import CanvasStructureControls, { type ViewportBox } from "./CanvasStructureControls";
 import AITextSidebar from "./AITextSidebar";
-import CanvasTextPanel, { type CanvasTextItem } from "./CanvasTextPanel";
 import { chatStreamAuto, MistralError, type ChatMessage } from "@/lib/ai/mistral";
 import { createCodeCardSvg } from "@/lib/ai/highlight";
 import TodoPanel, { TodoCornerButton } from "./TodoOverlay";
@@ -338,10 +337,6 @@ export default function ExcalidrawWrapper() {
   const [showDataStructuresPanel, setShowDataStructuresPanel] = useState(false);
   const [showTodos, setShowTodos] = useState(false);
   const [showAiTextPanel, setShowAiTextPanel] = useState(false);
-  const [showTextPanel, setShowTextPanel] = useState(false);
-  const [activeTool, setActiveTool] = useState("selection");
-  const [textItems, setTextItems] = useState<CanvasTextItem[]>([]);
-  const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
   const editingTextIdRef = useRef<string | null>(null);
   const [listMode, setListMode] = useState<"ordered" | "bullet" | null>(null);
   const [textAnchor, setTextAnchor] = useState<{
@@ -467,21 +462,6 @@ export default function ExcalidrawWrapper() {
           showDataStructuresPanelRef.current = false;
         }
       }
-
-      // Track active tool + canvas text items for the Canvas Text panel.
-      const toolType = (appState as unknown as { activeTool?: { type?: string } }).activeTool?.type ?? "selection";
-      setActiveTool((prev) => (prev === toolType ? prev : toolType));
-      const texts: CanvasTextItem[] = [];
-      for (const el of elements) {
-        if (el.isDeleted || el.type !== "text") continue;
-        const t = el as unknown as { id: string; text?: string; customData?: { markdownRaw?: string } };
-        const text = typeof t.text === "string" ? t.text : "";
-        texts.push({ id: t.id, text, raw: typeof t.customData?.markdownRaw === "string" ? t.customData.markdownRaw : text });
-      }
-      setTextItems((prev) => {
-        if (prev.length === texts.length && prev.every((p, i) => p.id === texts[i].id && p.text === texts[i].text && p.raw === texts[i].raw)) return prev;
-        return texts;
-      });
 
       // Markdown edit lifecycle: show raw markdown while the WYSIWYG editor is
       // open on a text element; strip to rendered text when editing ends.
@@ -1091,11 +1071,6 @@ export default function ExcalidrawWrapper() {
     return () => obs.disconnect();
   }, []);
 
-  // Auto-open the Canvas Text panel when the text tool is active.
-  useEffect(() => {
-    if (activeTool === "text") setShowTextPanel(true);
-  }, [activeTool]);
-
   const handleUpdateCanvasText = useCallback((id: string, raw: string) => {
     const api = excalidrawAPI.current;
     if (!api) return;
@@ -1191,7 +1166,6 @@ export default function ExcalidrawWrapper() {
       }
       handleUpdateCanvasText(id, listed);
       setListMode(kind);
-      setSelectedTextId(id);
     },
     [handleUpdateCanvasText]
   );
@@ -1717,18 +1691,6 @@ export default function ExcalidrawWrapper() {
 
       {/* Todo overlay — toggled by the top-left corner button */}
       {showTodos && <TodoPanel onClose={() => setShowTodos(false)} />}
-
-      {/* Canvas Text panel — opens when the text tool is active */}
-      {showTextPanel && (
-        <CanvasTextPanel
-          items={textItems}
-          selectedId={selectedTextId}
-          onSelect={setSelectedTextId}
-          onUpdateText={handleUpdateCanvasText}
-          onInsertText={handleInsertTextToCanvas}
-          onClose={() => setShowTextPanel(false)}
-        />
-      )}
 
       {/* In-canvas text toolbar — anchored to the selected/editing text box */}
       {textAnchor && textToolbarPos && (
