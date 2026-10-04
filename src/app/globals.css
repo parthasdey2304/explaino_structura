@@ -444,6 +444,10 @@ canvas {
   gap: 8px;
 }
 
+.bottom-controls-right.explanio-dock {
+  bottom: 64px;
+}
+
 .zoom-island,
 .undo-island {
   display: flex;
@@ -3578,6 +3582,200 @@ canvas {
   text-align: center;
 }
 
+/* Explanio voice-notes panel — theme-aware via CSS vars. */
+.explanio-panel {
+  position: fixed;
+  top: calc(1rem + 2.25rem + 8px);
+  right: 12px;
+  z-index: 60;
+  width: 340px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - var(--toolbar-height) - 70px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-surface-high);
+  border-radius: var(--border-radius-lg);
+  background: var(--island-bg-color);
+  color: var(--color-on-surface);
+  animation: todoPopoverIn 0.16s ease-out;
+}
+
+.explanio-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-surface-high);
+}
+
+.explanio-panel__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.explanio-panel__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  background: transparent;
+  color: var(--color-gray-50, #999);
+  cursor: pointer;
+}
+
+.explanio-panel__close:hover {
+  background: var(--color-surface-high);
+  color: var(--color-on-surface);
+}
+
+.explanio__section {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-surface-high);
+}
+
+.explanio__section:last-child {
+  border-bottom: none;
+}
+
+.explanio__section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-gray-50, #999);
+  margin-bottom: 8px;
+}
+
+.explanio__player,
+.explanio__rec-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.explanio__play,
+.explanio__rec {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--color-surface-high);
+  background: var(--color-surface-primary-container);
+  color: var(--color-on-primary-container);
+  cursor: pointer;
+}
+
+.explanio__rec--on {
+  background: #e03131;
+  border-color: #e03131;
+  color: #fff;
+  animation: explanioPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes explanioPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(224, 49, 49, 0.5); }
+  50% { box-shadow: 0 0 0 6px rgba(224, 49, 49, 0); }
+}
+
+.explanio__player-main,
+.explanio__rec-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.explanio__wave {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 36px;
+}
+
+.explanio__bar {
+  flex: 1;
+  min-width: 2px;
+  border-radius: 2px;
+  background: var(--color-primary);
+  opacity: 0.35;
+}
+
+.explanio__bar--played {
+  opacity: 1;
+}
+
+.explanio__meta {
+  font-size: 11px;
+  color: var(--color-gray-50, #999);
+  margin-top: 2px;
+}
+
+.explanio__meta--rec {
+  color: #e03131;
+}
+
+.explanio__empty {
+  font-size: 12.5px;
+  color: var(--color-gray-60, #888);
+  padding: 6px 0;
+}
+
+.explanio__error {
+  font-size: 12px;
+  color: #e03131;
+  margin-top: 6px;
+}
+
+.explanio__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.explanio__chip {
+  border: 1px solid var(--color-surface-high);
+  background: transparent;
+  color: var(--color-on-surface);
+  font-size: 11.5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.explanio__chip--active {
+  background: var(--color-surface-primary-container);
+  border-color: var(--color-surface-primary-container);
+  color: var(--color-on-primary-container);
+}
+
+.explanio__delete {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  background: transparent;
+  color: var(--color-gray-50, #999);
+  cursor: pointer;
+}
+
+.explanio__delete:hover {
+  background: rgba(224, 49, 49, 0.12);
+  color: #e03131;
+}
+
 /* In-canvas text toolbar — anchored to the selected/editing text box. */
 .canvas-text-dock {
   position: fixed;
@@ -4460,6 +4658,12 @@ canvas {
   .bottom-controls-right.ai-text-dock {
     display: flex !important;
     bottom: 76px;
+    right: 12px;
+  }
+
+  .bottom-controls-right.explanio-dock {
+    display: flex !important;
+    bottom: 128px;
     right: 12px;
   }
 

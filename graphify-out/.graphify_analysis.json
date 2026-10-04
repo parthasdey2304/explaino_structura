@@ -147,6 +147,60 @@
       "src_lib_datastructures_writetreevalues"
     ],
     "2": [
+      "src_components_aichatpanel",
+      "src_components_aichatpanel_aichatpanel",
+      "src_components_aichatpanel_aichatpanel_createspeechrecognition",
+      "src_components_aichatpanel_aichatpanelprops",
+      "src_components_aichatpanel_attachedfile",
+      "src_components_aichatpanel_displaymessage",
+      "src_components_aichatpanel_loadchathistory",
+      "src_components_aichatpanel_nextid",
+      "src_components_aichatpanel_rendermarkdown",
+      "src_components_aichatpanel_savechathistory",
+      "src_components_aitextsidebar",
+      "src_components_aitextsidebar_aitextsidebar",
+      "src_components_aitextsidebar_aitextsidebarprops",
+      "src_components_aitextsidebar_assistantbody",
+      "src_components_aitextsidebar_canonical_order",
+      "src_components_aitextsidebar_copytext",
+      "src_components_aitextsidebar_createspeechrecognition",
+      "src_components_aitextsidebar_extractsolutions",
+      "src_components_aitextsidebar_loadcachedmessages",
+      "src_components_aitextsidebar_md",
+      "src_components_aitextsidebar_nextid",
+      "src_components_aitextsidebar_rendermarkdown",
+      "src_components_aitextsidebar_savecachedmessages",
+      "src_components_aitextsidebar_solution",
+      "src_components_aitextsidebar_solutionlabel",
+      "src_components_aitextsidebar_solutiontabs",
+      "src_components_aitextsidebar_speechctor",
+      "src_components_aitextsidebar_speechevent",
+      "src_components_aitextsidebar_speechrecognitionlike",
+      "src_components_aitextsidebar_speechrecognitionlike_start",
+      "src_components_aitextsidebar_speechrecognitionlike_stop",
+      "src_components_aitextsidebar_speechresult",
+      "src_components_aitextsidebar_uimessage",
+      "src_lib_ai_gemini_live",
+      "src_lib_ai_gemini_live_geminilivehandlers",
+      "src_lib_ai_gemini_live_getstoredgeminikey",
+      "src_lib_ai_gemini_live_setstoredgeminikey",
+      "src_lib_ai_mistral",
+      "src_lib_ai_mistral_chatcomplete",
+      "src_lib_ai_mistral_chatmessage",
+      "src_lib_ai_mistral_chatstream",
+      "src_lib_ai_mistral_chatstreamauto",
+      "src_lib_ai_mistral_extractfirstcodeblock",
+      "src_lib_ai_mistral_getstoredapikey",
+      "src_lib_ai_mistral_getstoredmodel",
+      "src_lib_ai_mistral_mistral_models",
+      "src_lib_ai_mistral_mistralerror",
+      "src_lib_ai_mistral_mistralmodel",
+      "src_lib_ai_mistral_openchatstream",
+      "src_lib_ai_mistral_readssestream",
+      "src_lib_ai_mistral_setstoredapikey",
+      "src_lib_ai_mistral_setstoredmodel"
+    ],
+    "3": [
       "codemirror",
       "codemirror_commands",
       "codemirror_lang_cpp",
@@ -197,56 +251,8 @@
       "react_dom",
       "zustand"
     ],
-    "3": [
-      "src_components_aichatpanel",
-      "src_components_aichatpanel_aichatpanel",
-      "src_components_aichatpanel_aichatpanel_createspeechrecognition",
-      "src_components_aichatpanel_aichatpanelprops",
-      "src_components_aichatpanel_attachedfile",
-      "src_components_aichatpanel_displaymessage",
-      "src_components_aichatpanel_loadchathistory",
-      "src_components_aichatpanel_nextid",
-      "src_components_aichatpanel_rendermarkdown",
-      "src_components_aichatpanel_savechathistory",
-      "src_components_canvastextpanel",
-      "src_components_canvastextpanel_canvastextpanel",
-      "src_lib_ai_gemini_live",
-      "src_lib_ai_gemini_live_geminilivehandlers",
-      "src_lib_ai_gemini_live_geminilivesession",
-      "src_lib_ai_gemini_live_geminilivesession_arraybuffertobase64",
-      "src_lib_ai_gemini_live_geminilivesession_constructor",
-      "src_lib_ai_gemini_live_geminilivesession_float32toint16",
-      "src_lib_ai_gemini_live_geminilivesession_int16tofloat32",
-      "src_lib_ai_gemini_live_geminilivesession_isconnected",
-      "src_lib_ai_gemini_live_geminilivesession_onmessage",
-      "src_lib_ai_gemini_live_geminilivesession_onopen",
-      "src_lib_ai_gemini_live_geminilivesession_playaudio",
-      "src_lib_ai_gemini_live_geminilivesession_sendaudiochunk",
-      "src_lib_ai_gemini_live_geminilivesession_start",
-      "src_lib_ai_gemini_live_geminilivesession_startrecording",
-      "src_lib_ai_gemini_live_geminilivesession_stop",
-      "src_lib_ai_gemini_live_geminilivesession_stoprecording",
-      "src_lib_ai_gemini_live_getstoredgeminikey",
-      "src_lib_ai_gemini_live_setstoredgeminikey",
-      "src_lib_ai_mistral",
-      "src_lib_ai_mistral_chatcomplete",
-      "src_lib_ai_mistral_chatmessage",
-      "src_lib_ai_mistral_chatstream",
-      "src_lib_ai_mistral_chatstreamauto",
-      "src_lib_ai_mistral_extractfirstcodeblock",
-      "src_lib_ai_mistral_getstoredapikey",
-      "src_lib_ai_mistral_getstoredmodel",
-      "src_lib_ai_mistral_mistral_models",
-      "src_lib_ai_mistral_mistralerror",
-      "src_lib_ai_mistral_mistralmodel",
-      "src_lib_ai_mistral_openchatstream",
-      "src_lib_ai_mistral_readssestream",
-      "src_lib_ai_mistral_setstoredapikey",
-      "src_lib_ai_mistral_setstoredmodel"
-    ],
     "4": [
       "excalidraw",
-      "src_components_canvastextpanel_canvastextitem",
       "src_components_excalidrawwrapper",
       "src_components_excalidrawwrapper_boxof",
       "src_components_excalidrawwrapper_dsmeta",
@@ -290,51 +296,6 @@
       "src_lib_firestore_savedscene"
     ],
     "5": [
-      "src_components_aitextsidebar",
-      "src_components_aitextsidebar_aitextsidebar",
-      "src_components_aitextsidebar_aitextsidebarprops",
-      "src_components_aitextsidebar_assistantbody",
-      "src_components_aitextsidebar_canonical_order",
-      "src_components_aitextsidebar_code",
-      "src_components_aitextsidebar_copytext",
-      "src_components_aitextsidebar_createspeechrecognition",
-      "src_components_aitextsidebar_extractsolutions",
-      "src_components_aitextsidebar_loadcachedmessages",
-      "src_components_aitextsidebar_md",
-      "src_components_aitextsidebar_nextid",
-      "src_components_aitextsidebar_rendermarkdown",
-      "src_components_aitextsidebar_savecachedmessages",
-      "src_components_aitextsidebar_solution",
-      "src_components_aitextsidebar_solutionlabel",
-      "src_components_aitextsidebar_solutiontabs",
-      "src_components_aitextsidebar_speechctor",
-      "src_components_aitextsidebar_speechevent",
-      "src_components_aitextsidebar_speechrecognitionlike",
-      "src_components_aitextsidebar_speechrecognitionlike_start",
-      "src_components_aitextsidebar_speechrecognitionlike_stop",
-      "src_components_aitextsidebar_speechresult",
-      "src_components_aitextsidebar_uimessage",
-      "src_lib_ai_highlight",
-      "src_lib_ai_highlight_aliases",
-      "src_lib_ai_highlight_createcodecardsvg",
-      "src_lib_ai_highlight_createcodecardsvg_compensatefordarkcanvas",
-      "src_lib_ai_highlight_createcodecardsvg_escapexml",
-      "src_lib_ai_highlight_createcodecardsvg_getdarktokencolor",
-      "src_lib_ai_highlight_createcodecardsvg_hextorgb",
-      "src_lib_ai_highlight_createcodecardsvg_invert3x3",
-      "src_lib_ai_highlight_createcodecardsvg_rgbtohex",
-      "src_lib_ai_highlight_css_lang",
-      "src_lib_ai_highlight_escapehtml",
-      "src_lib_ai_highlight_highlightcode",
-      "src_lib_ai_highlight_languages",
-      "src_lib_ai_highlight_resolvelanguage",
-      "src_lib_ai_highlight_shell_lang",
-      "src_lib_ai_highlight_tobase64",
-      "src_lib_ai_highlight_yaml_lang",
-      "src_lib_dartmode",
-      "src_lib_dartmode_dartlang"
-    ],
-    "6": [
       "src_components_visualizerpanel",
       "src_components_visualizerpanel_arrayvisualizer",
       "src_components_visualizerpanel_memoryblock",
@@ -372,7 +333,7 @@
       "src_lib_visualizerstore_visualizerreducer",
       "src_lib_visualizerstore_visualizerstate"
     ],
-    "7": [
+    "6": [
       "eslint",
       "eslint_config_next",
       "lightningcss_win32_x64_msvc",
@@ -407,7 +368,7 @@
       "types_react_dom",
       "typescript"
     ],
-    "8": [
+    "7": [
       "ref_dom",
       "ref_dom_iterable",
       "ref_esnext",
@@ -438,7 +399,7 @@
       "tsconfig_exclude",
       "tsconfig_include"
     ],
-    "9": [
+    "8": [
       "src_app_api_terminal_create_route",
       "src_app_api_terminal_create_route_post",
       "src_app_api_terminal_destroy_route",
@@ -467,7 +428,7 @@
       "src_lib_terminal_service_terminalservice_writefile",
       "src_lib_terminal_service_workspacesyncfile"
     ],
-    "10": [
+    "9": [
       "src_lib_quickshape",
       "src_lib_quickshape_anglebetween",
       "src_lib_quickshape_baseof",
@@ -496,7 +457,7 @@
       "src_lib_quickshape_roundness_line",
       "src_lib_quickshape_sharpcorners"
     ],
-    "11": [
+    "10": [
       "src_components_settingsmenu",
       "src_components_settingsmenu_options",
       "src_components_settingsmenu_settingsmenu",
@@ -524,7 +485,45 @@
       "src_lib_snippets_snippets_by_language",
       "src_lib_snippets_snippetsforlanguage"
     ],
+    "11": [
+      "src_components_aitextsidebar_code",
+      "src_lib_ai_highlight",
+      "src_lib_ai_highlight_aliases",
+      "src_lib_ai_highlight_createcodecardsvg",
+      "src_lib_ai_highlight_createcodecardsvg_compensatefordarkcanvas",
+      "src_lib_ai_highlight_createcodecardsvg_escapexml",
+      "src_lib_ai_highlight_createcodecardsvg_getdarktokencolor",
+      "src_lib_ai_highlight_createcodecardsvg_hextorgb",
+      "src_lib_ai_highlight_createcodecardsvg_invert3x3",
+      "src_lib_ai_highlight_createcodecardsvg_rgbtohex",
+      "src_lib_ai_highlight_css_lang",
+      "src_lib_ai_highlight_escapehtml",
+      "src_lib_ai_highlight_highlightcode",
+      "src_lib_ai_highlight_languages",
+      "src_lib_ai_highlight_resolvelanguage",
+      "src_lib_ai_highlight_shell_lang",
+      "src_lib_ai_highlight_tobase64",
+      "src_lib_ai_highlight_yaml_lang",
+      "src_lib_dartmode",
+      "src_lib_dartmode_dartlang"
+    ],
     "12": [
+      "src_lib_ai_gemini_live_geminilivesession",
+      "src_lib_ai_gemini_live_geminilivesession_arraybuffertobase64",
+      "src_lib_ai_gemini_live_geminilivesession_constructor",
+      "src_lib_ai_gemini_live_geminilivesession_float32toint16",
+      "src_lib_ai_gemini_live_geminilivesession_int16tofloat32",
+      "src_lib_ai_gemini_live_geminilivesession_isconnected",
+      "src_lib_ai_gemini_live_geminilivesession_onmessage",
+      "src_lib_ai_gemini_live_geminilivesession_onopen",
+      "src_lib_ai_gemini_live_geminilivesession_playaudio",
+      "src_lib_ai_gemini_live_geminilivesession_sendaudiochunk",
+      "src_lib_ai_gemini_live_geminilivesession_start",
+      "src_lib_ai_gemini_live_geminilivesession_startrecording",
+      "src_lib_ai_gemini_live_geminilivesession_stop",
+      "src_lib_ai_gemini_live_geminilivesession_stoprecording"
+    ],
+    "13": [
       "src_app_page",
       "src_app_page_excalidrawwrapper",
       "src_app_page_home",
@@ -537,7 +536,18 @@
       "src_components_excalidrawerrorboundary_props",
       "src_components_excalidrawerrorboundary_state"
     ],
-    "13": [
+    "14": [
+      "src_components_explaniopanel",
+      "src_components_explaniopanel_blobtodataurl",
+      "src_components_explaniopanel_explanionote",
+      "src_components_explaniopanel_explaniopanel",
+      "src_components_explaniopanel_fmttime",
+      "src_components_explaniopanel_loadnotes",
+      "src_components_explaniopanel_nextid",
+      "src_components_explaniopanel_savenotes",
+      "src_components_explaniopanel_waveform"
+    ],
+    "15": [
       "src_components_laseroverlay",
       "src_components_laseroverlay_drawtipdot",
       "src_components_laseroverlay_laser_red",
@@ -547,43 +557,43 @@
       "src_components_laseroverlay_trail",
       "src_components_laseroverlay_trailpoint"
     ],
-    "14": [
+    "16": [
       "src_types_emmet_d",
       "src_types_emmet_d_emmet",
       "src_types_emmet_d_extractedabbreviation",
       "src_types_emmet_d_extractoptions",
       "src_types_emmet_d_userconfig"
     ],
-    "15": [
+    "17": [
       "src_app_api_ai_chat_route",
       "src_app_api_ai_chat_route_chatmessage",
       "src_app_api_ai_chat_route_ischatmessage",
       "src_app_api_ai_chat_route_post"
     ],
-    "16": [
+    "18": [
       "src_app_api_execute_route",
       "src_app_api_execute_route_executebody",
       "src_app_api_execute_route_language_ids",
       "src_app_api_execute_route_post"
     ],
-    "17": [
+    "19": [
       "src_app_layout",
       "src_app_layout_metadata",
       "src_app_layout_rootlayout"
     ],
-    "18": [
+    "20": [
       "eslint_config",
       "eslint_config_eslintconfig"
     ],
-    "19": [
+    "21": [
       "next_config",
       "next_config_nextconfig"
     ],
-    "20": [
+    "22": [
       "postcss_config",
       "postcss_config_config"
     ],
-    "21": [
+    "23": [
       "src_lib_firebase",
       "src_lib_firebase_firebaseconfig"
     ]
@@ -591,26 +601,28 @@
   "cohesion": {
     "0": 0.05495151337055539,
     "1": 0.07071887784921099,
-    "2": 0.04081632653061224,
-    "3": 0.09494949494949495,
-    "4": 0.07862679955703211,
-    "5": 0.07087486157253599,
-    "6": 0.09365079365079365,
-    "7": 0.06060606060606061,
-    "8": 0.06896551724137931,
-    "9": 0.1111111111111111,
-    "10": 0.1452991452991453,
-    "11": 0.12923076923076923,
-    "12": 0.2,
-    "13": 0.35714285714285715,
-    "14": 0.4,
-    "15": 0.6666666666666666,
-    "16": 0.5,
+    "2": 0.07541478129713423,
+    "3": 0.04081632653061224,
+    "4": 0.08130081300813008,
+    "5": 0.09365079365079365,
+    "6": 0.06060606060606061,
+    "7": 0.06896551724137931,
+    "8": 0.1111111111111111,
+    "9": 0.1452991452991453,
+    "10": 0.12923076923076923,
+    "11": 0.1368421052631579,
+    "12": 0.26373626373626374,
+    "13": 0.2,
+    "14": 0.3611111111111111,
+    "15": 0.35714285714285715,
+    "16": 0.4,
     "17": 0.6666666666666666,
-    "18": 1.0,
-    "19": 1.0,
+    "18": 0.5,
+    "19": 0.6666666666666666,
     "20": 1.0,
-    "21": 1.0
+    "21": 1.0,
+    "22": 1.0,
+    "23": 1.0
   },
   "gods": [
     {
@@ -724,13 +736,18 @@
   "questions": [
     {
       "type": "bridge_node",
-      "question": "Why does `createCodeCardSvg()` connect `AITextSidebar.tsx` to `ExcalidrawWrapper.tsx`?",
+      "question": "Why does `GeminiLiveSession` connect `GeminiLiveSession` to `AITextSidebar.tsx`?",
+      "why": "High betweenness centrality (0.028) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `createCodeCardSvg()` connect `highlight.ts` to `ExcalidrawWrapper.tsx`?",
       "why": "High betweenness centrality (0.018) - this node is a cross-community bridge."
     },
     {
       "type": "isolated_nodes",
       "question": "What connects `CodeEditorPanelProps`, `RunStatus`, `Creating` to the rest of the system?",
-      "why": "163 weakly-connected nodes found - possible documentation gaps or missing edges."
+      "why": "164 weakly-connected nodes found - possible documentation gaps or missing edges."
     },
     {
       "type": "low_cohesion",
@@ -744,18 +761,13 @@
     },
     {
       "type": "low_cohesion",
+      "question": "Should `AITextSidebar.tsx` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.07541478129713423 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
       "question": "Should `dependencies` be split into smaller, more focused modules?",
       "why": "Cohesion score 0.04081632653061224 - nodes in this community are weakly interconnected."
-    },
-    {
-      "type": "low_cohesion",
-      "question": "Should `AIChatPanel.tsx` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.09494949494949495 - nodes in this community are weakly interconnected."
-    },
-    {
-      "type": "low_cohesion",
-      "question": "Should `ExcalidrawWrapper.tsx` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.07862679955703211 - nodes in this community are weakly interconnected."
     }
   ]
 }

@@ -25,6 +25,7 @@ import CodeEditorPanel from "./CodeEditorPanel";
 import DataStructuresPanel from "./DataStructuresPanel";
 import CanvasStructureControls, { type ViewportBox } from "./CanvasStructureControls";
 import AITextSidebar from "./AITextSidebar";
+import ExplanioPanel from "./ExplanioPanel";
 import { chatStreamAuto, MistralError, type ChatMessage } from "@/lib/ai/mistral";
 import { createCodeCardSvg } from "@/lib/ai/highlight";
 import TodoPanel, { TodoCornerButton } from "./TodoOverlay";
@@ -47,7 +48,7 @@ import {
   type DataStructureDef,
   type StructureId,
 } from "@/lib/dataStructures";
-import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2 } from "lucide-react";
+import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic } from "lucide-react";
 
 /**
  * Metadata attached to every element of an inserted diagram via Excalidraw's
@@ -337,6 +338,7 @@ export default function ExcalidrawWrapper() {
   const [showDataStructuresPanel, setShowDataStructuresPanel] = useState(false);
   const [showTodos, setShowTodos] = useState(false);
   const [showAiTextPanel, setShowAiTextPanel] = useState(false);
+  const [showExplanio, setShowExplanio] = useState(false);
   const editingTextIdRef = useRef<string | null>(null);
   const [listMode, setListMode] = useState<"ordered" | "bullet" | null>(null);
   const [textAnchor, setTextAnchor] = useState<{
@@ -1115,6 +1117,18 @@ export default function ExcalidrawWrapper() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [listMode]);
 
+  // Scene snapshot captured alongside an Explanio voice note (capped size).
+  const getSceneSnapshotForNote = useCallback((): string | null => {
+    try {
+      const scene = latestSceneRef.current;
+      if (!scene) return null;
+      const json = JSON.stringify(scene.elements);
+      return json.length > 200_000 ? json.slice(0, 200_000) : json;
+    } catch {
+      return null;
+    }
+  }, []);
+
   // Set text content verbatim (markdown kept as-is, e.g. Codestral output).
   const handleSetCanvasTextRaw = useCallback((id: string, text: string) => {
     const api = excalidrawAPI.current;
@@ -1787,6 +1801,36 @@ export default function ExcalidrawWrapper() {
       {/* Code Editor Panel */}
       {showCodePanel && (
         <CodeEditorPanel onClose={() => setShowCodePanel(false)} />
+      )}
+
+      {/* Explanio launcher — bottom-right above AI Text, identical styling */}
+      <div className="bottom-controls-right ai-text-dock explanio-dock">
+        <button
+          type="button"
+          className="excalidraw-button"
+          style={PANEL_BUTTON_STYLE}
+          onClick={() => {
+            if (!showExplanio) {
+              setShowCodePanel(false);
+              setShowAiTextPanel(false);
+              setShowDataStructuresPanel(false);
+            }
+            setShowExplanio(!showExplanio);
+          }}
+          title="Open Explanio voice notes"
+          aria-label="Explanio"
+        >
+          <Mic size={16} strokeWidth={2.2} />
+          <span style={{ marginLeft: 4 }}>Explanio</span>
+        </button>
+      </div>
+
+      {/* Explanio voice notes panel */}
+      {showExplanio && (
+        <ExplanioPanel
+          onClose={() => setShowExplanio(false)}
+          getSceneSnapshot={getSceneSnapshotForNote}
+        />
       )}
 
       {/* AI Text launcher — bottom-right, identical styling to the Code button */}
