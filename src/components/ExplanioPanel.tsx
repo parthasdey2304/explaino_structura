@@ -3,12 +3,20 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Mic, Pause, Play, Square, Trash2, X } from "lucide-react";
 import {
+  exportToCanvas,
   sceneCoordsToViewportCoords,
   viewportCoordsToSceneCoords,
 } from "@excalidraw/excalidraw";
 
 const STORAGE_KEY = "explaino-explanio-notes-v1";
 const MAX_NOTES = 20;
+
+export interface ExplanioFrame {
+  /** Seconds since recording start. */
+  t: number;
+  /** Small PNG thumbnail of the region at time t. */
+  img: string;
+}
 
 export interface ExplanioNote {
   id: string;
@@ -19,6 +27,8 @@ export interface ExplanioNote {
   peaks: number[];
   /** Canvas scene snapshot captured with the recording (for review). */
   scene: string | null;
+  /** Playback-synced thumbnails of shapes drawn inside the region. */
+  frames: ExplanioFrame[];
 }
 
 interface SceneRegion {
@@ -46,10 +56,12 @@ function loadNotes(): ExplanioNote[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (n): n is ExplanioNote =>
-        !!n && typeof n.id === "string" && typeof n.audio === "string"
-    );
+    return parsed
+      .filter(
+        (n): n is ExplanioNote =>
+          !!n && typeof n.id === "string" && typeof n.audio === "string"
+      )
+      .map((n) => ({ ...n, frames: Array.isArray(n.frames) ? n.frames : [] }));
   } catch {
     return [];
   }
@@ -83,26 +95,64 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 /** Keep only the elements that intersect the capture region. */
+function clipElementsToRegion(
+  els: unknown,
+  region: SceneRegion
+): Record<string, unknown>[] {
+  if (!Array.isArray(els)) return [];
+  return (els as Record<string, unknown>[]).filter((el) => {
+    if (!el || el.isDeleted) return false;
+    if (typeof el.x !== "number" || typeof el.y !== "number") return false;
+    const w = typeof el.width === "number" ? el.width : 0;
+    const h = typeof el.height === "number" ? el.height : 0;
+    return el.x < region.maxX && el.x + w > region.minX && el.y < region.maxY && el.y + h > region.minY;
+  });
+}
+
+/** Keep only the elements that intersect the capture region. */
 function clipSceneToRegion(sceneJson: string | null, region: SceneRegion): string | null {
   if (!sceneJson) return null;
   try {
     const els = JSON.parse(sceneJson);
     if (!Array.isArray(els)) return sceneJson;
-    const kept = els.filter((el) => {
-      if (!el || typeof el.x !== "number" || typeof el.y !== "number") return false;
-      const w = typeof el.width === "number" ? el.width : 0;
-      const h = typeof el.height === "number" ? el.height : 0;
-      return el.x < region.maxX && el.x + w > region.minX && el.y < region.maxY && el.y + h > region.minY;
-    });
-    return JSON.stringify(kept);
+    return JSON.stringify(clipElementsToRegion(els, region));
   } catch {
     return sceneJson;
   }
 }
 
+const MAX_FRAME_THUMBS = 10;
+const NOTE_JSON_BUDGET = 3_000_000;
+
+/** Render small PNG thumbnails for evenly sampled frames. */
+async function buildFrameThumbs(
+  frames: { t: number; elements: Record<string, unknown>[] }[],
+  files: unknown
+): Promise<ExplanioFrame[]> {
+  if (frames.length === 0) return [];
+  const step = Math.max(1, Math.floor(frames.length / MAX_FRAME_THUMBS));
+  const sampled = frames.filter((_, i) => i % step === 0).slice(0, MAX_FRAME_THUMBS);
+  const out: ExplanioFrame[] = [];
+  for (const f of sampled) {
+    try {
+      const canvas = await exportToCanvas({
+        elements: f.elements,
+        appState: { viewBackgroundColor: "transparent" },
+        files,
+        maxWidthOrHeight: 220,
+      } as unknown as Parameters<typeof exportToCanvas>[0]);
+      out.push({ t: f.t, img: canvas.toDataURL("image/png") });
+    } catch {
+      // skip frames that fail to render
+    }
+  }
+  return out;
+}
+
 function Waveform({ peaks, progress = 0 }: { peaks: number[]; progress?: number }) {
   const bars = peaks.length > 0 ? peaks : new Array(32).fill(0.15);
-  const shown = bars.slice(0, 64);
+  // Cap bar count so the strip never stretches outside its dock.
+  const shown = bars.length > 40 ? bars.filter((_, i) => i % Math.ceil(bars.length / 40) === 0).slice(0, 40) : bars;
   return (
     <div className="explanio__wave" aria-hidden="true">
       {shown.map((p, i) => (
@@ -119,10 +169,12 @@ function Waveform({ peaks, progress = 0 }: { peaks: number[]; progress?: number 
 export default function ExplanioPanel({
   onClose,
   getSceneSnapshot,
+  getSceneData,
   viewport,
 }: {
   onClose: () => void;
   getSceneSnapshot: () => string | null;
+  getSceneData: () => { elements: unknown[]; files: unknown } | null;
   viewport: Viewport;
 }) {
   const [notes, setNotes] = useState<ExplanioNote[]>(() => loadNotes());
@@ -133,6 +185,7 @@ export default function ExplanioPanel({
   const [livePeaks, setLivePeaks] = useState<number[]>([]);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  const [frameImg, setFrameImg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -140,6 +193,7 @@ export default function ExplanioPanel({
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const peaksRef = useRef<number[]>([]);
+  const framesRef = useRef<{ t: number; elements: Record<string, unknown>[] }[]>([]);
   const analyserRef = useRef<{ ctx: AudioContext; analyser: AnalyserNode; raf: number } | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -168,6 +222,20 @@ export default function ExplanioPanel({
       audioRef.current?.pause();
     },
     [stopTracks]
+  );
+
+  const captureFrame = useCallback(
+    (atSec: number) => {
+      if (!region) return;
+      const data = getSceneData();
+      if (!data) return;
+      framesRef.current.push({
+        t: atSec,
+        elements: clipElementsToRegion(data.elements, region),
+      });
+      if (framesRef.current.length > 120) framesRef.current.shift();
+    },
+    [getSceneData, region]
   );
 
   const toScene = useCallback(
@@ -207,7 +275,9 @@ export default function ExplanioPanel({
         const startedAt = Date.now() - recSec * 1000;
         try {
           const audio = await blobToDataUrl(blob);
-          const note: ExplanioNote = {
+          const data = getSceneData();
+          let frames = await buildFrameThumbs(framesRef.current, data?.files ?? {});
+          let note: ExplanioNote = {
             id: nextId(),
             createdAt: startedAt,
             durationSec: recSec,
@@ -215,7 +285,15 @@ export default function ExplanioPanel({
             audio,
             peaks: peaksRef.current,
             scene: clipSceneToRegion(getSceneSnapshot(), region),
+            frames,
           };
+          // Respect browser storage budget — shed thumbnails first.
+          while (JSON.stringify(note).length > NOTE_JSON_BUDGET && note.frames.length > 0) {
+            note = { ...note, frames: note.frames.filter((_, i) => i % 2 === 0).slice(0, Math.max(1, note.frames.length >> 1)) };
+          }
+          if (JSON.stringify(note).length > NOTE_JSON_BUDGET) {
+            note = { ...note, frames: [], scene: null };
+          }
           setNotes((prev) => [note, ...prev].slice(0, MAX_NOTES));
           setActiveId(note.id);
         } catch {
@@ -254,13 +332,20 @@ export default function ExplanioPanel({
         // waveform is decorative — recording continues without it
       }
       setRecSec(0);
-      timerRef.current = setInterval(() => setRecSec((s) => s + 1), 1000);
+      framesRef.current = [];
+      captureFrame(0);
+      timerRef.current = setInterval(() => {
+        setRecSec((s) => {
+          captureFrame(s + 1);
+          return s + 1;
+        });
+      }, 1000);
       rec.start(250);
       setRecording(true);
     } catch {
       setError("Microphone unavailable — allow mic access to record.");
     }
-  }, [getSceneSnapshot, recSec, region, stopTracks]);
+  }, [captureFrame, getSceneData, getSceneSnapshot, recSec, region, stopTracks]);
 
   const stopRecording = useCallback(() => {
     mediaRef.current?.stop();
@@ -277,16 +362,32 @@ export default function ExplanioPanel({
       if (audio) audio.pause();
       const next = new Audio(note.audio);
       audioRef.current = next;
+      const pickFrame = () => {
+        if (note.frames.length === 0) {
+          setFrameImg(null);
+          return;
+        }
+        const t = next.currentTime;
+        let img = note.frames[0].img;
+        for (const f of note.frames) {
+          if (f.t <= t) img = f.img;
+          else break;
+        }
+        setFrameImg((prev) => (prev === img ? prev : img));
+      };
       next.ontimeupdate = () => {
         if (next.duration) setProgress(next.currentTime / next.duration);
+        pickFrame();
       };
       next.onended = () => {
         setPlayingId(null);
         setProgress(0);
       };
+      next.onseeked = pickFrame;
       setActiveId(note.id);
       setProgress(0);
       setPlayingId(note.id);
+      pickFrame();
       void next.play().catch(() => setPlayingId(null));
     },
     [playingId]
@@ -297,6 +398,7 @@ export default function ExplanioPanel({
       if (playingId === id) {
         audioRef.current?.pause();
         setPlayingId(null);
+        setFrameImg(null);
       }
       setNotes((prev) => prev.filter((n) => n.id !== id));
       setActiveId((prev) => (prev === id ? null : prev));
@@ -305,6 +407,10 @@ export default function ExplanioPanel({
   );
 
   const active = notes.find((n) => n.id === activeId) ?? notes[0] ?? null;
+  const previewImg =
+    active && playingId === active.id
+      ? frameImg
+      : (active?.frames.length ? active.frames[active.frames.length - 1].img : null);
 
   const onDrawDown = useCallback((e: React.PointerEvent) => {
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
@@ -404,6 +510,9 @@ export default function ExplanioPanel({
                   {playingId === active.id ? <Pause size={15} /> : <Play size={15} />}
                 </button>
                 <div className="explanio__player-main">
+                  {previewImg && (
+                    <img className="explanio__preview" src={previewImg} alt="Canvas activity during recording" />
+                  )}
                   <Waveform peaks={active.peaks} progress={playingId === active.id ? progress : 0} />
                   <div className="explanio__meta">{fmtTime(active.durationSec)}</div>
                 </div>
@@ -430,6 +539,7 @@ export default function ExplanioPanel({
                     onClick={() => {
                       audioRef.current?.pause();
                       setPlayingId(null);
+                      setFrameImg(null);
                       setActiveId(n.id);
                     }}
                   >
