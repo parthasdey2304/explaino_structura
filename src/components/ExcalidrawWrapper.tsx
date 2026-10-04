@@ -1117,6 +1117,20 @@ export default function ExcalidrawWrapper() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [listMode]);
 
+  // Scene data captured alongside an Explanio voice note.
+  const getSceneDataForNote = useCallback((): {
+    elements: ExcalidrawElement[];
+    files: BinaryFiles;
+  } | null => {
+    try {
+      const scene = latestSceneRef.current;
+      if (!scene) return null;
+      return { elements: [...scene.elements], files: scene.files };
+    } catch {
+      return null;
+    }
+  }, []);
+
   // Scene snapshot captured alongside an Explanio voice note (capped size).
   const getSceneSnapshotForNote = useCallback((): string | null => {
     try {
@@ -1803,8 +1817,8 @@ export default function ExcalidrawWrapper() {
         <CodeEditorPanel onClose={() => setShowCodePanel(false)} />
       )}
 
-      {/* Explanio launcher — bottom-right above AI Text, identical styling */}
-      <div className="bottom-controls-right ai-text-dock explanio-dock">
+      {/* Launchers — bottom-right: single stack, Explanio above AI Text */}
+      <div className="bottom-controls-right ai-text-dock launcher-stack">
         <button
           type="button"
           className="excalidraw-button"
@@ -1823,19 +1837,6 @@ export default function ExcalidrawWrapper() {
           <Mic size={16} strokeWidth={2.2} />
           <span style={{ marginLeft: 4 }}>Explanio</span>
         </button>
-      </div>
-
-      {/* Explanio voice notes panel */}
-      {showExplanio && (
-        <ExplanioPanel
-          onClose={() => setShowExplanio(false)}
-          getSceneSnapshot={getSceneSnapshotForNote}
-          viewport={viewport}
-        />
-      )}
-
-      {/* AI Text launcher — bottom-right, identical styling to the Code button */}
-      <div className="bottom-controls-right ai-text-dock">
         <button
           type="button"
           className="excalidraw-button"
@@ -1854,6 +1855,16 @@ export default function ExcalidrawWrapper() {
           <span style={{ marginLeft: 4 }}>AI Text</span>
         </button>
       </div>
+
+      {/* Explanio voice notes panel */}
+      {showExplanio && (
+        <ExplanioPanel
+          onClose={() => setShowExplanio(false)}
+          getSceneSnapshot={getSceneSnapshotForNote}
+          getSceneData={getSceneDataForNote}
+          viewport={viewport}
+        />
+      )}
 
       {/* AI Text sidebar — slides in from the right at half the Code width */}
       {showAiTextPanel && (

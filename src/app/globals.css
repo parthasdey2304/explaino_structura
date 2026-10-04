@@ -444,8 +444,11 @@ canvas {
   gap: 8px;
 }
 
-.bottom-controls-right.explanio-dock {
-  bottom: 52px;
+.bottom-controls-right.ai-text-dock.launcher-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
 }
 
 .zoom-island,
@@ -3668,7 +3671,13 @@ canvas {
 .explanio__player--dock {
   display: flex;
   align-items: center;
-  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.explanio__player-main {
+  min-width: 0;
+  overflow: hidden;
 }
 
 .explanio__play,
@@ -3709,14 +3718,27 @@ canvas {
   align-items: center;
   gap: 2px;
   height: 36px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .explanio__bar {
-  flex: 1;
-  min-width: 2px;
+  flex: 1 1 0;
+  min-width: 0;
   border-radius: 2px;
   background: var(--color-primary);
   opacity: 0.35;
+}
+
+.explanio__preview {
+  display: block;
+  width: 100%;
+  max-height: 110px;
+  object-fit: contain;
+  border-radius: 6px;
+  border: 1px solid var(--color-surface-high);
+  background: #000;
+  margin-bottom: 6px;
 }
 
 .explanio__bar--played {
@@ -4668,13 +4690,10 @@ canvas {
      exception so the sidebar stays reachable above Excalidraw's bottom bar. */
   .bottom-controls-right.ai-text-dock {
     display: flex !important;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
     bottom: 76px;
-    right: 12px;
-  }
-
-  .bottom-controls-right.explanio-dock {
-    display: flex !important;
-    bottom: 128px;
     right: 12px;
   }
 
