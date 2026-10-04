@@ -1,10 +1,10 @@
-@import "tailwindcss";
+﻿@import "tailwindcss";
 
 /* ============================================================
-   EXPLAINO — Excalidraw-inspired Design System
+   EXPLAINO â€” Excalidraw-inspired Design System
    ============================================================ */
 
-/* ── CSS Variables ────────────────────────────────────────── */
+/* â”€â”€ CSS Variables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 :root {
   /* Brand / Primary */
   --color-primary: #6965db;
@@ -56,7 +56,7 @@
   --sidebar-width: 212px;
 }
 
-/* ── Dark Theme ───────────────────────────────────────────── */
+/* â”€â”€ Dark Theme â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .theme-dark {
   --default-bg-color: #121212;
   --island-bg-color: #232329;
@@ -79,12 +79,14 @@
   --color-border-outline-variant: #43434a;
 }
 
-/* ── Hide Excalidraw Library Button ───────────────────────── */
-.excalidraw .layer-ui__library-button {
+/* â”€â”€ Hide Excalidraw Library Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.excalidraw .layer-ui__library-button,
+.excalidraw button[aria-label="Library"],
+.excalidraw [aria-label="Library"] {
   display: none !important;
 }
 
-/* ── Reset ────────────────────────────────────────────────── */
+/* â”€â”€ Reset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 *,
 *::before,
 *::after {
@@ -114,7 +116,7 @@ canvas {
   touch-action: none;
 }
 
-/* ── Island (floating panel) ──────────────────────────────── */
+/* â”€â”€ Island (floating panel) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .excalidraw-island {
   background-color: var(--island-bg-color);
   box-shadow: var(--shadow-island);
@@ -124,7 +126,7 @@ canvas {
   color: var(--color-on-surface);
 }
 
-/* ── Tool Icon Button ─────────────────────────────────────── */
+/* â”€â”€ Tool Icon Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .tool-icon-btn {
   width: 2.5rem;
   height: 2.5rem;
@@ -169,7 +171,7 @@ canvas {
   cursor: not-allowed;
 }
 
-/* ── Toolbar Shortcut Badge ───────────────────────────────── */
+/* â”€â”€ Toolbar Shortcut Badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .tool-shortcut-badge {
   position: absolute;
   bottom: 3px;
@@ -183,7 +185,7 @@ canvas {
   font-family: inherit;
 }
 
-/* ── Excalidraw-style Button ──────────────────────────────── */
+/* â”€â”€ Excalidraw-style Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .excalidraw-button {
   display: inline-flex;
   align-items: center;
@@ -217,7 +219,7 @@ canvas {
   border-color: #d2d0ff;
 }
 
-/* ── Laser pointer mode ───────────────────────────────────────
+/* â”€â”€ Laser pointer mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Crosshair over the drawing surface while lasering. Scoped with
    !important because Excalidraw sets canvas cursors inline. */
 .explaino-laser-active .excalidraw,
@@ -225,7 +227,7 @@ canvas {
   cursor: crosshair !important;
 }
 
-/* ── Todo corner toggle (top-left, right of the hamburger menu) ────────
+/* â”€â”€ Todo corner toggle (top-left, right of the hamburger menu) â”€â”€â”€â”€â”€â”€â”€â”€
    Mirrors Excalidraw's `.dropdown-menu-button.main-menu-trigger` box model:
    2.25rem box / 1rem icon / lg radius / island surface tokens, with the same
    0.5rem gap the app's own button rows use. The hamburger sits at a 1rem
@@ -300,7 +302,7 @@ canvas {
   background-color: var(--color-surface-mid);
 }
 
-/* ── Toolbar Layout ───────────────────────────────────────── */
+/* â”€â”€ Toolbar Layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /* App wrapper */
 .excalidraw-wrapper {
@@ -356,7 +358,7 @@ canvas {
   flex-shrink: 0;
 }
 
-/* ── Left Sidebar ─────────────────────────────────────────── */
+/* â”€â”€ Left Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .left-sidebar {
   position: fixed;
   top: var(--toolbar-height);
@@ -378,7 +380,7 @@ canvas {
   margin-bottom: 10px;
 }
 
-/* ── Hamburger Menu Dropdown ──────────────────────────────── */
+/* â”€â”€ Hamburger Menu Dropdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .hamburger-menu {
   position: fixed;
   top: var(--toolbar-height);
@@ -421,7 +423,7 @@ canvas {
   margin: 4px 8px;
 }
 
-/* ── Bottom Controls ──────────────────────────────────────── */
+/* â”€â”€ Bottom Controls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .bottom-controls-left {
   position: fixed;
   bottom: 12px;
@@ -468,7 +470,7 @@ canvas {
   color: var(--color-primary);
 }
 
-/* ── Code Editor Panel ───────────────────────────────────────────── */
+/* â”€â”€ Code Editor Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .code-editor-panel {
   position: fixed;
   top: var(--toolbar-height);
@@ -598,7 +600,7 @@ canvas {
   min-height: 0;
 }
 
-/* ── Explorer (VS Code-like) ──────────────────────────────────────────── */
+/* â”€â”€ Explorer (VS Code-like) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .explorer {
   width: 200px;
   flex-shrink: 0;
@@ -778,7 +780,7 @@ canvas {
   font-family: "Fira Code", "Cascadia Code", "Consolas", monospace;
 }
 
-/* ── Tabs ──────────────────────────────────────────────────────────────── */
+/* â”€â”€ Tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .code-editor__tabs {
   display: flex;
   align-items: center;
@@ -852,7 +854,7 @@ canvas {
   padding: 4px 8px;
 }
 
-/* ── CodeMirror host ──────────────────────────────────────────────────── */
+/* â”€â”€ CodeMirror host â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .code-editor__right {
   flex: 1;
   display: flex;
@@ -878,7 +880,7 @@ canvas {
   margin-left: -3px;
 }
 
-/* ── Welcome Screen ────────────────────────────────────────────────────── */
+/* â”€â”€ Welcome Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .code-editor__welcome {
   flex: 1;
   display: flex;
@@ -996,7 +998,7 @@ canvas {
   color: #888;
 }
 
-/* ── Status bar ───────────────────────────────────────────────────────── */
+/* â”€â”€ Status bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .code-editor__statusbar {
   display: flex;
   align-items: center;
@@ -1109,7 +1111,7 @@ canvas {
   color: #f48771;
 }
 
-/* ── Terminal ───────────────────────────────────────────────────────────── */
+/* â”€â”€ Terminal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .terminal {
   flex: 1;
   min-height: 0;
@@ -1205,7 +1207,7 @@ canvas {
   background: var(--color-primary-hover);
 }
 
-/* ── Output / Terminal Toggle ───────────────────────────────────────────── */
+/* â”€â”€ Output / Terminal Toggle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .code-editor__bottom {
   position: relative;
   display: flex;
@@ -1279,7 +1281,7 @@ canvas {
   background-color: #1e1e1e;
 }
 
-/* ── Data Structures Trigger & Panel ─────────────────────────────── */
+/* â”€â”€ Data Structures Trigger & Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .data-structures-panel {
   position: fixed;
   top: var(--toolbar-height);
@@ -1375,7 +1377,7 @@ canvas {
   color: var(--color-gray-60);
 }
 
-/* ── Save Toast ───────────────────────────────────────────── */
+/* â”€â”€ Save Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .save-toast {
   position: fixed;
   top: 64px;
@@ -1392,7 +1394,7 @@ canvas {
   pointer-events: none;
 }
 
-/* ── Color Picker Input ───────────────────────────────────── */
+/* â”€â”€ Color Picker Input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .color-hex-input {
   margin-top: 8px;
   width: 100%;
@@ -1411,7 +1413,7 @@ canvas {
   border-color: var(--color-primary);
 }
 
-/* ── Opacity Slider ───────────────────────────────────────── */
+/* â”€â”€ Opacity Slider â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .opacity-slider {
   width: 100%;
   height: 4px;
@@ -1444,7 +1446,7 @@ canvas {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
-/* ── Scrollbar ────────────────────────────────────────────── */
+/* â”€â”€ Scrollbar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -1463,7 +1465,7 @@ canvas {
   background: var(--color-gray-50);
 }
 
-/* ── Dialog / Modal ───────────────────────────────────────── */
+/* â”€â”€ Dialog / Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .dialog-overlay {
   position: fixed;
   inset: 0;
@@ -1518,7 +1520,7 @@ canvas {
   justify-content: flex-end;
 }
 
-/* ── Color Swatch ─────────────────────────────────────────── */
+/* â”€â”€ Color Swatch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .color-swatch {
   width: 24px;
   height: 24px;
@@ -1560,7 +1562,7 @@ canvas {
   background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
 }
 
-/* ── Transparent swatch (red slash) ──────────────────────── */
+/* â”€â”€ Transparent swatch (red slash) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .color-swatch__transparent {
   position: absolute;
   inset: 0;
@@ -1577,7 +1579,7 @@ canvas {
   transform: rotate(45deg);
 }
 
-/* ── Loading Screen ───────────────────────────────────────── */
+/* â”€â”€ Loading Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .loading-screen {
   display: flex;
   align-items: center;
@@ -1593,7 +1595,7 @@ canvas {
   font-weight: 500;
 }
 
-/* ── Algorithm Visualizer Panel ─────────────────────────────────────────── */
+/* â”€â”€ Algorithm Visualizer Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .visualizer-panel {
   position: fixed;
   top: calc(var(--toolbar-height) + 12px);
@@ -1881,7 +1883,7 @@ canvas {
   gap: 10px;
 }
 
-/* ── Variable Card ───────────────────────────────────────────────────────── */
+/* â”€â”€ Variable Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .variable-card {
   padding: 12px;
   background-color: var(--color-surface-low);
@@ -1929,7 +1931,7 @@ canvas {
   color: var(--color-gray-80);
 }
 
-/* ── Array Visualizer ───────────────────────────────────────────────────── */
+/* â”€â”€ Array Visualizer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .array-visualizer {
   margin-top: 4px;
 }
@@ -1971,7 +1973,7 @@ canvas {
   background-color: var(--color-surface-mid);
 }
 
-/* ── Object Visualizer ──────────────────────────────────────────────────── */
+/* â”€â”€ Object Visualizer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .object-visualizer {
   margin-top: 4px;
   padding: 8px;
@@ -2002,7 +2004,7 @@ canvas {
   font-style: italic;
 }
 
-/* ── Visualize Button ───────────────────────────────────────────────────── */
+/* â”€â”€ Visualize Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .code-editor__visualize-btn {
   display: flex;
   align-items: center;
@@ -2032,7 +2034,7 @@ canvas {
   color: white;
 }
 
-/* ── Responsive / Mobile Breakpoints ───────────────────────── */
+/* â”€â”€ Responsive / Mobile Breakpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 /* Excalidraw-style mobile: toolbar at bottom, reduced options, drawer sidebars */
 
 @media (max-width: 768px) {
@@ -2301,7 +2303,7 @@ canvas {
   }
 }
 
-/* ── VS Code-style Explorer Toggle ──────────────────────────── */
+/* â”€â”€ VS Code-style Explorer Toggle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .code-editor__explorer-toggle {
   display: inline-flex;
   align-items: center;
@@ -2326,7 +2328,7 @@ canvas {
   border-color: var(--color-primary, #6965db);
 }
 
-/* ── Data Structures Panel: interactive cards ─────────────────── */
+/* â”€â”€ Data Structures Panel: interactive cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .ds-card {
   display: flex;
   flex-direction: column;
@@ -2553,7 +2555,7 @@ canvas {
   color: var(--color-on-surface, #d4d4d4);
 }
 
-/* ── Insert Table button in panel ─────────────────────────────── */
+/* â”€â”€ Insert Table button in panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .ds-panel__table-btn-wrap {
   padding: 0 10px 8px;
   flex-shrink: 0;
@@ -2578,7 +2580,7 @@ canvas {
   background: rgba(105,101,219,0.15);
 }
 
-/* ── Previews (mini visualizations inside cards) ──────────────── */
+/* â”€â”€ Previews (mini visualizations inside cards) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .ds-preview {
   display: flex;
   flex-direction: column;
@@ -2714,7 +2716,7 @@ canvas {
   font-style: italic;
 }
 
-/* ── On-canvas data-structure editing controls ────────────────── */
+/* â”€â”€ On-canvas data-structure editing controls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 /* Anchored to the selected diagram's bounding box in screen pixels, so they
    follow panning and zooming without scaling into illegibility. */
 
@@ -2877,7 +2879,7 @@ canvas {
   color: #e03131;
 }
 
-/* ── Table preview (Data Structures panel) ────────────────────── */
+/* â”€â”€ Table preview (Data Structures panel) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .ds-preview__table {
   display: flex;
   flex-direction: column;
@@ -2904,7 +2906,7 @@ canvas {
   margin-left: 6px;
 }
 
-/* ── AI button (header) ───────────────────────────────────────────────── */
+/* â”€â”€ AI button (header) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .code-editor__ai-btn {
   display: flex;
   align-items: center;
@@ -2927,7 +2929,7 @@ canvas {
   color: white;
 }
 
-/* ── Draggable file tabs ───────────────────────────────────────────────── */
+/* â”€â”€ Draggable file tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .code-editor__tab--dragging {
   opacity: 0.4;
 }
@@ -2935,7 +2937,7 @@ canvas {
   box-shadow: inset 2px 0 0 var(--color-primary);
 }
 
-/* ── Settings gear dropdown ────────────────────────────────────────────── */
+/* â”€â”€ Settings gear dropdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .settings-menu {
   position: relative;
 }
@@ -3029,7 +3031,7 @@ canvas {
   line-height: 1.3;
 }
 
-/* ── AI Chat Panel ─────────────────────────────────────────────────────── */
+/* â”€â”€ AI Chat Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .ai-chat-panel {
   position: fixed;
   top: calc(var(--toolbar-height) + 12px);
@@ -3439,7 +3441,7 @@ canvas {
 
 
 /* ============================================================
-   TODO OVERLAY — top-right toolbar dropdown
+   TODO OVERLAY â€” top-right toolbar dropdown
    ============================================================ */
 @keyframes todoPopoverIn {
   from {
@@ -3576,6 +3578,72 @@ canvas {
   text-align: center;
 }
 
+.text-panel {
+  left: auto;
+  right: 12px;
+}
+
+.text-panel__ai {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px 6px;
+}
+
+.text-panel__ai .todo-panel__input {
+  flex: 1;
+}
+
+.text-panel__error {
+  padding: 0 12px;
+  color: #e03131;
+  font-size: 12px;
+}
+
+.text-panel__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 8px;
+  border-radius: var(--border-radius-md);
+  border: none;
+  background: transparent;
+  color: var(--color-on-surface);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.text-panel__item:hover {
+  background: var(--color-surface-high);
+}
+
+.text-panel__item--active {
+  background: var(--color-surface-high);
+  border-left: 3px solid var(--color-primary);
+}
+
+.text-panel__editor {
+  width: calc(100% - 24px);
+  margin: 6px 12px 12px;
+  min-height: 90px;
+  max-height: 180px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--color-surface-high);
+  border-radius: var(--border-radius-md);
+  background: transparent;
+  color: var(--color-on-surface);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+@media (hover: none) {
+  .text-panel {
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+}
+
 .todo-panel__item {
   display: flex;
   align-items: flex-start;
@@ -3613,6 +3681,44 @@ canvas {
 .todo-panel__item--done .todo-panel__check {
   background: var(--color-primary);
   border-color: var(--color-primary);
+}
+
+.todo-panel__check--inprogress,
+.todo-panel__item--inprogress .todo-panel__check {
+  background: #e03131;
+  border-color: #e03131;
+}
+
+.todo-panel__item--inprogress .todo-panel__text {
+  color: #e03131;
+}
+
+.todo-panel__drag {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-gray-50, #999);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease;
+}
+
+.todo-panel__item:hover .todo-panel__drag {
+  opacity: 1;
+}
+
+.todo-panel__drag:hover {
+  color: var(--color-on-surface);
+}
+
+.todo-panel__item[draggable="true"] {
+  cursor: default;
+}
+
+@media (hover: none) {
+  .todo-panel__drag {
+    opacity: 1;
+  }
 }
 
 .todo-panel__text {
@@ -3673,7 +3779,7 @@ canvas {
 
 
 /* ============================================================
-   AI TEXT SIDEBAR — right edge, half the Code sidebar's width
+   AI TEXT SIDEBAR â€” right edge, half the Code sidebar's width
    ============================================================ */
 .ai-text-panel {
   position: fixed;
@@ -3699,7 +3805,7 @@ canvas {
   transform: translateX(0);
 }
 
-/* ── AI Text solution tabs (Java / Python / C / C++) ─────────────────── */
+/* â”€â”€ AI Text solution tabs (Java / Python / C / C++) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .ai-text__solutions {
   display: flex;
   flex-direction: column;
@@ -4106,14 +4212,14 @@ canvas {
   overflow-wrap: anywhere;
 }
 
-/* Syntax highlighting — light theme */
+/* Syntax highlighting â€” light theme */
 .ai-text-panel__msg-text--markdown .tok-comment,
 .ai-text__codewrap .tok-comment { color: #6a737d; }
 .ai-text-panel__msg-text--markdown .tok-keyword,
 .ai-text__codewrap .tok-keyword { color: #cf222e; }
 .ai-text-panel__msg-text--markdown .tok-string,
 .ai-text-panel__msg-text--markdown .tok-string2,
-.ai-text__codewrap .tok-string,
+
 .ai-text__codewrap .tok-string2 { color: #0a3069; }
 .ai-text-panel__msg-text--markdown .tok-number,
 .ai-text__codewrap .tok-number { color: #0550ae; }
@@ -4121,36 +4227,36 @@ canvas {
 .ai-text-panel__msg-text--markdown .tok-atom,
 .ai-text-panel__msg-text--markdown .tok-literal,
 .ai-text-panel__msg-text--markdown .tok-meta,
-.ai-text__codewrap .tok-bool,
-.ai-text__codewrap .tok-atom,
-.ai-text__codewrap .tok-literal,
+
+
+
 .ai-text__codewrap .tok-meta { color: #0550ae; }
 .ai-text-panel__msg-text--markdown .tok-typeName,
 .ai-text-panel__msg-text--markdown .tok-className,
 .ai-text-panel__msg-text--markdown .tok-namespace,
 .ai-text-panel__msg-text--markdown .tok-macroName,
-.ai-text__codewrap .tok-typeName,
-.ai-text__codewrap .tok-className,
-.ai-text__codewrap .tok-namespace,
+
+
+
 .ai-text__codewrap .tok-macroName { color: #953800; }
 .ai-text-panel__msg-text--markdown .tok-variableName,
 .ai-text-panel__msg-text--markdown .tok-variableName2,
 .ai-text-panel__msg-text--markdown .tok-propertyName,
-.ai-text__codewrap .tok-variableName,
-.ai-text__codewrap .tok-variableName2,
+
+
 .ai-text__codewrap .tok-propertyName { color: #0550ae; }
 .ai-text-panel__msg-text--markdown .tok-variableName.tok-definition,
 .ai-text__codewrap .tok-variableName.tok-definition { color: #8250df; }
 .ai-text-panel__msg-text--markdown .tok-operator,
 .ai-text-panel__msg-text--markdown .tok-punctuation,
 .ai-text-panel__msg-text--markdown .tok-labelName,
-.ai-text__codewrap .tok-operator,
-.ai-text__codewrap .tok-punctuation,
+
+
 .ai-text__codewrap .tok-labelName { color: #57606a; }
 .ai-text-panel__msg-text--markdown .tok-invalid,
 .ai-text__codewrap .tok-invalid { color: #cf222e; }
 
-/* Syntax highlighting — dark theme */
+/* Syntax highlighting â€” dark theme */
 .theme-dark .ai-text-panel__msg-text--markdown .tok-comment,
 .theme-dark .ai-text__codewrap .tok-comment { color: #6a9955; }
 .theme-dark .ai-text-panel__msg-text--markdown .tok-keyword,
@@ -4317,7 +4423,7 @@ canvas {
 
 
 /* ============================================================
-   RESPONSIVE — keep the AI Text launcher reachable on mobile
+   RESPONSIVE â€” keep the AI Text launcher reachable on mobile
    ============================================================ */
 @media (max-width: 768px) {
   /* `.bottom-controls-right` is hidden on mobile; the AI Text dock is the
@@ -4354,3 +4460,29 @@ canvas {
     transform: translateY(0);
   }
 }
+
+
+
+/* AI text code card: always keep the dark code-card look (theme-independent) */
+.ai-text__codewrap { background: #18181b !important; border-color: #27272a !important; }
+.ai-text__codewrap .tok-comment { color: #6a9955; }
+.ai-text__codewrap .tok-keyword { color: #569cd6; }
+.ai-text__codewrap .tok-string,
+.ai-text__codewrap .tok-string2 { color: #ce9178; }
+.ai-text__codewrap .tok-number { color: #b5cea8; }
+.ai-text__codewrap .tok-bool,
+.ai-text__codewrap .tok-atom,
+.ai-text__codewrap .tok-literal { color: #569cd6; }
+.ai-text__codewrap .tok-meta { color: #c586c0; }
+.ai-text__codewrap .tok-typeName,
+.ai-text__codewrap .tok-className,
+.ai-text__codewrap .tok-namespace,
+.ai-text__codewrap .tok-macroName { color: #4ec9b0; }
+.ai-text__codewrap .tok-variableName,
+.ai-text__codewrap .tok-variableName2,
+.ai-text__codewrap .tok-propertyName { color: #9cdcfe; }
+.ai-text__codewrap .tok-variableName.tok-definition { color: #dcdcaa; }
+.ai-text__codewrap .tok-operator,
+.ai-text__codewrap .tok-punctuation,
+.ai-text__codewrap .tok-labelName { color: #d4d4d4; }
+.ai-text__codewrap .tok-invalid { color: #f44747; }

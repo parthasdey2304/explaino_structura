@@ -471,17 +471,6 @@ export default function AIChatPanel({
       {showKeyInput && (
         <div className="ai-chat-panel__keybox">
           <label className="ai-chat-panel__keybox-label">
-            Mistral API key
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => saveKey(e.target.value)}
-              placeholder="Paste your key — stored only in this browser"
-              className="ai-chat-panel__keybox-input"
-              autoComplete="off"
-            />
-          </label>
-          <label className="ai-chat-panel__keybox-label">
             Model
             <select
               value={model}
@@ -496,7 +485,8 @@ export default function AIChatPanel({
             </select>
           </label>
           <p className="ai-chat-panel__keybox-hint">
-            Get a key at{" "}
+            Uses the same Mistral API key as the AI Text panel (bottom-right) — set it there once.
+            Need a key? Get one at{" "}
             <a href="https://console.mistral.ai/api-keys" target="_blank" rel="noreferrer noopener">
               console.mistral.ai/api-keys
             </a>
