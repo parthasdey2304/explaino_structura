@@ -4,12 +4,12 @@
 - cluster-only mode — file stats not available
 
 ## Summary
-- 556 nodes · 962 edges · 23 communities (17 shown, 6 thin omitted)
+- 555 nodes · 961 edges · 23 communities (17 shown, 6 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 13 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `38dcea62`
+- Built from commit: `5bff3c73`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -17,14 +17,14 @@
 - CodeEditorPanel.tsx
 - ExcalidrawWrapper.tsx
 - dataStructures.ts
-- dependencies
 - AITextSidebar.tsx
+- dependencies
 - instrumentation.ts
 - devDependencies
 - compilerOptions
-- AIChatPanel.tsx
 - TerminalService
 - getEditorSettings
+- highlight.ts
 - ExplanioPanel.tsx
 - GeminiLiveSession
 - ExcalidrawErrorBoundary
@@ -46,8 +46,8 @@
 5. `GeminiLiveSession` - 15 edges
 6. `TerminalService` - 14 edges
 7. `recognizeShape()` - 13 edges
-8. `getEditorSettings()` - 11 edges
-9. `createCodeCardSvg()` - 11 edges
+8. `createCodeCardSvg()` - 11 edges
+9. `getEditorSettings()` - 11 edges
 10. `ExplanioPanel()` - 10 edges
 
 ## Surprising Connections (you probably didn't know these)
@@ -68,24 +68,24 @@
 ## Communities (23 total, 6 thin omitted)
 
 ### Community 0 - "CodeEditorPanel.tsx"
-Cohesion: 0.06
-Nodes (63): baseLangExtension(), cmHighlight, cmTheme, CodeEditorPanel(), CodeEditorPanelProps, FILE_ICON_COLORS, langExtension(), LANGUAGES (+55 more)
+Cohesion: 0.05
+Nodes (64): baseLangExtension(), cmHighlight, cmTheme, CodeEditorPanel(), CodeEditorPanelProps, FILE_ICON_COLORS, langExtension(), LANGUAGES (+56 more)
 
 ### Community 1 - "ExcalidrawWrapper.tsx"
-Cohesion: 0.06
+Cohesion: 0.07
 Nodes (56): boxOf(), DSMeta, ExcalidrawComponent, ExcalidrawWrapper(), load(), harvestLabels(), isPointPair(), LINEAR_TYPES (+48 more)
 
 ### Community 2 - "dataStructures.ts"
 Cohesion: 0.07
 Nodes (49): CanvasStructureControls(), CanvasStructureControlsProps, ViewportBox, BuilderState, DataStructuresPanel(), DataStructuresPanelProps, ICONS, initBuilderState() (+41 more)
 
-### Community 3 - "dependencies"
+### Community 3 - "AITextSidebar.tsx"
+Cohesion: 0.08
+Nodes (45): AIChatPanel(), AIChatPanelProps, AttachedFile, DisplayMessage, loadChatHistory(), nextId(), renderMarkdown(), saveChatHistory() (+37 more)
+
+### Community 4 - "dependencies"
 Cohesion: 0.04
 Nodes (49): codemirror, @codemirror/commands, @codemirror/lang-cpp, @codemirror/lang-html, @codemirror/lang-java, @codemirror/lang-javascript, @codemirror/lang-python, @codemirror/language (+41 more)
-
-### Community 4 - "AITextSidebar.tsx"
-Cohesion: 0.07
-Nodes (36): AITextSidebar(), AITextSidebarProps, AssistantBody(), CANONICAL_ORDER, code(), copyText(), createSpeechRecognition(), extractSolutions() (+28 more)
 
 ### Community 5 - "instrumentation.ts"
 Cohesion: 0.09
@@ -99,17 +99,17 @@ Nodes (32): eslint, eslint-config-next, lightningcss-win32-x64-msvc, @next/swc-w
 Cohesion: 0.07
 Nodes (28): dom, dom.iterable, esnext, **/*.mts, .next/dev/types/**/*.ts, next-env.d.ts, .next/types/**/*.ts, node_modules (+20 more)
 
-### Community 8 - "AIChatPanel.tsx"
-Cohesion: 0.16
-Nodes (24): AIChatPanel(), AIChatPanelProps, AttachedFile, DisplayMessage, loadChatHistory(), nextId(), renderMarkdown(), saveChatHistory() (+16 more)
-
-### Community 9 - "TerminalService"
+### Community 8 - "TerminalService"
 Cohesion: 0.11
 Nodes (12): POST(), POST(), POST(), POST(), POST(), HistoryEntry, Terminal(), TerminalProps (+4 more)
 
-### Community 10 - "getEditorSettings"
+### Community 9 - "getEditorSettings"
 Cohesion: 0.13
-Nodes (23): OPTIONS, SettingsMenu(), DEFAULTS, EditorSettings, getEditorSettings(), readFromStorage(), setEditorSettings(), subscribeEditorSettings() (+15 more)
+Nodes (22): OPTIONS, SettingsMenu(), DEFAULTS, EditorSettings, getEditorSettings(), readFromStorage(), setEditorSettings(), subscribeEditorSettings() (+14 more)
+
+### Community 10 - "highlight.ts"
+Cohesion: 0.14
+Nodes (15): code(), ALIASES, createCodeCardSvg(), compensateForDarkCanvas(), hexToRgb(), rgbToHex(), CSS_LANG, escapeHtml() (+7 more)
 
 ### Community 11 - "ExplanioPanel.tsx"
 Cohesion: 0.18
@@ -143,17 +143,17 @@ Nodes (3): ChatMessage, isChatMessage(), POST()
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `GeminiLiveSession` connect `GeminiLiveSession` to `AIChatPanel.tsx`?**
+- **Why does `GeminiLiveSession` connect `GeminiLiveSession` to `AITextSidebar.tsx`?**
   _High betweenness centrality (0.028) - this node is a cross-community bridge._
-- **Why does `createCodeCardSvg()` connect `AITextSidebar.tsx` to `ExcalidrawWrapper.tsx`?**
+- **Why does `createCodeCardSvg()` connect `highlight.ts` to `ExcalidrawWrapper.tsx`?**
   _High betweenness centrality (0.018) - this node is a cross-community bridge._
 - **What connects `CodeEditorPanelProps`, `RunStatus`, `Creating` to the rest of the system?**
   _167 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `CodeEditorPanel.tsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.05570611261668172 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05495151337055539 - nodes in this community are weakly interconnected._
 - **Should `ExcalidrawWrapper.tsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.06393442622950819 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.0655367231638418 - nodes in this community are weakly interconnected._
 - **Should `dataStructures.ts` be split into smaller, more focused modules?**
   _Cohesion score 0.07071887784921099 - nodes in this community are weakly interconnected._
-- **Should `dependencies` be split into smaller, more focused modules?**
-  _Cohesion score 0.04081632653061224 - nodes in this community are weakly interconnected._
+- **Should `AITextSidebar.tsx` be split into smaller, more focused modules?**
+  _Cohesion score 0.07541478129713423 - nodes in this community are weakly interconnected._

@@ -174,7 +174,8 @@ const MAX_FRAME_THUMBS = 10;
 /** Render small PNG thumbnails for evenly sampled frames. */
 async function buildFrameThumbs(
   frames: { t: number; elements: Record<string, unknown>[] }[],
-  files: unknown
+  files: unknown,
+  dark: boolean
 ): Promise<ExplanioFrame[]> {
   if (frames.length === 0) return [];
   const step = Math.max(1, Math.floor(frames.length / MAX_FRAME_THUMBS));
@@ -182,11 +183,20 @@ async function buildFrameThumbs(
   const out: ExplanioFrame[] = [];
   for (const f of sampled) {
     try {
+      // Bake the theme appearance in: dark-mode strokes are stored inverted
+      // (the canvas CSS filter un-inverts them), so export explicitly in the
+      // current theme or the replay renders near-invisible.
       const canvas = await exportToCanvas({
         elements: f.elements,
-        appState: { viewBackgroundColor: "transparent" },
+        appState: {
+          viewBackgroundColor: dark ? "#121212" : "#ffffff",
+          exportBackground: true,
+          exportWithDarkMode: dark,
+        },
         files,
-        maxWidthOrHeight: 220,
+        // High enough resolution that upscaling to the region stays crisp.
+        maxWidthOrHeight: 880,
+        exportPadding: 0,
       } as unknown as Parameters<typeof exportToCanvas>[0]);
       out.push({ t: f.t, img: canvas.toDataURL("image/png"), bbox: contentBBox(f.elements) });
     } catch {
@@ -252,6 +262,7 @@ export default function ExplanioPanel({
   const [livePeaks, setLivePeaks] = useState<number[]>([]);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  const [curTime, setCurTime] = useState(0);
   const [frame, setFrame] = useState<ExplanioFrame | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -463,7 +474,10 @@ export default function ExplanioPanel({
         try {
           const audio = await blobToDataUrl(blob);
           const data = getSceneData();
-          const frames = await buildFrameThumbs(framesRef.current, data?.files ?? {});
+          const dark =
+            typeof document !== "undefined" &&
+            document.documentElement.classList.contains("theme-dark");
+          const frames = await buildFrameThumbs(framesRef.current, data?.files ?? {}, dark);
           const note: ExplanioNote = {
             id: nextId(),
             createdAt: startedAt,
@@ -565,20 +579,37 @@ export default function ExplanioPanel({
       };
       next.ontimeupdate = () => {
         if (next.duration) setProgress(next.currentTime / next.duration);
+        setCurTime(next.currentTime);
         pickFrame();
       };
       next.onended = () => {
         setPlayingId(null);
         setProgress(0);
+        setCurTime(0);
       };
       next.onseeked = pickFrame;
       setActiveId(ready.id);
       setProgress(0);
+      setCurTime(0);
       setPlayingId(ready.id);
       pickFrame();
       void next.play().catch(() => setPlayingId(null));
     },
     [ensureMedia, playingId]
+  );
+
+  /** Click/drag on the waveform to seek back and forth. */
+  const seekTo = useCallback(
+    (e: React.PointerEvent, note: ExplanioNote) => {
+      const audio = audioRef.current;
+      if (!audio || !audio.duration || playingId !== note.id) return;
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / Math.max(1, rect.width)));
+      audio.currentTime = ratio * audio.duration;
+      setProgress(ratio);
+      setCurTime(audio.currentTime);
+    },
+    [playingId]
   );
 
   const removeNote = useCallback(
@@ -765,9 +796,28 @@ export default function ExplanioPanel({
                   {playingId === active.id ? <Pause size={15} /> : <Play size={15} />}
                 </button>
                 <div className="explanio__player-main">
-                  <Waveform peaks={active.peaks} progress={playingId === active.id ? progress : 0} />
+                  <div
+                    className="explanio__seek"
+                    role="slider"
+                    aria-label="Seek"
+                    aria-valuemin={0}
+                    aria-valuemax={Math.round(active.durationSec)}
+                    aria-valuenow={Math.round(playingId === active.id ? curTime : 0)}
+                    onPointerDown={(e) => {
+                      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+                      seekTo(e, active);
+                    }}
+                    onPointerMove={(e) => {
+                      if (e.buttons > 0) seekTo(e, active);
+                    }}
+                    title="Click or drag to seek"
+                  >
+                    <Waveform peaks={active.peaks} progress={playingId === active.id ? progress : 0} />
+                  </div>
                   <div className="explanio__meta">
-                    {fmtTime(active.durationSec)}
+                    {playingId === active.id
+                      ? `${fmtTime(curTime)} / ${fmtTime(active.durationSec)}`
+                      : fmtTime(active.durationSec)}
                     {syncing[active.id] ? " · syncing…" : active.cloud ? " · cloud" : " · local"}
                   </div>
                 </div>
