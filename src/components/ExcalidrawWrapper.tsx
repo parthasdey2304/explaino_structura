@@ -1154,6 +1154,7 @@ export default function ExcalidrawWrapper() {
   }, []);
 
   // Apply ordered ("1. 2. 3.") or bullet ("•") list formatting to one text box.
+  // Clicking the same button again removes the formatting (toggle).
   const applyListToText = useCallback(
     (id: string, kind: "ordered" | "bullet") => {
       const api = excalidrawAPI.current;
@@ -1162,11 +1163,32 @@ export default function ExcalidrawWrapper() {
       if (!target || target.isDeleted || target.type !== "text") return;
       const t = target as unknown as { text?: string; customData?: { markdownRaw?: string } };
       const current = typeof t.customData?.markdownRaw === "string" ? t.customData.markdownRaw : (t.text ?? "");
-      const stripped = current.split("\n").map((l) => l.replace(/^\s*(?:\d+\.\s*|[•\-*]\s*)/, "").trimEnd());
-      const listed =
-        kind === "ordered"
-          ? stripped.map((l, i) => (l ? `${i + 1}. ${l}` : "")).join("\n")
-          : stripped.map((l) => (l ? `• ${l}` : "")).join("\n");
+      const lines = current.split("\n");
+      const nonEmpty = lines.filter((l) => l.trim());
+      const stripLine = (l: string) => l.replace(/^\s*(?:\d+[.)]\s*|[•\-*]\s*)/, "").trimEnd();
+      const isOrdered = nonEmpty.length > 0 && nonEmpty.every((l) => /^\s*\d+[.)]\s/.test(l));
+      const isBulleted = nonEmpty.length > 0 && nonEmpty.every((l) => /^\s*[•\-*]\s/.test(l));
+      let listed: string;
+      if ((kind === "ordered" && isOrdered) || (kind === "bullet" && isBulleted)) {
+        listed = lines.map(stripLine).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+      } else if (kind === "ordered") {
+        let n = 0;
+        listed = lines
+          .map((l) => {
+            const s = stripLine(l);
+            if (!s) return "";
+            n += 1;
+            return `${n}. ${s}`;
+          })
+          .join("\n");
+      } else {
+        listed = lines
+          .map((l) => {
+            const s = stripLine(l);
+            return s ? `• ${s}` : "";
+          })
+          .join("\n");
+      }
       handleUpdateCanvasText(id, listed);
       setListMode(kind);
       setSelectedTextId(id);
