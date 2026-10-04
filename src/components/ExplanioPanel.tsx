@@ -7,15 +7,32 @@ import {
   sceneCoordsToViewportCoords,
   viewportCoordsToSceneCoords,
 } from "@excalidraw/excalidraw";
+import { db, storage } from "@/lib/firebase";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  setDoc,
+} from "firebase/firestore";
+import { deleteObject, getDownloadURL, ref, uploadBytes, uploadString } from "firebase/storage";
 
 const STORAGE_KEY = "explaino-explanio-notes-v1";
 const MAX_NOTES = 20;
+// Keep total stored JSON safely under the ~5MB localStorage quota so notes
+// always survive a reload. Frames are shed first, then scenes, then old notes.
+const STORE_BUDGET = 4_000_000;
 
 export interface ExplanioFrame {
   /** Seconds since recording start. */
   t: number;
   /** Small PNG thumbnail of the region at time t. */
   img: string;
+  /** Content bounding box (scene coords) of this frame. */
+  bbox: { minX: number; minY: number; maxX: number; maxY: number };
 }
 
 export interface ExplanioNote {
@@ -29,7 +46,13 @@ export interface ExplanioNote {
   scene: string | null;
   /** Playback-synced thumbnails of shapes drawn inside the region. */
   frames: ExplanioFrame[];
+  /** Capture rectangle in scene coords — pointwise canvas placement for recall. */
+  region: SceneRegion | null;
+  /** True once metadata + media live in Firebase. */
+  cloud: boolean;
 }
+
+const CLOUD_COLLECTION = "explanio_notes";
 
 interface SceneRegion {
   minX: number;
@@ -61,18 +84,43 @@ function loadNotes(): ExplanioNote[] {
         (n): n is ExplanioNote =>
           !!n && typeof n.id === "string" && typeof n.audio === "string"
       )
-      .map((n) => ({ ...n, frames: Array.isArray(n.frames) ? n.frames : [] }));
+      .map((n) => ({
+        ...n,
+        frames: Array.isArray(n.frames) ? n.frames : [],
+        region: n.region ?? null,
+        cloud: n.cloud ?? false,
+      }));
   } catch {
     return [];
   }
 }
 
-function saveNotes(notes: ExplanioNote[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(notes.slice(0, MAX_NOTES)));
-  } catch {
-    // quota — voice notes are best-effort in local cache
+function saveNotes(notes: ExplanioNote[]): { kept: ExplanioNote[]; trimmed: boolean } {
+  const fitted = notes.slice(0, MAX_NOTES).map((n) => ({ ...n, frames: [...n.frames] }));
+  const size = () => JSON.stringify(fitted).length;
+  let trimmed = false;
+  // 1. Shed replay thumbnails from the oldest notes first.
+  for (let i = fitted.length - 1; i >= 0 && size() > STORE_BUDGET; i--) {
+    while (fitted[i].frames.length > 0 && size() > STORE_BUDGET) {
+      const f = fitted[i].frames;
+      fitted[i] = { ...fitted[i], frames: f.filter((_, j) => j % 2 === 0).slice(0, Math.max(1, f.length >> 1)) };
+      trimmed = true;
+    }
   }
+  // 2. Drop scene snapshots, oldest first.
+  for (let i = fitted.length - 1; i >= 0 && size() > STORE_BUDGET; i--) {
+    if (fitted[i].scene) {
+      fitted[i] = { ...fitted[i], scene: null };
+      trimmed = true;
+    }
+  }
+  // 3. Drop oldest notes entirely.
+  while (fitted.length > 1 && size() > STORE_BUDGET) {
+    fitted.pop();
+    trimmed = true;
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(fitted));
+  return { kept: fitted, trimmed };
 }
 
 function nextId(): string {
@@ -122,7 +170,6 @@ function clipSceneToRegion(sceneJson: string | null, region: SceneRegion): strin
 }
 
 const MAX_FRAME_THUMBS = 10;
-const NOTE_JSON_BUDGET = 3_000_000;
 
 /** Render small PNG thumbnails for evenly sampled frames. */
 async function buildFrameThumbs(
@@ -141,12 +188,32 @@ async function buildFrameThumbs(
         files,
         maxWidthOrHeight: 220,
       } as unknown as Parameters<typeof exportToCanvas>[0]);
-      out.push({ t: f.t, img: canvas.toDataURL("image/png") });
+      out.push({ t: f.t, img: canvas.toDataURL("image/png"), bbox: contentBBox(f.elements) });
     } catch {
       // skip frames that fail to render
     }
   }
   return out;
+}
+
+function contentBBox(
+  elements: Record<string, unknown>[]
+): { minX: number; minY: number; maxX: number; maxY: number } {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const el of elements) {
+    if (typeof el.x !== "number" || typeof el.y !== "number") continue;
+    const w = typeof el.width === "number" ? el.width : 0;
+    const h = typeof el.height === "number" ? el.height : 0;
+    minX = Math.min(minX, el.x);
+    minY = Math.min(minY, el.y);
+    maxX = Math.max(maxX, el.x + w);
+    maxY = Math.max(maxY, el.y + h);
+  }
+  if (!Number.isFinite(minX)) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+  return { minX, minY, maxX, maxY };
 }
 
 function Waveform({ peaks, progress = 0 }: { peaks: number[]; progress?: number }) {
@@ -185,9 +252,12 @@ export default function ExplanioPanel({
   const [livePeaks, setLivePeaks] = useState<number[]>([]);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
-  const [frameImg, setFrameImg] = useState<string | null>(null);
+  const [frame, setFrame] = useState<ExplanioFrame | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [storageTight, setStorageTight] = useState(false);
+  const [syncing, setSyncing] = useState<Record<string, boolean>>({});
+  const [cloudError, setCloudError] = useState(false);
 
   const mediaRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -199,7 +269,17 @@ export default function ExplanioPanel({
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    saveNotes(notes);
+    try {
+      const { kept, trimmed } = saveNotes(notes);
+      setStorageTight(trimmed);
+      if (kept.length < notes.length) {
+        // Storage could not hold everything — keep state identical to disk
+        // so a reload shows exactly what is here now.
+        setNotes(kept);
+      }
+    } catch {
+      setError("Browser storage is full — this note will vanish on reload. Delete old notes.");
+    }
   }, [notes]);
 
   const stopTracks = useCallback(() => {
@@ -223,6 +303,113 @@ export default function ExplanioPanel({
     },
     [stopTracks]
   );
+
+  // ── Firebase split storage ───────────────────────────────────
+  // Cache (localStorage): lightweight metadata + region only.
+  // Firebase: audio bytes + frames in Storage, doc in Firestore.
+  const syncNoteToCloud = useCallback(async (note: ExplanioNote, audioBlob: Blob) => {
+    setSyncing((s) => ({ ...s, [note.id]: true }));
+    try {
+      await uploadBytes(ref(storage, `explanio/${note.id}/audio`), audioBlob, {
+        contentType: note.mimeType || "audio/webm",
+      });
+      await uploadString(
+        ref(storage, `explanio/${note.id}/frames.json`),
+        JSON.stringify(note.frames),
+        "raw",
+        { contentType: "application/json" }
+      );
+      await setDoc(doc(db, CLOUD_COLLECTION, note.id), {
+        createdAt: note.createdAt,
+        durationSec: note.durationSec,
+        mimeType: note.mimeType,
+        peaks: note.peaks.slice(0, 200),
+        region: note.region,
+      });
+      setNotes((prev) => prev.map((n) => (n.id === note.id ? { ...n, cloud: true } : n)));
+    } catch {
+      // Offline or rules deny — note stays local-only, still playable here.
+      setCloudError(true);
+    } finally {
+      setSyncing((s) => {
+        const next = { ...s };
+        delete next[note.id];
+        return next;
+      });
+    }
+  }, []);
+
+  // Pull cloud notes on open; merge with local (local wins on conflict).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDocs(
+          query(collection(db, CLOUD_COLLECTION), orderBy("createdAt", "desc"), limit(20))
+        );
+        if (cancelled) return;
+        const cloudNotes: ExplanioNote[] = snap.docs.map((d) => {
+          const v = d.data() as Record<string, unknown>;
+          return {
+            id: d.id,
+            createdAt: typeof v.createdAt === "number" ? v.createdAt : 0,
+            durationSec: typeof v.durationSec === "number" ? v.durationSec : 0,
+            mimeType: typeof v.mimeType === "string" ? v.mimeType : "audio/webm",
+            audio: "",
+            peaks: Array.isArray(v.peaks) ? (v.peaks as number[]) : [],
+            scene: null,
+            frames: [],
+            region: (v.region as SceneRegion | null) ?? null,
+            cloud: true,
+          };
+        });
+        setNotes((prev) => {
+          const ids = new Set(prev.map((n) => n.id));
+          const merged = [...prev];
+          for (const c of cloudNotes) {
+            if (!ids.has(c.id)) merged.push(c);
+            else {
+              const i = merged.findIndex((n) => n.id === c.id);
+              merged[i] = { ...merged[i], cloud: true, region: merged[i].region ?? c.region };
+            }
+          }
+          return merged.sort((a, b) => b.createdAt - a.createdAt).slice(0, MAX_NOTES);
+        });
+      } catch {
+        // Cloud unreachable — local cache still works.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /** Download a cloud note's media before first play. */
+  const ensureMedia = useCallback(async (note: ExplanioNote): Promise<ExplanioNote | null> => {
+    if (note.audio) return note;
+    try {
+      const [audioUrl, framesUrl] = await Promise.all([
+        getDownloadURL(ref(storage, `explanio/${note.id}/audio`)),
+        getDownloadURL(ref(storage, `explanio/${note.id}/frames.json`)),
+      ]);
+      const [audioRes, framesRes] = await Promise.all([fetch(audioUrl), fetch(framesUrl)]);
+      const blob = await audioRes.blob();
+      const audio = await blobToDataUrl(blob);
+      const frames = (await framesRes.json()) as ExplanioFrame[];
+      let merged: ExplanioNote | null = null;
+      setNotes((prev) =>
+        prev.map((n) => {
+          if (n.id !== note.id) return n;
+          merged = { ...n, audio, frames: Array.isArray(frames) ? frames : [] };
+          return merged;
+        })
+      );
+      return merged ?? { ...note, audio, frames: Array.isArray(frames) ? frames : [] };
+    } catch {
+      setError("Could not download this note — check connection.");
+      return null;
+    }
+  }, []);
 
   const captureFrame = useCallback(
     (atSec: number) => {
@@ -276,8 +463,8 @@ export default function ExplanioPanel({
         try {
           const audio = await blobToDataUrl(blob);
           const data = getSceneData();
-          let frames = await buildFrameThumbs(framesRef.current, data?.files ?? {});
-          let note: ExplanioNote = {
+          const frames = await buildFrameThumbs(framesRef.current, data?.files ?? {});
+          const note: ExplanioNote = {
             id: nextId(),
             createdAt: startedAt,
             durationSec: recSec,
@@ -286,16 +473,12 @@ export default function ExplanioPanel({
             peaks: peaksRef.current,
             scene: clipSceneToRegion(getSceneSnapshot(), region),
             frames,
+            region,
+            cloud: false,
           };
-          // Respect browser storage budget — shed thumbnails first.
-          while (JSON.stringify(note).length > NOTE_JSON_BUDGET && note.frames.length > 0) {
-            note = { ...note, frames: note.frames.filter((_, i) => i % 2 === 0).slice(0, Math.max(1, note.frames.length >> 1)) };
-          }
-          if (JSON.stringify(note).length > NOTE_JSON_BUDGET) {
-            note = { ...note, frames: [], scene: null };
-          }
           setNotes((prev) => [note, ...prev].slice(0, MAX_NOTES));
           setActiveId(note.id);
+          void syncNoteToCloud(note, blob);
         } catch {
           setError("Could not save recording (browser storage).");
         }
@@ -352,7 +535,7 @@ export default function ExplanioPanel({
   }, []);
 
   const togglePlay = useCallback(
-    (note: ExplanioNote) => {
+    async (note: ExplanioNote) => {
       const audio = audioRef.current;
       if (playingId === note.id && audio) {
         audio.pause();
@@ -360,20 +543,25 @@ export default function ExplanioPanel({
         return;
       }
       if (audio) audio.pause();
-      const next = new Audio(note.audio);
+      const ready = await ensureMedia(note);
+      if (!ready || !ready.audio) return;
+      // Position-aware recall: jump the docks to where this note was recorded.
+      if (ready.region) setRegion(ready.region);
+      const next = new Audio(ready.audio);
       audioRef.current = next;
+      const frames = ready.frames;
       const pickFrame = () => {
-        if (note.frames.length === 0) {
-          setFrameImg(null);
+        if (frames.length === 0) {
+          setFrame(null);
           return;
         }
         const t = next.currentTime;
-        let img = note.frames[0].img;
-        for (const f of note.frames) {
-          if (f.t <= t) img = f.img;
+        let best = frames[0];
+        for (const f of frames) {
+          if (f.t <= t) best = f;
           else break;
         }
-        setFrameImg((prev) => (prev === img ? prev : img));
+        setFrame((prev) => (prev?.img === best.img ? prev : best));
       };
       next.ontimeupdate = () => {
         if (next.duration) setProgress(next.currentTime / next.duration);
@@ -384,13 +572,13 @@ export default function ExplanioPanel({
         setProgress(0);
       };
       next.onseeked = pickFrame;
-      setActiveId(note.id);
+      setActiveId(ready.id);
       setProgress(0);
-      setPlayingId(note.id);
+      setPlayingId(ready.id);
       pickFrame();
       void next.play().catch(() => setPlayingId(null));
     },
-    [playingId]
+    [ensureMedia, playingId]
   );
 
   const removeNote = useCallback(
@@ -398,19 +586,34 @@ export default function ExplanioPanel({
       if (playingId === id) {
         audioRef.current?.pause();
         setPlayingId(null);
-        setFrameImg(null);
+        setFrame(null);
       }
       setNotes((prev) => prev.filter((n) => n.id !== id));
       setActiveId((prev) => (prev === id ? null : prev));
+      // Best-effort cloud cleanup (keeps Firebase space minimal).
+      void (async () => {
+        try {
+          await deleteDoc(doc(db, CLOUD_COLLECTION, id));
+        } catch {
+          // already gone or offline — local delete stands
+        }
+        for (const p of [`explanio/${id}/audio`, `explanio/${id}/frames.json`]) {
+          try {
+            await deleteObject(ref(storage, p));
+          } catch {
+            // ignore
+          }
+        }
+      })();
     },
     [playingId]
   );
 
   const active = notes.find((n) => n.id === activeId) ?? notes[0] ?? null;
-  const previewImg =
-    active && playingId === active.id
-      ? frameImg
-      : (active?.frames.length ? active.frames[active.frames.length - 1].img : null);
+  const replaying = playingId !== null && (active?.frames.length ?? 0) > 0 && active?.id === playingId;
+
+  const replayRef = useRef<HTMLCanvasElement | null>(null);
+  const replayImgRef = useRef<HTMLImageElement | null>(null);
 
   const onDrawDown = useCallback((e: React.PointerEvent) => {
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
@@ -464,6 +667,47 @@ export default function ExplanioPanel({
       }
     : null;
 
+  // Docks zoom with the canvas (clamped so they stay usable at extremes).
+  const zoomScale = Math.max(0.5, Math.min(1.5, viewport.zoom.value || 1));
+
+  // Draw the current replay frame onto the region overlay canvas,
+  // mapping the frame's scene-space bbox onto the region's screen rect
+  // (uniform zoom — axes and pixels stay true, no distortion).
+  useEffect(() => {
+    const canvas = replayRef.current;
+    if (!canvas || !region || !box) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, box.right - box.left);
+    const h = Math.max(1, box.bottom - box.top);
+    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    if (!replaying || !frame) return;
+    const zoom = w / Math.max(1, region.maxX - region.minX);
+    const img = new Image();
+    img.onload = () => {
+      const c = replayRef.current;
+      if (!c || !region) return;
+      const cc = c.getContext("2d");
+      if (!cc) return;
+      const d = window.devicePixelRatio || 1;
+      cc.setTransform(d, 0, 0, d, 0, 0);
+      const fx = (frame.bbox.minX - region.minX) * zoom;
+      const fy = (frame.bbox.minY - region.minY) * zoom;
+      const fw = Math.max(1, (frame.bbox.maxX - frame.bbox.minX) * zoom);
+      const fh = Math.max(1, (frame.bbox.maxY - frame.bbox.minY) * zoom);
+      cc.clearRect(0, 0, w, h);
+      cc.drawImage(img, fx, fy, fw, fh);
+    };
+    img.src = frame.img;
+    replayImgRef.current = img;
+  }, [box, region, frame, replaying]);
+
   return (
     <>
       {/* Draw-a-rectangle step: transparent capture layer over the canvas. */}
@@ -493,11 +737,22 @@ export default function ExplanioPanel({
       {region && box && (
         <>
           <div
-            className="explanio-region"
+            className={`explanio-region${replaying ? " explanio-region--playing" : ""}`}
             style={{ left: box.left, top: box.top, width: box.right - box.left, height: box.bottom - box.top }}
           />
+          {/* Drawing replay — renders inside the rectangle, synced to the voice. */}
+          {replaying && (
+            <canvas
+              ref={replayRef}
+              className="explanio-replay"
+              style={{ left: box.left, top: box.top, width: box.right - box.left, height: box.bottom - box.top }}
+            />
+          )}
           {/* Listener side — top right of the rectangle */}
-          <div className="explanio-dock explanio-dock--listen" style={{ left: box.right - 232, top: box.top - 58 }}>
+          <div
+            className="explanio-dock explanio-dock--listen"
+            style={{ left: box.right, top: box.top, transform: `scale(${zoomScale}) translate(-100%, -100%)` }}
+          >
             {active ? (
               <div className="explanio__player explanio__player--dock">
                 <button
@@ -510,11 +765,11 @@ export default function ExplanioPanel({
                   {playingId === active.id ? <Pause size={15} /> : <Play size={15} />}
                 </button>
                 <div className="explanio__player-main">
-                  {previewImg && (
-                    <img className="explanio__preview" src={previewImg} alt="Canvas activity during recording" />
-                  )}
                   <Waveform peaks={active.peaks} progress={playingId === active.id ? progress : 0} />
-                  <div className="explanio__meta">{fmtTime(active.durationSec)}</div>
+                  <div className="explanio__meta">
+                    {fmtTime(active.durationSec)}
+                    {syncing[active.id] ? " · syncing…" : active.cloud ? " · cloud" : " · local"}
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -539,8 +794,10 @@ export default function ExplanioPanel({
                     onClick={() => {
                       audioRef.current?.pause();
                       setPlayingId(null);
-                      setFrameImg(null);
+                      setFrame(null);
                       setActiveId(n.id);
+                      // Position-aware recall: jump to where it was recorded.
+                      if (n.region) setRegion(n.region);
                     }}
                   >
                     {fmtTime(n.durationSec)}
@@ -550,7 +807,10 @@ export default function ExplanioPanel({
             )}
           </div>
           {/* Recorder side — bottom right of the rectangle */}
-          <div className="explanio-dock explanio-dock--record" style={{ left: box.right - 232, top: box.bottom + 10 }}>
+          <div
+            className="explanio-dock explanio-dock--record"
+            style={{ left: box.right, top: box.bottom, transform: `scale(${zoomScale}) translate(-100%, 10px)` }}
+          >
             <button
               type="button"
               className={`explanio__rec${recording ? " explanio__rec--on" : ""}`}
@@ -580,6 +840,12 @@ export default function ExplanioPanel({
               <X size={12} strokeWidth={2.5} />
             </button>
             {error && <div className="explanio__error">{error}</div>}
+            {!error && cloudError && (
+              <div className="explanio__meta">Cloud unreachable — notes stay in local cache.</div>
+            )}
+            {!error && storageTight && (
+              <div className="explanio__meta">Storage nearly full — oldest replays trimmed to keep notes saved.</div>
+            )}
           </div>
         </>
       )}
