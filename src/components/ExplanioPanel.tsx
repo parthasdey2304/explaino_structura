@@ -2,6 +2,10 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Mic, Pause, Play, Square, Trash2, X } from "lucide-react";
+import {
+  sceneCoordsToViewportCoords,
+  viewportCoordsToSceneCoords,
+} from "@excalidraw/excalidraw";
 
 const STORAGE_KEY = "explaino-explanio-notes-v1";
 const MAX_NOTES = 20;
@@ -15,6 +19,21 @@ export interface ExplanioNote {
   peaks: number[];
   /** Canvas scene snapshot captured with the recording (for review). */
   scene: string | null;
+}
+
+interface SceneRegion {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+interface Viewport {
+  zoom: { value: number };
+  offsetLeft: number;
+  offsetTop: number;
+  scrollX: number;
+  scrollY: number;
 }
 
 // ── Storage adapter ──────────────────────────────────────────────
@@ -63,6 +82,24 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+/** Keep only the elements that intersect the capture region. */
+function clipSceneToRegion(sceneJson: string | null, region: SceneRegion): string | null {
+  if (!sceneJson) return null;
+  try {
+    const els = JSON.parse(sceneJson);
+    if (!Array.isArray(els)) return sceneJson;
+    const kept = els.filter((el) => {
+      if (!el || typeof el.x !== "number" || typeof el.y !== "number") return false;
+      const w = typeof el.width === "number" ? el.width : 0;
+      const h = typeof el.height === "number" ? el.height : 0;
+      return el.x < region.maxX && el.x + w > region.minX && el.y < region.maxY && el.y + h > region.minY;
+    });
+    return JSON.stringify(kept);
+  } catch {
+    return sceneJson;
+  }
+}
+
 function Waveform({ peaks, progress = 0 }: { peaks: number[]; progress?: number }) {
   const bars = peaks.length > 0 ? peaks : new Array(32).fill(0.15);
   const shown = bars.slice(0, 64);
@@ -82,11 +119,15 @@ function Waveform({ peaks, progress = 0 }: { peaks: number[]; progress?: number 
 export default function ExplanioPanel({
   onClose,
   getSceneSnapshot,
+  viewport,
 }: {
   onClose: () => void;
   getSceneSnapshot: () => string | null;
+  viewport: Viewport;
 }) {
   const [notes, setNotes] = useState<ExplanioNote[]>(() => loadNotes());
+  const [region, setRegion] = useState<SceneRegion | null>(null);
+  const [drawing, setDrawing] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [recording, setRecording] = useState(false);
   const [recSec, setRecSec] = useState(0);
   const [livePeaks, setLivePeaks] = useState<number[]>([]);
@@ -129,7 +170,26 @@ export default function ExplanioPanel({
     [stopTracks]
   );
 
+  const toScene = useCallback(
+    (clientX: number, clientY: number) =>
+      viewportCoordsToSceneCoords(
+        { clientX, clientY },
+        viewport as unknown as Parameters<typeof viewportCoordsToSceneCoords>[1]
+      ),
+    [viewport]
+  );
+
+  const toViewport = useCallback(
+    (sceneX: number, sceneY: number) =>
+      sceneCoordsToViewportCoords(
+        { sceneX, sceneY },
+        viewport as unknown as Parameters<typeof sceneCoordsToViewportCoords>[1]
+      ),
+    [viewport]
+  );
+
   const startRecording = useCallback(async () => {
+    if (!region) return;
     setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -154,7 +214,7 @@ export default function ExplanioPanel({
             mimeType: blob.type,
             audio,
             peaks: peaksRef.current,
-            scene: getSceneSnapshot(),
+            scene: clipSceneToRegion(getSceneSnapshot(), region),
           };
           setNotes((prev) => [note, ...prev].slice(0, MAX_NOTES));
           setActiveId(note.id);
@@ -166,9 +226,11 @@ export default function ExplanioPanel({
       };
       // Live waveform sampling.
       try {
-        const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-        if (Ctx) {
-          const ctx = new Ctx();
+        const Ctor =
+          window.AudioContext ??
+          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (Ctor) {
+          const ctx = new Ctor();
           const src = ctx.createMediaStreamSource(stream);
           const analyser = ctx.createAnalyser();
           analyser.fftSize = 256;
@@ -198,7 +260,7 @@ export default function ExplanioPanel({
     } catch {
       setError("Microphone unavailable — allow mic access to record.");
     }
-  }, [getSceneSnapshot, recSec, stopTracks]);
+  }, [getSceneSnapshot, recSec, region, stopTracks]);
 
   const stopRecording = useCallback(() => {
     mediaRef.current?.stop();
@@ -244,97 +306,173 @@ export default function ExplanioPanel({
 
   const active = notes.find((n) => n.id === activeId) ?? notes[0] ?? null;
 
-  return (
-    <div className="explanio-panel excalidraw-island" role="dialog" aria-label="Explanio voice notes">
-      <div className="explanio-panel__header">
-        <span className="explanio-panel__title">
-          <Mic size={14} strokeWidth={2.2} />
-          Explanio
-        </span>
-        <button type="button" className="explanio-panel__close" onClick={onClose} title="Close" aria-label="Close Explanio">
-          <X size={14} strokeWidth={2.5} />
-        </button>
-      </div>
+  const onDrawDown = useCallback((e: React.PointerEvent) => {
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    setDrawing({ x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY });
+  }, []);
 
-      {/* Listener side — playback + waveform */}
-      <div className="explanio__section">
-        <div className="explanio__section-label">Listen</div>
-        {active ? (
-          <div className="explanio__player">
+  const onDrawMove = useCallback(
+    (e: React.PointerEvent) => {
+      setDrawing((d) => (d ? { ...d, x1: e.clientX, y1: e.clientY } : d));
+    },
+    []
+  );
+
+  const onDrawUp = useCallback(() => {
+    setDrawing((d) => {
+      if (d) {
+        const w = Math.abs(d.x1 - d.x0);
+        const h = Math.abs(d.y1 - d.y0);
+        if (w > 24 && h > 24) {
+          const a = toScene(Math.min(d.x0, d.x1), Math.min(d.y0, d.y1));
+          const b = toScene(Math.max(d.x0, d.x1), Math.max(d.y0, d.y1));
+          setRegion({ minX: a.x, minY: a.y, maxX: b.x, maxY: b.y });
+        }
+      }
+      return null;
+    });
+  }, [toScene]);
+
+  const clearRegion = useCallback(() => {
+    if (recording) stopRecording();
+    audioRef.current?.pause();
+    setPlayingId(null);
+    setRegion(null);
+  }, [recording, stopRecording]);
+
+  const box = region
+    ? {
+        left: toViewport(region.minX, region.minY).x,
+        top: toViewport(region.minX, region.minY).y,
+        right: toViewport(region.maxX, region.maxY).x,
+        bottom: toViewport(region.maxX, region.maxY).y,
+      }
+    : null;
+
+  const draft = drawing
+    ? {
+        left: Math.min(drawing.x0, drawing.x1),
+        top: Math.min(drawing.y0, drawing.y1),
+        width: Math.abs(drawing.x1 - drawing.x0),
+        height: Math.abs(drawing.y1 - drawing.y0),
+      }
+    : null;
+
+  return (
+    <>
+      {/* Draw-a-rectangle step: transparent capture layer over the canvas. */}
+      {!region && (
+        <div
+          className="explanio-draw"
+          onPointerDown={onDrawDown}
+          onPointerMove={onDrawMove}
+          onPointerUp={onDrawUp}
+        >
+          <div className="explanio-draw__hint">
+            Drag on the canvas to mark the capture rectangle
+            <button type="button" className="explanio-draw__close" onClick={onClose} aria-label="Close Explanio">
+              <X size={13} strokeWidth={2.5} />
+            </button>
+          </div>
+          {draft && (
+            <div
+              className="explanio-region explanio-region--draft"
+              style={{ left: draft.left, top: draft.top, width: draft.width, height: draft.height }}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Capture rectangle + anchored controls (hidden when Explanio is closed). */}
+      {region && box && (
+        <>
+          <div
+            className="explanio-region"
+            style={{ left: box.left, top: box.top, width: box.right - box.left, height: box.bottom - box.top }}
+          />
+          {/* Listener side — top right of the rectangle */}
+          <div className="explanio-dock explanio-dock--listen" style={{ left: box.right - 232, top: box.top - 58 }}>
+            {active ? (
+              <div className="explanio__player explanio__player--dock">
+                <button
+                  type="button"
+                  className="explanio__play"
+                  onClick={() => togglePlay(active)}
+                  title={playingId === active.id ? "Pause" : "Play"}
+                  aria-label={playingId === active.id ? "Pause" : "Play"}
+                >
+                  {playingId === active.id ? <Pause size={15} /> : <Play size={15} />}
+                </button>
+                <div className="explanio__player-main">
+                  <Waveform peaks={active.peaks} progress={playingId === active.id ? progress : 0} />
+                  <div className="explanio__meta">{fmtTime(active.durationSec)}</div>
+                </div>
+                <button
+                  type="button"
+                  className="explanio__delete"
+                  onClick={() => removeNote(active.id)}
+                  title="Delete note"
+                  aria-label="Delete note"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ) : (
+              <div className="explanio__empty">No voice notes yet.</div>
+            )}
+            {notes.length > 1 && (
+              <div className="explanio__list">
+                {notes.map((n) => (
+                  <button
+                    key={n.id}
+                    type="button"
+                    className={`explanio__chip${n.id === active?.id ? " explanio__chip--active" : ""}`}
+                    onClick={() => {
+                      audioRef.current?.pause();
+                      setPlayingId(null);
+                      setActiveId(n.id);
+                    }}
+                  >
+                    {fmtTime(n.durationSec)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Recorder side — bottom right of the rectangle */}
+          <div className="explanio-dock explanio-dock--record" style={{ left: box.right - 232, top: box.bottom + 10 }}>
             <button
               type="button"
-              className="explanio__play"
-              onClick={() => togglePlay(active)}
-              title={playingId === active.id ? "Pause" : "Play"}
-              aria-label={playingId === active.id ? "Pause" : "Play"}
+              className={`explanio__rec${recording ? " explanio__rec--on" : ""}`}
+              onClick={recording ? stopRecording : startRecording}
+              title={recording ? "Stop recording" : "Start recording"}
+              aria-label={recording ? "Stop recording" : "Start recording"}
             >
-              {playingId === active.id ? <Pause size={16} /> : <Play size={16} />}
+              {recording ? <Square size={13} /> : <Mic size={14} />}
             </button>
-            <div className="explanio__player-main">
-              <Waveform peaks={active.peaks} progress={playingId === active.id ? progress : 0} />
-              <div className="explanio__meta">
-                {fmtTime(active.durationSec)} · {new Date(active.createdAt).toLocaleString()}
-              </div>
+            <div className="explanio__rec-main">
+              {recording ? (
+                <>
+                  <Waveform peaks={livePeaks} />
+                  <div className="explanio__meta explanio__meta--rec">● {fmtTime(recSec)}</div>
+                </>
+              ) : (
+                <div className="explanio__empty">Tap mic to add a voice note.</div>
+              )}
             </div>
             <button
               type="button"
               className="explanio__delete"
-              onClick={() => removeNote(active.id)}
-              title="Delete note"
-              aria-label="Delete note"
+              onClick={clearRegion}
+              title="Clear rectangle"
+              aria-label="Clear rectangle"
             >
-              <Trash2 size={13} />
+              <X size={12} strokeWidth={2.5} />
             </button>
+            {error && <div className="explanio__error">{error}</div>}
           </div>
-        ) : (
-          <div className="explanio__empty">No voice notes yet — record one below.</div>
-        )}
-        {notes.length > 1 && (
-          <div className="explanio__list">
-            {notes.map((n) => (
-              <button
-                key={n.id}
-                type="button"
-                className={`explanio__chip${n.id === active?.id ? " explanio__chip--active" : ""}`}
-                onClick={() => {
-                  audioRef.current?.pause();
-                  setPlayingId(null);
-                  setActiveId(n.id);
-                }}
-              >
-                {fmtTime(n.durationSec)}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Recorder side — add something */}
-      <div className="explanio__section">
-        <div className="explanio__section-label">Record</div>
-        <div className="explanio__rec-row">
-          <button
-            type="button"
-            className={`explanio__rec${recording ? " explanio__rec--on" : ""}`}
-            onClick={recording ? stopRecording : startRecording}
-            title={recording ? "Stop recording" : "Start recording"}
-            aria-label={recording ? "Stop recording" : "Start recording"}
-          >
-            {recording ? <Square size={14} /> : <Mic size={15} />}
-          </button>
-          <div className="explanio__rec-main">
-            {recording ? (
-              <>
-                <Waveform peaks={livePeaks} />
-                <div className="explanio__meta explanio__meta--rec">● {fmtTime(recSec)} — capturing voice + canvas</div>
-              </>
-            ) : (
-              <div className="explanio__empty">Tap the mic to add a voice note.</div>
-            )}
-          </div>
-        </div>
-        {error && <div className="explanio__error">{error}</div>}
-      </div>
-    </div>
+        </>
+      )}
+    </>
   );
 }

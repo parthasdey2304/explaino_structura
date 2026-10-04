@@ -445,7 +445,7 @@ canvas {
 }
 
 .bottom-controls-right.explanio-dock {
-  bottom: 64px;
+  bottom: 52px;
 }
 
 .zoom-island,
@@ -3582,79 +3582,90 @@ canvas {
   text-align: center;
 }
 
-/* Explanio voice-notes panel — theme-aware via CSS vars. */
-.explanio-panel {
+/* Explanio voice-notes — draw-a-rectangle flow, theme-aware via CSS vars. */
+.explanio-draw {
   position: fixed;
-  top: calc(1rem + 2.25rem + 8px);
-  right: 12px;
-  z-index: 60;
-  width: 340px;
-  max-width: calc(100vw - 24px);
-  max-height: calc(100vh - var(--toolbar-height) - 70px);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--color-surface-high);
-  border-radius: var(--border-radius-lg);
-  background: var(--island-bg-color);
-  color: var(--color-on-surface);
-  animation: todoPopoverIn 0.16s ease-out;
+  inset: 0;
+  z-index: 45;
+  cursor: crosshair;
+  touch-action: none;
 }
 
-.explanio-panel__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--color-surface-high);
-}
-
-.explanio-panel__title {
+.explanio-draw__hint {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 46;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: 8px;
+  font-size: 12.5px;
   font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--island-bg-color);
+  color: var(--color-on-surface);
+  border: 1px solid var(--color-surface-high);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  pointer-events: auto;
 }
 
-.explanio-panel__close {
+.explanio-draw__close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border: none;
-  border-radius: var(--border-radius-sm);
+  border-radius: 6px;
   background: transparent;
   color: var(--color-gray-50, #999);
   cursor: pointer;
 }
 
-.explanio-panel__close:hover {
+.explanio-draw__close:hover {
   background: var(--color-surface-high);
   color: var(--color-on-surface);
 }
 
-.explanio__section {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--color-surface-high);
+.explanio-region {
+  position: fixed;
+  z-index: 44;
+  pointer-events: none;
+  border: 2px dashed var(--color-primary);
+  border-radius: 6px;
+  background: transparent;
 }
 
-.explanio__section:last-child {
-  border-bottom: none;
+.explanio-region--draft {
+  background: rgba(105, 101, 219, 0.06);
 }
 
-.explanio__section-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-gray-50, #999);
-  margin-bottom: 8px;
+.explanio-dock {
+  position: fixed;
+  z-index: 46;
+  width: 232px;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--island-bg-color);
+  color: var(--color-on-surface);
+  border: 1px solid var(--color-surface-high);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
 }
 
-.explanio__player,
-.explanio__rec-row {
+.explanio-dock--record {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.explanio-dock--record .explanio__rec-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.explanio__player--dock {
   display: flex;
   align-items: center;
   gap: 10px;
