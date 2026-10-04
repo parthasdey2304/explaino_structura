@@ -78,8 +78,8 @@
     "semantic_hash": "603a595635cbd79c9054b8d897b512c7"
   },
   "src/components/AIChatPanel.tsx": {
-    "mtime": 1791125582.969069,
-    "seen": 1791126085.8319964,
+    "mtime": 1791126186.8906474,
+    "seen": 1791126565.728122,
     "ast_hash": "794d1a7643d2020a1d962b6ea6e707c7",
     "semantic_hash": "794d1a7643d2020a1d962b6ea6e707c7"
   },
@@ -114,8 +114,8 @@
     "semantic_hash": "57e598bcf4c5e62fd114d093b9974e38"
   },
   "src/components/ExcalidrawWrapper.tsx": {
-    "mtime": 1791125434.7477021,
-    "seen": 1791126085.8324683,
+    "mtime": 1791126186.8931632,
+    "seen": 1791126565.7285798,
     "ast_hash": "ba88a238c158dd4b4e07c68e24db396d",
     "semantic_hash": "ba88a238c158dd4b4e07c68e24db396d"
   },
@@ -144,8 +144,8 @@
     "semantic_hash": "ff2e0c5b47e35202bafbaed81263e311"
   },
   "src/components/TodoOverlay.tsx": {
-    "mtime": 1791124055.31398,
-    "seen": 1791126085.8328063,
+    "mtime": 1791126186.8931632,
+    "seen": 1791126565.7290087,
     "ast_hash": "ef9d1448c39f37d6762b3f604e6e63e6",
     "semantic_hash": "ef9d1448c39f37d6762b3f604e6e63e6"
   },
@@ -312,9 +312,9 @@
     "semantic_hash": "57d29251e76c0e7c24189453a5153408"
   },
   "src/components/CanvasTextPanel.tsx": {
-    "mtime": 1791125184.2616248,
-    "seen": 1791126085.8321862,
-    "ast_hash": "56478d96e5b188c24bd167dc6eb5847f",
-    "semantic_hash": "56478d96e5b188c24bd167dc6eb5847f"
+    "mtime": 1791126186.8921552,
+    "seen": 1791126565.7283158,
+    "ast_hash": "55a68052d188fb4344eecd0338a5c31e",
+    "semantic_hash": "55a68052d188fb4344eecd0338a5c31e"
   }
 }
