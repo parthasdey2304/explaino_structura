@@ -1830,6 +1830,7 @@ export default function ExcalidrawWrapper() {
         <ExplanioPanel
           onClose={() => setShowExplanio(false)}
           getSceneSnapshot={getSceneSnapshotForNote}
+          viewport={viewport}
         />
       )}
 
