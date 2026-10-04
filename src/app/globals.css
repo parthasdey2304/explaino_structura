@@ -3736,6 +3736,16 @@ canvas {
   overflow: hidden;
 }
 
+.explanio__seek {
+  cursor: pointer;
+  border-radius: 6px;
+  min-width: 0;
+}
+
+.explanio__seek:hover .explanio__bar {
+  opacity: 0.6;
+}
+
 .explanio__bar {
   flex: 1 1 0;
   min-width: 0;
