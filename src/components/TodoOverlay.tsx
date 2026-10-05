@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowUpDown, Check, GripVertical, ListTodo, Minus, Plus, Trash2, X } from "lucide-react";
+import { ArrowUpDown, Check, Circle, GripVertical, ListTodo, Minus, Plus, Trash2, X } from "lucide-react";
 
 const TODO_STORAGE_KEY = "explaino-todos";
 
@@ -106,7 +106,15 @@ export default function TodoPanel({ onClose }: { onClose: () => void }) {
     setTodos((prev) =>
       prev.map((t) =>
         t.id === id
-          ? { ...t, status: t.status === "todo" ? "done" : t.status === "done" ? "inprogress" : "todo" }
+          ? {
+              ...t,
+              status:
+                t.status === "todo"
+                  ? "inprogress"
+                  : t.status === "inprogress"
+                  ? "done"
+                  : "todo",
+            }
           : t
       )
     );
@@ -242,14 +250,19 @@ export default function TodoPanel({ onClose }: { onClose: () => void }) {
               onClick={() => cycleTodo(todo.id)}
               title={
                 todo.status === "done"
-                  ? "Done — click for on the way"
+                  ? "Done — click for not done"
                   : todo.status === "inprogress"
                     ? "On the way — click for not done"
-                    : "Not done — click for done"
+                    : "Not done — click for on the way"
               }
             >
               {todo.status === "done" && <Check size={11} strokeWidth={3} />}
-              {todo.status === "inprogress" && <Minus size={11} strokeWidth={3} />}
+              {todo.status === "inprogress" && (
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                  <circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" strokeWidth="2" fill="currentColor" />
+                  <circle cx="5.5" cy="5.5" r="2" fill="white" />
+                </svg>
+              )}
             </button>
             <span className="todo-panel__text">{todo.text}</span>
             <button
