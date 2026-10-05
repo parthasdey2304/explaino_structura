@@ -25,7 +25,7 @@ import CodeEditorPanel from "./CodeEditorPanel";
 import DataStructuresPanel from "./DataStructuresPanel";
 import CanvasStructureControls, { type ViewportBox } from "./CanvasStructureControls";
 import AITextSidebar from "./AITextSidebar";
-import ExplanioPanel from "./ExplanioPanel";
+import ExplainoPanel from "./ExplainoPanel";
 import { chatStreamAuto, MistralError, type ChatMessage } from "@/lib/ai/mistral";
 import { createCodeCardSvg } from "@/lib/ai/highlight";
 import TodoPanel, { TodoCornerButton } from "./TodoOverlay";
@@ -338,7 +338,7 @@ export default function ExcalidrawWrapper() {
   const [showDataStructuresPanel, setShowDataStructuresPanel] = useState(false);
   const [showTodos, setShowTodos] = useState(false);
   const [showAiTextPanel, setShowAiTextPanel] = useState(false);
-  const [showExplanio, setShowExplanio] = useState(false);
+  const [showExplaino, setShowExplaino] = useState(false);
   const editingTextIdRef = useRef<string | null>(null);
   const [listMode, setListMode] = useState<"ordered" | "bullet" | null>(null);
   const [textAnchor, setTextAnchor] = useState<{
@@ -1128,7 +1128,7 @@ export default function ExcalidrawWrapper() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [listMode]);
 
-  // Scene data captured alongside an Explanio voice note.
+  // Scene data captured alongside an Explaino voice note.
   const getSceneDataForNote = useCallback((): {
     elements: ExcalidrawElement[];
     files: BinaryFiles;
@@ -1142,7 +1142,7 @@ export default function ExcalidrawWrapper() {
     }
   }, []);
 
-  // Scene snapshot captured alongside an Explanio voice note (capped size).
+  // Scene snapshot captured alongside an Explaino voice note (capped size).
   const getSceneSnapshotForNote = useCallback((): string | null => {
     try {
       const scene = latestSceneRef.current;
@@ -1828,25 +1828,25 @@ export default function ExcalidrawWrapper() {
         <CodeEditorPanel onClose={() => setShowCodePanel(false)} />
       )}
 
-      {/* Launchers — bottom-right: single stack, Explanio above AI Text */}
+      {/* Launchers — bottom-right: single stack, Explaino above AI Text */}
       <div className="bottom-controls-right ai-text-dock launcher-stack">
         <button
           type="button"
           className="excalidraw-button"
           style={PANEL_BUTTON_STYLE}
           onClick={() => {
-            if (!showExplanio) {
+            if (!showExplaino) {
               setShowCodePanel(false);
               setShowAiTextPanel(false);
               setShowDataStructuresPanel(false);
             }
-            setShowExplanio(!showExplanio);
+            setShowExplaino(!showExplaino);
           }}
-          title="Open Explanio voice notes"
-          aria-label="Explanio"
+          title="Open Explaino voice notes"
+          aria-label="Explaino"
         >
           <Mic size={16} strokeWidth={2.2} />
-          <span style={{ marginLeft: 4 }}>Explanio</span>
+          <span style={{ marginLeft: 4 }}>Explaino</span>
         </button>
         <button
           type="button"
@@ -1867,10 +1867,10 @@ export default function ExcalidrawWrapper() {
         </button>
       </div>
 
-      {/* Explanio voice notes panel */}
-      {showExplanio && (
-        <ExplanioPanel
-          onClose={() => setShowExplanio(false)}
+      {/* Explaino voice notes panel */}
+      {showExplaino && (
+        <ExplainoPanel
+          onClose={() => setShowExplaino(false)}
           getSceneSnapshot={getSceneSnapshotForNote}
           getSceneData={getSceneDataForNote}
           viewport={viewport}
