@@ -20,13 +20,13 @@ import {
 } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytes, uploadString } from "firebase/storage";
 
-const STORAGE_KEY = "explaino-explanio-notes-v1";
+const STORAGE_KEY = "explaino-explaino-notes-v1";
 const MAX_NOTES = 20;
 // Keep total stored JSON safely under the ~5MB localStorage quota so notes
 // always survive a reload. Frames are shed first, then scenes, then old notes.
 const STORE_BUDGET = 4_000_000;
 
-export interface ExplanioFrame {
+export interface ExplainoFrame {
   /** Seconds since recording start. */
   t: number;
   /** Small PNG thumbnail of the region at time t. */
@@ -35,7 +35,7 @@ export interface ExplanioFrame {
   bbox: { minX: number; minY: number; maxX: number; maxY: number };
 }
 
-export interface ExplanioNote {
+export interface ExplainoNote {
   id: string;
   createdAt: number;
   durationSec: number;
@@ -45,14 +45,14 @@ export interface ExplanioNote {
   /** Canvas scene snapshot captured with the recording (for review). */
   scene: string | null;
   /** Playback-synced thumbnails of shapes drawn inside the region. */
-  frames: ExplanioFrame[];
+  frames: ExplainoFrame[];
   /** Capture rectangle in scene coords — pointwise canvas placement for recall. */
   region: SceneRegion | null;
   /** True once metadata + media live in Firebase. */
   cloud: boolean;
 }
 
-const CLOUD_COLLECTION = "explanio_notes";
+const CLOUD_COLLECTION = "explaino_notes";
 
 interface SceneRegion {
   minX: number;
@@ -73,7 +73,7 @@ interface Viewport {
 // Local cache for now. Firestore (via src/lib/firestore.ts) is the better
 // long-term home for these — swap loadNotes/saveNotes to Firestore when
 // ready; the note shape already carries everything needed.
-function loadNotes(): ExplanioNote[] {
+function loadNotes(): ExplainoNote[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
@@ -81,7 +81,7 @@ function loadNotes(): ExplanioNote[] {
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter(
-        (n): n is ExplanioNote =>
+        (n): n is ExplainoNote =>
           !!n && typeof n.id === "string" && typeof n.audio === "string"
       )
       .map((n) => ({
@@ -95,7 +95,7 @@ function loadNotes(): ExplanioNote[] {
   }
 }
 
-function saveNotes(notes: ExplanioNote[]): { kept: ExplanioNote[]; trimmed: boolean } {
+function saveNotes(notes: ExplainoNote[]): { kept: ExplainoNote[]; trimmed: boolean } {
   const fitted = notes.slice(0, MAX_NOTES).map((n) => ({ ...n, frames: [...n.frames] }));
   const size = () => JSON.stringify(fitted).length;
   let trimmed = false;
@@ -176,11 +176,11 @@ async function buildFrameThumbs(
   frames: { t: number; elements: Record<string, unknown>[] }[],
   files: unknown,
   dark: boolean
-): Promise<ExplanioFrame[]> {
+): Promise<ExplainoFrame[]> {
   if (frames.length === 0) return [];
   const step = Math.max(1, Math.floor(frames.length / MAX_FRAME_THUMBS));
   const sampled = frames.filter((_, i) => i % step === 0).slice(0, MAX_FRAME_THUMBS);
-  const out: ExplanioFrame[] = [];
+  const out: ExplainoFrame[] = [];
   for (const f of sampled) {
     try {
       // Bake the theme appearance in: dark-mode strokes are stored inverted
@@ -231,11 +231,11 @@ function Waveform({ peaks, progress = 0 }: { peaks: number[]; progress?: number 
   // Cap bar count so the strip never stretches outside its dock.
   const shown = bars.length > 40 ? bars.filter((_, i) => i % Math.ceil(bars.length / 40) === 0).slice(0, 40) : bars;
   return (
-    <div className="explanio__wave" aria-hidden="true">
+    <div className="explaino__wave" aria-hidden="true">
       {shown.map((p, i) => (
         <span
           key={i}
-          className={`explanio__bar${i / shown.length <= progress ? " explanio__bar--played" : ""}`}
+          className={`explaino__bar${i / shown.length <= progress ? " explaino__bar--played" : ""}`}
           style={{ height: `${Math.max(8, Math.min(100, p * 100))}%` }}
         />
       ))}
@@ -243,7 +243,7 @@ function Waveform({ peaks, progress = 0 }: { peaks: number[]; progress?: number 
   );
 }
 
-export default function ExplanioPanel({
+export default function ExplainoPanel({
   onClose,
   getSceneSnapshot,
   getSceneData,
@@ -254,7 +254,7 @@ export default function ExplanioPanel({
   getSceneData: () => { elements: unknown[]; files: unknown } | null;
   viewport: Viewport;
 }) {
-  const [notes, setNotes] = useState<ExplanioNote[]>(() => loadNotes());
+  const [notes, setNotes] = useState<ExplainoNote[]>(() => loadNotes());
   const [region, setRegion] = useState<SceneRegion | null>(null);
   const [drawing, setDrawing] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [recording, setRecording] = useState(false);
@@ -263,7 +263,7 @@ export default function ExplanioPanel({
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [curTime, setCurTime] = useState(0);
-  const [frame, setFrame] = useState<ExplanioFrame | null>(null);
+  const [frame, setFrame] = useState<ExplainoFrame | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [storageTight, setStorageTight] = useState(false);
@@ -318,14 +318,14 @@ export default function ExplanioPanel({
   // ── Firebase split storage ───────────────────────────────────
   // Cache (localStorage): lightweight metadata + region only.
   // Firebase: audio bytes + frames in Storage, doc in Firestore.
-  const syncNoteToCloud = useCallback(async (note: ExplanioNote, audioBlob: Blob) => {
+  const syncNoteToCloud = useCallback(async (note: ExplainoNote, audioBlob: Blob) => {
     setSyncing((s) => ({ ...s, [note.id]: true }));
     try {
-      await uploadBytes(ref(storage, `explanio/${note.id}/audio`), audioBlob, {
+      await uploadBytes(ref(storage, `explaino/${note.id}/audio`), audioBlob, {
         contentType: note.mimeType || "audio/webm",
       });
       await uploadString(
-        ref(storage, `explanio/${note.id}/frames.json`),
+        ref(storage, `explaino/${note.id}/frames.json`),
         JSON.stringify(note.frames),
         "raw",
         { contentType: "application/json" }
@@ -359,7 +359,7 @@ export default function ExplanioPanel({
           query(collection(db, CLOUD_COLLECTION), orderBy("createdAt", "desc"), limit(20))
         );
         if (cancelled) return;
-        const cloudNotes: ExplanioNote[] = snap.docs.map((d) => {
+        const cloudNotes: ExplainoNote[] = snap.docs.map((d) => {
           const v = d.data() as Record<string, unknown>;
           return {
             id: d.id,
@@ -396,18 +396,18 @@ export default function ExplanioPanel({
   }, []);
 
   /** Download a cloud note's media before first play. */
-  const ensureMedia = useCallback(async (note: ExplanioNote): Promise<ExplanioNote | null> => {
+  const ensureMedia = useCallback(async (note: ExplainoNote): Promise<ExplainoNote | null> => {
     if (note.audio) return note;
     try {
       const [audioUrl, framesUrl] = await Promise.all([
-        getDownloadURL(ref(storage, `explanio/${note.id}/audio`)),
-        getDownloadURL(ref(storage, `explanio/${note.id}/frames.json`)),
+        getDownloadURL(ref(storage, `explaino/${note.id}/audio`)),
+        getDownloadURL(ref(storage, `explaino/${note.id}/frames.json`)),
       ]);
       const [audioRes, framesRes] = await Promise.all([fetch(audioUrl), fetch(framesUrl)]);
       const blob = await audioRes.blob();
       const audio = await blobToDataUrl(blob);
-      const frames = (await framesRes.json()) as ExplanioFrame[];
-      let merged: ExplanioNote | null = null;
+      const frames = (await framesRes.json()) as ExplainoFrame[];
+      let merged: ExplainoNote | null = null;
       setNotes((prev) =>
         prev.map((n) => {
           if (n.id !== note.id) return n;
@@ -478,7 +478,7 @@ export default function ExplanioPanel({
             typeof document !== "undefined" &&
             document.documentElement.classList.contains("theme-dark");
           const frames = await buildFrameThumbs(framesRef.current, data?.files ?? {}, dark);
-          const note: ExplanioNote = {
+          const note: ExplainoNote = {
             id: nextId(),
             createdAt: startedAt,
             durationSec: recSec,
@@ -549,7 +549,7 @@ export default function ExplanioPanel({
   }, []);
 
   const togglePlay = useCallback(
-    async (note: ExplanioNote) => {
+    async (note: ExplainoNote) => {
       const audio = audioRef.current;
       if (playingId === note.id && audio) {
         audio.pause();
@@ -600,7 +600,7 @@ export default function ExplanioPanel({
 
   /** Click/drag on the waveform to seek back and forth. */
   const seekTo = useCallback(
-    (e: React.PointerEvent, note: ExplanioNote) => {
+    (e: React.PointerEvent, note: ExplainoNote) => {
       const audio = audioRef.current;
       if (!audio || !audio.duration || playingId !== note.id) return;
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -628,7 +628,7 @@ export default function ExplanioPanel({
         } catch {
           // already gone or offline — local delete stands
         }
-        for (const p of [`explanio/${id}/audio`, `explanio/${id}/frames.json`]) {
+        for (const p of [`explaino/${id}/audio`, `explaino/${id}/frames.json`]) {
           try {
             await deleteObject(ref(storage, p));
           } catch {
@@ -744,60 +744,60 @@ export default function ExplanioPanel({
       {/* Draw-a-rectangle step: transparent capture layer over the canvas. */}
       {!region && (
         <div
-          className="explanio-draw"
+          className="explaino-draw"
           onPointerDown={onDrawDown}
           onPointerMove={onDrawMove}
           onPointerUp={onDrawUp}
         >
-          <div className="explanio-draw__hint">
+          <div className="explaino-draw__hint">
             Drag on the canvas to mark the capture rectangle
-            <button type="button" className="explanio-draw__close" onClick={onClose} aria-label="Close Explanio">
+            <button type="button" className="explaino-draw__close" onClick={onClose} aria-label="Close Explaino">
               <X size={13} strokeWidth={2.5} />
             </button>
           </div>
           {draft && (
             <div
-              className="explanio-region explanio-region--draft"
+              className="explaino-region explaino-region--draft"
               style={{ left: draft.left, top: draft.top, width: draft.width, height: draft.height }}
             />
           )}
         </div>
       )}
 
-      {/* Capture rectangle + anchored controls (hidden when Explanio is closed). */}
+      {/* Capture rectangle + anchored controls (hidden when Explaino is closed). */}
       {region && box && (
         <>
           <div
-            className={`explanio-region${replaying ? " explanio-region--playing" : ""}`}
+            className={`explaino-region${replaying ? " explaino-region--playing" : ""}`}
             style={{ left: box.left, top: box.top, width: box.right - box.left, height: box.bottom - box.top }}
           />
           {/* Drawing replay — renders inside the rectangle, synced to the voice. */}
           {replaying && (
             <canvas
               ref={replayRef}
-              className="explanio-replay"
+              className="explaino-replay"
               style={{ left: box.left, top: box.top, width: box.right - box.left, height: box.bottom - box.top }}
             />
           )}
           {/* Listener side — top right of the rectangle */}
           <div
-            className="explanio-dock explanio-dock--listen"
+            className="explaino-dock explaino-dock--listen"
             style={{ left: box.right, top: box.top, transform: `scale(${zoomScale}) translate(-100%, -100%)` }}
           >
             {active ? (
-              <div className="explanio__player explanio__player--dock">
+              <div className="explaino__player explaino__player--dock">
                 <button
                   type="button"
-                  className="explanio__play"
+                  className="explaino__play"
                   onClick={() => togglePlay(active)}
                   title={playingId === active.id ? "Pause" : "Play"}
                   aria-label={playingId === active.id ? "Pause" : "Play"}
                 >
                   {playingId === active.id ? <Pause size={15} /> : <Play size={15} />}
                 </button>
-                <div className="explanio__player-main">
+                <div className="explaino__player-main">
                   <div
-                    className="explanio__seek"
+                    className="explaino__seek"
                     role="slider"
                     aria-label="Seek"
                     aria-valuemin={0}
@@ -814,7 +814,7 @@ export default function ExplanioPanel({
                   >
                     <Waveform peaks={active.peaks} progress={playingId === active.id ? progress : 0} />
                   </div>
-                  <div className="explanio__meta">
+                  <div className="explaino__meta">
                     {playingId === active.id
                       ? `${fmtTime(curTime)} / ${fmtTime(active.durationSec)}`
                       : fmtTime(active.durationSec)}
@@ -823,7 +823,7 @@ export default function ExplanioPanel({
                 </div>
                 <button
                   type="button"
-                  className="explanio__delete"
+                  className="explaino__delete"
                   onClick={() => removeNote(active.id)}
                   title="Delete note"
                   aria-label="Delete note"
@@ -832,15 +832,15 @@ export default function ExplanioPanel({
                 </button>
               </div>
             ) : (
-              <div className="explanio__empty">No voice notes yet.</div>
+              <div className="explaino__empty">No voice notes yet.</div>
             )}
             {notes.length > 1 && (
-              <div className="explanio__list">
+              <div className="explaino__list">
                 {notes.map((n) => (
                   <button
                     key={n.id}
                     type="button"
-                    className={`explanio__chip${n.id === active?.id ? " explanio__chip--active" : ""}`}
+                    className={`explaino__chip${n.id === active?.id ? " explaino__chip--active" : ""}`}
                     onClick={() => {
                       audioRef.current?.pause();
                       setPlayingId(null);
@@ -858,43 +858,43 @@ export default function ExplanioPanel({
           </div>
           {/* Recorder side — bottom right of the rectangle */}
           <div
-            className="explanio-dock explanio-dock--record"
+            className="explaino-dock explaino-dock--record"
             style={{ left: box.right, top: box.bottom, transform: `scale(${zoomScale}) translate(-100%, 10px)` }}
           >
             <button
               type="button"
-              className={`explanio__rec${recording ? " explanio__rec--on" : ""}`}
+              className={`explaino__rec${recording ? " explaino__rec--on" : ""}`}
               onClick={recording ? stopRecording : startRecording}
               title={recording ? "Stop recording" : "Start recording"}
               aria-label={recording ? "Stop recording" : "Start recording"}
             >
               {recording ? <Square size={13} /> : <Mic size={14} />}
             </button>
-            <div className="explanio__rec-main">
+            <div className="explaino__rec-main">
               {recording ? (
                 <>
                   <Waveform peaks={livePeaks} />
-                  <div className="explanio__meta explanio__meta--rec">● {fmtTime(recSec)}</div>
+                  <div className="explaino__meta explaino__meta--rec">● {fmtTime(recSec)}</div>
                 </>
               ) : (
-                <div className="explanio__empty">Tap mic to add a voice note.</div>
+                <div className="explaino__empty">Tap mic to add a voice note.</div>
               )}
             </div>
             <button
               type="button"
-              className="explanio__delete"
+              className="explaino__delete"
               onClick={clearRegion}
               title="Clear rectangle"
               aria-label="Clear rectangle"
             >
               <X size={12} strokeWidth={2.5} />
             </button>
-            {error && <div className="explanio__error">{error}</div>}
+            {error && <div className="explaino__error">{error}</div>}
             {!error && cloudError && (
-              <div className="explanio__meta">Cloud unreachable — notes stay in local cache.</div>
+              <div className="explaino__meta">Cloud unreachable — notes stay in local cache.</div>
             )}
             {!error && storageTight && (
-              <div className="explanio__meta">Storage nearly full — oldest replays trimmed to keep notes saved.</div>
+              <div className="explaino__meta">Storage nearly full — oldest replays trimmed to keep notes saved.</div>
             )}
           </div>
         </>

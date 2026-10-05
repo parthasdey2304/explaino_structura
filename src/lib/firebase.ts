@@ -73,7 +73,7 @@ export async function checkFirebaseConnection(): Promise<FirebaseHealth> {
   let storageOk = false;
   let detail = '';
   try {
-    const pingRef = doc(db, 'explanio_health', 'ping');
+    const pingRef = doc(db, 'explaino_health', 'ping');
     await setDoc(pingRef, { ts: Date.now(), from: 'explaino_structura' });
     const back = await getDoc(pingRef);
     firestore = back.exists();
@@ -82,7 +82,7 @@ export async function checkFirebaseConnection(): Promise<FirebaseHealth> {
     detail += `firestore FAILED (${e instanceof Error ? e.message : String(e)}). `;
   }
   try {
-    const probe = ref(storage, 'explanio/__health__.txt');
+    const probe = ref(storage, 'explaino/__health__.txt');
     await uploadBytes(probe, new Blob(['ok'], { type: 'text/plain' }));
     await getDownloadURL(probe);
     await deleteObject(probe);

@@ -3585,8 +3585,8 @@ canvas {
   text-align: center;
 }
 
-/* Explanio voice-notes — draw-a-rectangle flow, theme-aware via CSS vars. */
-.explanio-draw {
+/* Explaino voice-notes — draw-a-rectangle flow, theme-aware via CSS vars. */
+.explaino-draw {
   position: fixed;
   inset: 0;
   z-index: 45;
@@ -3594,7 +3594,7 @@ canvas {
   touch-action: none;
 }
 
-.explanio-draw__hint {
+.explaino-draw__hint {
   position: fixed;
   top: 12px;
   left: 50%;
@@ -3614,7 +3614,7 @@ canvas {
   pointer-events: auto;
 }
 
-.explanio-draw__close {
+.explaino-draw__close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3627,12 +3627,12 @@ canvas {
   cursor: pointer;
 }
 
-.explanio-draw__close:hover {
+.explaino-draw__close:hover {
   background: var(--color-surface-high);
   color: var(--color-on-surface);
 }
 
-.explanio-region {
+.explaino-region {
   position: fixed;
   z-index: 44;
   pointer-events: none;
@@ -3641,17 +3641,17 @@ canvas {
   background: transparent;
 }
 
-.explanio-region--draft {
+.explaino-region--draft {
   background: rgba(105, 101, 219, 0.06);
 }
 
-.explanio-region--playing {
+.explaino-region--playing {
   border-style: solid;
   border-color: #a8a5ff;
   box-shadow: 0 0 0 2px rgba(168, 165, 255, 0.35), 0 0 24px rgba(168, 165, 255, 0.25);
 }
 
-.explanio-replay {
+.explaino-replay {
   position: fixed;
   z-index: 43;
   pointer-events: none;
@@ -3659,7 +3659,7 @@ canvas {
   background: var(--default-bg-color, #121212);
 }
 
-.explanio-dock {
+.explaino-dock {
   position: fixed;
   z-index: 46;
   width: 232px;
@@ -3671,31 +3671,31 @@ canvas {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
 }
 
-.explanio-dock--record {
+.explaino-dock--record {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.explanio-dock--record .explanio__rec-main {
+.explaino-dock--record .explaino__rec-main {
   flex: 1;
   min-width: 0;
 }
 
-.explanio__player--dock {
+.explaino__player--dock {
   display: flex;
   align-items: center;
   min-width: 0;
   overflow: hidden;
 }
 
-.explanio__player-main {
+.explaino__player-main {
   min-width: 0;
   overflow: hidden;
 }
 
-.explanio__play,
-.explanio__rec {
+.explaino__play,
+.explaino__rec {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -3709,25 +3709,25 @@ canvas {
   cursor: pointer;
 }
 
-.explanio__rec--on {
+.explaino__rec--on {
   background: #e03131;
   border-color: #e03131;
   color: #fff;
-  animation: explanioPulse 1.2s ease-in-out infinite;
+  animation: explainoPulse 1.2s ease-in-out infinite;
 }
 
-@keyframes explanioPulse {
+@keyframes explainoPulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(224, 49, 49, 0.5); }
   50% { box-shadow: 0 0 0 6px rgba(224, 49, 49, 0); }
 }
 
-.explanio__player-main,
-.explanio__rec-main {
+.explaino__player-main,
+.explaino__rec-main {
   flex: 1;
   min-width: 0;
 }
 
-.explanio__wave {
+.explaino__wave {
   display: flex;
   align-items: center;
   gap: 2px;
@@ -3736,17 +3736,17 @@ canvas {
   overflow: hidden;
 }
 
-.explanio__seek {
+.explaino__seek {
   cursor: pointer;
   border-radius: 6px;
   min-width: 0;
 }
 
-.explanio__seek:hover .explanio__bar {
+.explaino__seek:hover .explaino__bar {
   opacity: 0.6;
 }
 
-.explanio__bar {
+.explaino__bar {
   flex: 1 1 0;
   min-width: 0;
   border-radius: 2px;
@@ -3754,7 +3754,7 @@ canvas {
   opacity: 0.35;
 }
 
-.explanio__preview {
+.explaino__preview {
   display: block;
   width: 100%;
   max-height: 110px;
@@ -3765,40 +3765,40 @@ canvas {
   margin-bottom: 6px;
 }
 
-.explanio__bar--played {
+.explaino__bar--played {
   opacity: 1;
 }
 
-.explanio__meta {
+.explaino__meta {
   font-size: 11px;
   color: var(--color-gray-50, #999);
   margin-top: 2px;
 }
 
-.explanio__meta--rec {
+.explaino__meta--rec {
   color: #e03131;
 }
 
-.explanio__empty {
+.explaino__empty {
   font-size: 12.5px;
   color: var(--color-gray-60, #888);
   padding: 6px 0;
 }
 
-.explanio__error {
+.explaino__error {
   font-size: 12px;
   color: #e03131;
   margin-top: 6px;
 }
 
-.explanio__list {
+.explaino__list {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
 }
 
-.explanio__chip {
+.explaino__chip {
   border: 1px solid var(--color-surface-high);
   background: transparent;
   color: var(--color-on-surface);
@@ -3808,13 +3808,13 @@ canvas {
   cursor: pointer;
 }
 
-.explanio__chip--active {
+.explaino__chip--active {
   background: var(--color-surface-primary-container);
   border-color: var(--color-surface-primary-container);
   color: var(--color-on-primary-container);
 }
 
-.explanio__delete {
+.explaino__delete {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -3828,7 +3828,7 @@ canvas {
   cursor: pointer;
 }
 
-.explanio__delete:hover {
+.explaino__delete:hover {
   background: rgba(224, 49, 49, 0.12);
   color: #e03131;
 }
