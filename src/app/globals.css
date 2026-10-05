@@ -3969,12 +3969,13 @@ canvas {
 
 .todo-panel__check--inprogress,
 .todo-panel__item--inprogress .todo-panel__check {
-  background: #e03131;
-  border-color: #e03131;
+  background: #f5c000;
+  border-color: #f5c000;
+  color: #f5c000;
 }
 
 .todo-panel__item--inprogress .todo-panel__text {
-  color: #e03131;
+  color: #f5c000;
 }
 
 .todo-panel__drag {

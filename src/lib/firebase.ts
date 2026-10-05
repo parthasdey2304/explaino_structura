@@ -14,7 +14,7 @@ const firebaseConfig = {
 };
 
 let app: FirebaseApp;
-let auth: Auth;
+let auth: Auth | null = null;
 let db: Firestore;
 let storage: FirebaseStorage;
 
@@ -33,12 +33,20 @@ if (typeof window !== 'undefined') {
   } else {
     app = getApp();
   }
-  auth = getAuth(app);
+  // NOTE: Auth is initialised lazily (see getAuthInstance) because getAuth()
+  // fires a getProjectConfig request on load. Nothing in the app uses Auth
+  // yet, so don't pay for — or log noise from — that request up front.
   db = getFirestore(app);
   storage = getStorage(app);
 }
 
 export { app, auth, db, storage };
+
+/** Lazily create the Auth instance on first real use. */
+export function getAuthInstance(): Auth {
+  if (!auth) auth = getAuth(app);
+  return auth;
+}
 export default firebaseConfig;
 
 export interface FirebaseHealth {
