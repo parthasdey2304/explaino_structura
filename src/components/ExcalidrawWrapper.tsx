@@ -28,7 +28,7 @@ import AITextSidebar from "./AITextSidebar";
 import ExplainoPanel from "./ExplainoPanel";
 import { chatStreamAuto, MistralError, type ChatMessage } from "@/lib/ai/mistral";
 import { createCodeCardSvg } from "@/lib/ai/highlight";
-import TodoPanel, { TodoCornerButton } from "./TodoOverlay";
+import TodoPanel from "./TodoOverlay";
 import LaserOverlay from "./LaserOverlay";
 import {
   recognizeShape,
@@ -48,7 +48,7 @@ import {
   type DataStructureDef,
   type StructureId,
 } from "@/lib/dataStructures";
-import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic } from "lucide-react";
+import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic, ListTodo } from "lucide-react";
 
 /**
  * Metadata attached to every element of an inserted diagram via Excalidraw's
@@ -1714,17 +1714,19 @@ export default function ExcalidrawWrapper() {
           </MainMenu.ItemLink>
           <MainMenu.Separator />
           <MainMenu.DefaultItems.ChangeCanvasBackground />
+          <MainMenu.Item
+            onSelect={() => setShowTodos((v) => !v)}
+            icon={<ListTodo size={16} strokeWidth={2.2} />}
+            className="explaino-menu-item"
+            title="Todo list"
+          >
+            Todos
+          </MainMenu.Item>
         </MainMenu>
         </ExcalidrawComponent>
       {/* Transient laser-pointer layer: screen-space only, never touches the
           scene or the undo/redo history. */}
       <LaserOverlay active={laserActive} />
-      {/* Todo toggle — docked top-left, immediately right of the hamburger
-          menu button (mirrors its box/border/icon sizing). */}
-      <TodoCornerButton
-        open={showTodos}
-        onToggle={() => setShowTodos((v) => !v)}
-      />
       </div>
       )}
 
