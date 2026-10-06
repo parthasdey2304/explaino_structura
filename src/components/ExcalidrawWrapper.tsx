@@ -26,6 +26,7 @@ import DataStructuresPanel from "./DataStructuresPanel";
 import CanvasStructureControls, { type ViewportBox } from "./CanvasStructureControls";
 import AITextSidebar from "./AITextSidebar";
 import ExplainoPanel from "./ExplainoPanel";
+import CommandPalette, { type PaletteCommand } from "./CommandPalette";
 import { chatStreamAuto, MistralError, type ChatMessage } from "@/lib/ai/mistral";
 import { createCodeCardSvg } from "@/lib/ai/highlight";
 import TodoPanel from "./TodoOverlay";
@@ -339,6 +340,7 @@ export default function ExcalidrawWrapper() {
   const [showTodos, setShowTodos] = useState(false);
   const [showAiTextPanel, setShowAiTextPanel] = useState(false);
   const [showExplaino, setShowExplaino] = useState(false);
+  const [showPalette, setShowPalette] = useState(false);
   const editingTextIdRef = useRef<string | null>(null);
   const [listMode, setListMode] = useState<"ordered" | "bullet" | null>(null);
   const [textAnchor, setTextAnchor] = useState<{
@@ -1422,6 +1424,144 @@ export default function ExcalidrawWrapper() {
     return () => window.removeEventListener("keydown", onKey);
   }, [laserActive]);
 
+  // Ctrl+Shift+P / Cmd+Shift+P (or Ctrl/Cmd+K) toggles the command palette.
+  // Capture phase + preventDefault so the browser never sees it as Print.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      const paletteKey =
+        (mod && e.shiftKey && e.key.toLowerCase() === "p") ||
+        (mod && !e.shiftKey && e.key.toLowerCase() === "k");
+      if (!paletteKey) return;
+      // Don't hijack typing inside text fields for Ctrl+K.
+      const t = e.target as HTMLElement | null;
+      const typing =
+        !!t &&
+        (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+      if (typing && e.key.toLowerCase() === "k") return;
+      e.preventDefault();
+      e.stopPropagation();
+      setShowPalette((v) => !v);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+
+  const paletteCommands = useMemo<PaletteCommand[]>(
+    () => {
+      const api = () => excalidrawAPI.current;
+      const closePanels = () => {
+        setShowCodePanel(false);
+        setShowAiTextPanel(false);
+        setShowDataStructuresPanel(false);
+        setShowExplaino(false);
+      };
+      const zoomBy = (factor: number) => {
+        const a = api();
+        if (!a) return;
+        const z = a.getAppState().zoom.value;
+        const next = Math.max(0.1, Math.min(30, z * factor));
+        a.updateScene({ appState: { zoom: { value: next } } as unknown as AppState });
+      };
+      return [
+        {
+          id: "toggle-code",
+          label: "Toggle Code editor",
+          hint: "panel",
+          run: () => {
+            if (!showCodePanel) closePanels();
+            setShowCodePanel(!showCodePanel);
+          },
+        },
+        {
+          id: "toggle-ai-text",
+          label: "Toggle AI Text assistant",
+          hint: "panel",
+          run: () => {
+            if (!showAiTextPanel) closePanels();
+            setShowAiTextPanel(!showAiTextPanel);
+          },
+        },
+        {
+          id: "toggle-data-structures",
+          label: "Toggle Data structure diagrams",
+          hint: "panel",
+          run: () => {
+            if (!showDataStructuresPanel) closePanels();
+            setShowDataStructuresPanel(!showDataStructuresPanel);
+          },
+        },
+        {
+          id: "toggle-todos",
+          label: "Toggle Todo list",
+          hint: "panel",
+          run: () => setShowTodos((v) => !v),
+        },
+        {
+          id: "toggle-explaino",
+          label: "Toggle Explaino voice notes",
+          hint: "panel",
+          run: () => {
+            if (!showExplaino) closePanels();
+            setShowExplaino(!showExplaino);
+          },
+        },
+        {
+          id: "toggle-theme",
+          label: `Switch to ${theme === "dark" ? "light" : "dark"} mode`,
+          hint: "theme",
+          run: () => setTheme(theme === "dark" ? "light" : "dark"),
+        },
+        {
+          id: "toggle-laser",
+          label: `${laserActive ? "Stop" : "Start"} laser pointer`,
+          hint: "canvas",
+          run: () => setLaserActive((v) => !v),
+        },
+        {
+          id: "insert-table",
+          label: "Insert editable table",
+          hint: "canvas",
+          run: () => handleInsertTable(),
+        },
+        {
+          id: "save-cloud",
+          label: "Save drawing to cloud",
+          hint: "file",
+          run: () => handleSaveClick(),
+        },
+        {
+          id: "clear-canvas",
+          label: "Clear canvas",
+          hint: "canvas",
+          run: () => api()?.resetScene(),
+        },
+        {
+          id: "zoom-in",
+          label: "Zoom in",
+          hint: "view",
+          run: () => zoomBy(1.25),
+        },
+        {
+          id: "zoom-out",
+          label: "Zoom out",
+          hint: "view",
+          run: () => zoomBy(0.8),
+        },
+      ];
+    },
+    [
+      theme,
+      laserActive,
+      showCodePanel,
+      showAiTextPanel,
+      showDataStructuresPanel,
+      showExplaino,
+      handleInsertTable,
+      handleSaveClick,
+    ]
+  );
+
   // QuickShape: while the freedraw tool is down, a stationary hold
   // (< 5px for ~500ms) snaps the in-progress stroke into a clean geometric
   // shape. The swap goes through updateScene with EVENTUALLY capture, so the
@@ -1732,6 +1872,11 @@ export default function ExcalidrawWrapper() {
 
       {/* Todo overlay — toggled by the top-left corner button */}
       {showTodos && <TodoPanel onClose={() => setShowTodos(false)} />}
+
+      {/* VS Code-style command palette (Ctrl/Cmd+Shift+P) */}
+      {showPalette && (
+        <CommandPalette commands={paletteCommands} onClose={() => setShowPalette(false)} />
+      )}
 
       {/* In-canvas text toolbar — anchored to the selected/editing text box */}
       {textAnchor && textToolbarPos && (
