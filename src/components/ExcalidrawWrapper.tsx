@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
@@ -22,6 +22,7 @@ import type {
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { saveDrawing, loadDrawing } from "@/lib/firestore";
 import CodeEditorPanel from "./CodeEditorPanel";
+import IframePanel, { type IframePanelLayout } from "./IframePanel";
 import DataStructuresPanel from "./DataStructuresPanel";
 import CanvasStructureControls, { type ViewportBox } from "./CanvasStructureControls";
 import AITextSidebar from "./AITextSidebar";
@@ -49,7 +50,7 @@ import {
   type DataStructureDef,
   type StructureId,
 } from "@/lib/dataStructures";
-import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic, ListTodo } from "lucide-react";
+import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic, ListTodo, Monitor } from "lucide-react";
 
 /**
  * Metadata attached to every element of an inserted diagram via Excalidraw's
@@ -336,6 +337,8 @@ export default function ExcalidrawWrapper() {
   const [apiReady, setApiReady] = useState(false);
   const [showCodePanel, setShowCodePanel] = useState(false);
   const showCodePanelRef = useRef(false);
+  const [showIframePanel, setShowIframePanel] = useState(false);
+  const [iframePanelLayout, setIframePanelLayout] = useState<IframePanelLayout>("right");
   const [showDataStructuresPanel, setShowDataStructuresPanel] = useState(false);
   const [showTodos, setShowTodos] = useState(false);
   const [showAiTextPanel, setShowAiTextPanel] = useState(false);
@@ -1722,20 +1725,14 @@ export default function ExcalidrawWrapper() {
             </button>
             <button
               type="button"
-              onClick={() => {
-                if (!showCodePanel && excalidrawAPI.current) {
-                  excalidrawAPI.current.updateScene({ appState: { showLibrary: false } as unknown as AppState });
-                  if (showDataStructuresPanel) setShowDataStructuresPanel(false);
-                }
-                if (!showCodePanel) setShowAiTextPanel(false);
-                setShowCodePanel(!showCodePanel);
-              }}
+              onClick={() => setShowIframePanel((v) => !v)}
               className="excalidraw-button"
               style={PANEL_BUTTON_STYLE}
-              title="Open code editor"
+              title="Open screen / browser panel"
+              aria-pressed={showIframePanel}
             >
-              <Code size={16} strokeWidth={2.2} />
-              <span style={{ marginLeft: 4 }}>Code</span>
+              <Monitor size={16} strokeWidth={2.2} />
+              <span style={{ marginLeft: 4 }}>Screen</span>
             </button>
             <button
               type="button"
@@ -1973,6 +1970,15 @@ export default function ExcalidrawWrapper() {
       {/* Code Editor Panel */}
       {showCodePanel && (
         <CodeEditorPanel onClose={() => setShowCodePanel(false)} />
+      )}
+
+      {/* Iframe / Screen Panel */}
+      {showIframePanel && (
+        <IframePanel
+          onClose={() => setShowIframePanel(false)}
+          layout={iframePanelLayout}
+          onLayoutChange={setIframePanelLayout}
+        />
       )}
 
       {/* Launchers — bottom-right: single stack, Explaino above AI Text */}
