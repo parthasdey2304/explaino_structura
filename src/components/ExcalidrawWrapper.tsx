@@ -172,6 +172,29 @@ function stripMarkdown(md: string): string {
 }
 
 const REPO_URL = "https://github.com/parthasdey2304/explaino_structura";
+const CREATOR_GITHUB_URL = "https://github.com/parthasdey2304";
+const CREATOR_AVATAR_URL = "https://github.com/parthasdey2304.png";
+
+/** Creator profile avatar icon for MainMenu. */
+function CreatorAvatarIcon() {
+  return (
+    <img
+      src={CREATOR_AVATAR_URL}
+      alt="Parth Vastavik"
+      width={16}
+      height={16}
+      style={{
+        width: 16,
+        height: 16,
+        borderRadius: "50%",
+        objectFit: "cover",
+        display: "inline-block",
+        verticalAlign: "middle",
+        border: "1px solid rgba(255, 255, 255, 0.2)",
+      }}
+    />
+  );
+}
 
 /**
  * Shared visual style for the panel launcher buttons ("Code" top-right,
@@ -1610,6 +1633,14 @@ export default function ExcalidrawWrapper() {
             target="_blank"
           >
             explaino_structura
+          </MainMenu.ItemLink>
+          <MainMenu.ItemLink
+            href={CREATOR_GITHUB_URL}
+            icon={<CreatorAvatarIcon />}
+            rel="noreferrer noopener"
+            target="_blank"
+          >
+            Creator: Parth Vastavik
           </MainMenu.ItemLink>
           <MainMenu.Separator />
           <MainMenu.DefaultItems.ChangeCanvasBackground />
