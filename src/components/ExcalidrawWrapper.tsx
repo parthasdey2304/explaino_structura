@@ -32,13 +32,7 @@ import { chatStreamAuto, MistralError, type ChatMessage } from "@/lib/ai/mistral
 import { createCodeCardSvg } from "@/lib/ai/highlight";
 import TodoPanel from "./TodoOverlay";
 import LaserOverlay from "./LaserOverlay";
-import {
-  recognizeShape,
-  buildShapeElement,
-  HOLD_MS as QUICKSHAPE_HOLD_MS,
-  HOLD_TOL_PX as QUICKSHAPE_HOLD_TOL_PX,
-  type QPoint,
-} from "@/lib/quickshape";
+import { useQuickShape, useListMode, useCanvasShortcuts } from "@/hooks";
 import {
   DATA_STRUCTURES,
   applyAction,
@@ -345,7 +339,6 @@ export default function ExcalidrawWrapper() {
   const [showExplaino, setShowExplaino] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
   const editingTextIdRef = useRef<string | null>(null);
-  const [listMode, setListMode] = useState<"ordered" | "bullet" | null>(null);
   const [textAnchor, setTextAnchor] = useState<{
     id: string;
     minX: number;
@@ -776,49 +769,6 @@ export default function ExcalidrawWrapper() {
     return () => document.removeEventListener("click", handleClick, true);
   }, []);
 
-  // ── Global shortcuts ──────────────────────────────────────────────────
-  // Ctrl+` opens the code panel on the Terminal tab (VS Code style).
-  // Ctrl+C opens the code editor when no text field is focused.
-  useEffect(() => {
-    const isEditable = (target: EventTarget | null) => {
-      if (!(target instanceof HTMLElement)) return false;
-      return !!target.closest(
-        "input, textarea, [contenteditable='true'], .cm-content, select"
-      );
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return;
-
-      if (e.key === "`") {
-        e.preventDefault();
-        setShowCodePanel(true);
-        showCodePanelRef.current = true;
-        // Let the panel mount, then switch to the terminal tab and focus it.
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent("explaino:open-terminal"));
-        }, 60);
-        return;
-      }
-
-      if (e.key.toLowerCase() === "c") {
-        // Only hijack Ctrl+C when the code panel is closed and the user
-        // isn't typing in an input/editor, so copy still works normally.
-        if (showCodePanelRef.current) return;
-        if (isEditable(e.target)) return;
-        e.preventDefault();
-        setShowCodePanel(true);
-        showCodePanelRef.current = true;
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent("explaino:focus-editor"));
-        }, 60);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
   // --- Insert a data-structure diagram into the scene at a given scene position
   const insertDataStructure = useCallback(
     (def: DataStructureDef, data: unknown, sceneX: number, sceneY: number) => {
@@ -1102,36 +1052,8 @@ export default function ExcalidrawWrapper() {
     });
   }, []);
 
-  // Ordered/bullet list mode: while writing a canvas text element, Enter adds
-  // the next list marker ("2. " / "• ") on a new line automatically.
-  useEffect(() => {
-    if (!listMode) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Enter" || e.shiftKey) return;
-      const ta = document.querySelector<HTMLTextAreaElement>(".excalidraw textarea");
-      if (!ta || document.activeElement !== ta) return;
-      e.preventDefault();
-      const v = ta.value;
-      const pos = ta.selectionStart ?? v.length;
-      let marker: string;
-      if (listMode === "ordered") {
-        let n = 0;
-        for (const line of v.split("\n")) if (/^\s*\d+\.\s/.test(line)) n++;
-        marker = `${n + 1}. `;
-      } else {
-        marker = "• ";
-      }
-      const next = v.slice(0, pos) + "\n" + marker + v.slice(ta.selectionEnd ?? pos);
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
-      if (!setter) return;
-      setter.call(ta, next);
-      ta.dispatchEvent(new Event("input", { bubbles: true }));
-      const np = pos + 1 + marker.length;
-      ta.setSelectionRange(np, np);
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [listMode]);
+  // List mode formatting managed via useListMode hook
+  const { listMode, applyListToText } = useListMode(excalidrawAPI, handleUpdateCanvasText);
 
   // Scene data captured alongside an Explaino voice note.
   const getSceneDataForNote = useCallback((): {
@@ -1171,48 +1093,6 @@ export default function ExcalidrawWrapper() {
       ),
     });
   }, []);
-
-  // Apply ordered ("1. 2. 3.") or bullet ("•") list formatting to one text box.
-  // Clicking the same button again removes the formatting (toggle).
-  const applyListToText = useCallback(
-    (id: string, kind: "ordered" | "bullet") => {
-      const api = excalidrawAPI.current;
-      if (!api) return;
-      const target = api.getSceneElements().find((el) => el.id === id);
-      if (!target || target.isDeleted || target.type !== "text") return;
-      const t = target as unknown as { text?: string; customData?: { markdownRaw?: string } };
-      const current = typeof t.customData?.markdownRaw === "string" ? t.customData.markdownRaw : (t.text ?? "");
-      const lines = current.split("\n");
-      const nonEmpty = lines.filter((l) => l.trim());
-      const stripLine = (l: string) => l.replace(/^\s*(?:\d+[.)]\s*|[•\-*]\s*)/, "").trimEnd();
-      const isOrdered = nonEmpty.length > 0 && nonEmpty.every((l) => /^\s*\d+[.)]\s/.test(l));
-      const isBulleted = nonEmpty.length > 0 && nonEmpty.every((l) => /^\s*[•\-*]\s/.test(l));
-      let listed: string;
-      if ((kind === "ordered" && isOrdered) || (kind === "bullet" && isBulleted)) {
-        listed = lines.map(stripLine).join("\n").replace(/\n{3,}/g, "\n\n").trim();
-      } else if (kind === "ordered") {
-        let n = 0;
-        listed = lines
-          .map((l) => {
-            const s = stripLine(l);
-            if (!s) return "";
-            n += 1;
-            return `${n}. ${s}`;
-          })
-          .join("\n");
-      } else {
-        listed = lines
-          .map((l) => {
-            const s = stripLine(l);
-            return s ? `• ${s}` : "";
-          })
-          .join("\n");
-      }
-      handleUpdateCanvasText(id, listed);
-      setListMode(kind);
-    },
-    [handleUpdateCanvasText]
-  );
 
   // Per-text-box AI: mini chat anchored to the selected text element.
   const [textAiFor, setTextAiFor] = useState<string | null>(null);
@@ -1417,38 +1297,27 @@ export default function ExcalidrawWrapper() {
     };
   }, [selectedInstance, viewport]);
 
-  // Escape exits laser-pointer mode.
-  useEffect(() => {
-    if (!laserActive) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setLaserActive(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [laserActive]);
-
-  // Ctrl+Shift+P / Cmd+Shift+P (or Ctrl/Cmd+K) toggles the command palette.
-  // Capture phase + preventDefault so the browser never sees it as Print.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const mod = e.ctrlKey || e.metaKey;
-      const paletteKey =
-        (mod && e.shiftKey && e.key.toLowerCase() === "p") ||
-        (mod && !e.shiftKey && e.key.toLowerCase() === "k");
-      if (!paletteKey) return;
-      // Don't hijack typing inside text fields for Ctrl+K.
-      const t = e.target as HTMLElement | null;
-      const typing =
-        !!t &&
-        (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
-      if (typing && e.key.toLowerCase() === "k") return;
-      e.preventDefault();
-      e.stopPropagation();
-      setShowPalette((v) => !v);
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, []);
+  // Global shortcuts handled via useCanvasShortcuts hook
+  useCanvasShortcuts({
+    onTogglePalette: () => setShowPalette((v) => !v),
+    onOpenTerminal: () => {
+      setShowCodePanel(true);
+      showCodePanelRef.current = true;
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("explaino:open-terminal"));
+      }, 60);
+    },
+    onOpenCodeEditor: () => {
+      setShowCodePanel(true);
+      showCodePanelRef.current = true;
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("explaino:focus-editor"));
+      }, 60);
+    },
+    onExitLaser: () => setLaserActive(false),
+    isCodePanelOpen: showCodePanel,
+    isLaserActive: laserActive,
+  });
 
   const paletteCommands = useMemo<PaletteCommand[]>(
     () => {
@@ -1565,115 +1434,8 @@ export default function ExcalidrawWrapper() {
     ]
   );
 
-  // QuickShape: while the freedraw tool is down, a stationary hold
-  // (< 5px for ~500ms) snaps the in-progress stroke into a clean geometric
-  // shape. The swap goes through updateScene with EVENTUALLY capture, so the
-  // pointerup finalize records the whole stroke-to-shape as ONE undo entry.
-  // Afterwards Excalidraw's native drag machinery keeps resizing the new
-  // shape (generic elements via maybeDragNewGenericElement, lines/arrows via
-  // the linear branch) until the pointer is released.
-  useEffect(() => {
-    const api = excalidrawAPI.current;
-    if (!apiReady || !api) return;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let drawing = false;
-    let snapped = false;
-    let last: { x: number; y: number } | null = null;
-
-    const clearTimer = () => {
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
-    };
-
-    const fireHold = () => {
-      timer = null;
-      if (!drawing || snapped) return;
-      const inner = excalidrawAPI.current;
-      if (!inner) return;
-      const inProgress = (
-        inner.getAppState() as unknown as {
-          newElement?: ExcalidrawElement | null;
-        }
-      ).newElement;
-      if (!inProgress || inProgress.isDeleted || inProgress.type !== "freedraw") {
-        return;
-      }
-      const raw = inProgress as unknown as {
-        x: number;
-        y: number;
-        points?: readonly (readonly [number, number])[];
-      };
-      if (!raw.points || raw.points.length < 2) return;
-      const scenePts: QPoint[] = [];
-      for (const p of raw.points) {
-        if (!Array.isArray(p) || typeof p[0] !== "number" || typeof p[1] !== "number") {
-          continue;
-        }
-        scenePts.push({ x: raw.x + p[0], y: raw.y + p[1] });
-      }
-      const recognized = recognizeShape(scenePts);
-      if (!recognized) return; // leave ambiguous scribbles as freedraw
-      const shape = buildShapeElement(inProgress, recognized);
-      const elements = inner.getSceneElements();
-      inner.updateScene({
-        elements: elements.map((el) => (el.id === inProgress.id ? shape : el)),
-        appState: {
-          newElement: shape as unknown as AppState["newElement"],
-        },
-        captureUpdate: CaptureUpdateAction.EVENTUALLY,
-      });
-      snapped = true;
-    };
-
-    const armTimer = () => {
-      clearTimer();
-      timer = setTimeout(fireHold, QUICKSHAPE_HOLD_MS);
-    };
-
-    const onDown: Parameters<
-      ExcalidrawImperativeAPI["onPointerDown"]
-    >[0] = (tool, _pointerDownState, e) => {
-      if (tool.type !== "freedraw") return;
-      drawing = true;
-      snapped = false;
-      last = { x: e.clientX, y: e.clientY };
-      armTimer();
-    };
-    const onMove = (e: PointerEvent) => {
-      if (!drawing || snapped) return;
-      if (!last) {
-        last = { x: e.clientX, y: e.clientY };
-        return;
-      }
-      if (
-        Math.hypot(e.clientX - last.x, e.clientY - last.y) >=
-        QUICKSHAPE_HOLD_TOL_PX
-      ) {
-        last = { x: e.clientX, y: e.clientY };
-        armTimer();
-      }
-    };
-    const onUp = () => {
-      drawing = false;
-      snapped = false;
-      last = null;
-      clearTimer();
-    };
-
-    const unsubs = [api.onPointerDown(onDown), api.onPointerUp(onUp)];
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
-    return () => {
-      unsubs.forEach((unsub) => unsub());
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-      clearTimer();
-    };
-  }, [apiReady]);
+  // QuickShape hold-detection pipeline managed via useQuickShape hook
+  useQuickShape(excalidrawAPI, apiReady);
 
   return (
     <div className={`w-full h-screen overflow-hidden relative${laserActive ? " explaino-laser-active" : ""}`} style={{ fontFamily: "var(--ui-font, 'Assistant', sans-serif)" }}>

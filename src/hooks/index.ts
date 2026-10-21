@@ -5,7 +5,7 @@
  *
  * @example
  * ```ts
- * import { useScenePersistence, useQuickShape, useListMode } from "@/hooks";
+ * import { useScenePersistence, useQuickShape, useListMode, useCanvasShortcuts } from "@/hooks";
  * ```
  *
  * @version 1.1.0
@@ -18,3 +18,6 @@ export { useQuickShape } from "./useQuickShape";
 
 export { useListMode } from "./useListMode";
 export type { ListMode, ListModeHandle } from "./useListMode";
+
+export { useCanvasShortcuts } from "./useCanvasShortcuts";
+export type { CanvasShortcutHandlers } from "./useCanvasShortcuts";
