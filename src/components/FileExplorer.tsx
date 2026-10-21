@@ -24,15 +24,29 @@ import {
   deleteNode,
 } from "@/lib/workspace";
 
-interface FileExplorerProps {
+/**
+ * Props for the FileExplorer component.
+ */
+export interface FileExplorerProps {
+  /** Workspace file and folder tree structure. */
   tree: WorkspaceNode[];
+  /** Currently active file ID selected in the explorer. */
   activeFileId: string | null;
+  /** Callback when user clicks or selects a file to open. */
   onOpenFile: (id: string) => void;
+  /** Callback when file structure modifications occur (create, delete, rename). */
   onTreeChange: (tree: WorkspaceNode[]) => void;
 }
 
-type Creating = { parentId: string | null; kind: "file" | "folder" } | null;
-type Renaming = { id: string } | null;
+/**
+ * In-progress new node creation state (tracking target parent folder and node type).
+ */
+export type Creating = { parentId: string | null; kind: "file" | "folder" } | null;
+
+/**
+ * In-progress inline renaming state (tracking node ID being renamed).
+ */
+export type Renaming = { id: string } | null;
 
 export default function FileExplorer({
   tree,

@@ -152,6 +152,9 @@ function arrow(
 
 // ── Data types ────────────────────────────────────────────────────────
 
+/**
+ * Node representation for binary tree diagrams on the canvas.
+ */
 export interface TreeNode {
   id: string;
   value: string;
@@ -192,6 +195,9 @@ function withChildren(
   return next;
 }
 
+/**
+ * Data payload types for each supported data structure diagram.
+ */
 export interface StructureData {
   stack: { items: string[] };
   queue: { values: string[] };
@@ -202,6 +208,9 @@ export interface StructureData {
   table: { rows: number; cols: number; cells: string[][] };
 }
 
+/**
+ * Identifier string literal union representing each supported data structure type.
+ */
 export type StructureId = keyof StructureData;
 
 export const DEFAULT_DATA: StructureData = {
@@ -891,6 +900,9 @@ export function describeData(type: StructureId, data: unknown): string {
 
 // ── Registry ──────────────────────────────────────────────────────────
 
+/**
+ * Definition contract for a registered data structure generator.
+ */
 export interface DataStructureDef {
   id: StructureId;
   name: string;

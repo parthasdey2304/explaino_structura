@@ -1,1 +1,13 @@
-{"0": "CodeEditorPanel.tsx", "1": "dataStructures.ts", "2": "dependencies", "3": "ExcalidrawWrapper.tsx", "4": "AITextSidebar.tsx", "5": "instrumentation.ts", "6": "devDependencies", "7": "compilerOptions", "8": "AIChatPanel.tsx", "9": "TerminalService", "10": "quickshape.ts", "11": "getEditorSettings", "12": "ExplanioPanel.tsx", "13": "GeminiLiveSession", "14": "ExcalidrawErrorBoundary", "15": "LaserOverlay.tsx", "16": "emmet.d.ts", "17": "chat/route.ts", "18": "api/execute/route.ts", "19": "layout.tsx", "20": "eslint.config.mjs", "21": "next.config.ts", "22": "postcss.config.mjs"}
+{
+  "1": "dataStructures.ts",
+  "2": "dependencies",
+  "4": "AITextSidebar.tsx",
+  "5": "instrumentation.ts",
+  "7": "compilerOptions",
+  "8": "AIChatPanel.tsx",
+  "9": "TerminalService",
+  "10": "quickshape.ts",
+  "14": "ExcalidrawErrorBoundary",
+  "16": "emmet.d.ts",
+  "22": "postcss.config.mjs"
+}

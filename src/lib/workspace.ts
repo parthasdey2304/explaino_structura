@@ -3,25 +3,44 @@
 // The entire workspace is kept in browser storage ONLY (localStorage). Nothing
 // is ever uploaded or shared anywhere.
 
+/**
+ * Represents a single file node in the in-browser workspace tree.
+ */
 export interface WorkspaceFile {
   type: "file";
+  /** Unique ID of the file. */
   id: string;
+  /** Display name including file extension (e.g. `main.js`). */
   name: string;
+  /** Language identifier for syntax highlighting and code execution. */
   language: string;
+  /** File contents string. */
   content: string;
 }
 
+/**
+ * Represents a folder node in the in-browser workspace tree containing children.
+ */
 export interface WorkspaceFolder {
   type: "folder";
+  /** Unique ID of the folder. */
   id: string;
+  /** Name of the directory. */
   name: string;
+  /** Child files and subfolders. */
   children: WorkspaceNode[];
 }
 
+/**
+ * Union type representing any item in the workspace tree (file or folder).
+ */
 export type WorkspaceNode = WorkspaceFile | WorkspaceFolder;
 
 const STORAGE_KEY = "explaino-workspace-v1";
 
+/**
+ * Generates a collision-resistant unique identifier string for workspace nodes.
+ */
 export function uid(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
@@ -47,6 +66,12 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   dart: "dart",
 };
 
+/**
+ * Detects the language ID for a given file name based on its file extension.
+ *
+ * @param fileName - File name or path (e.g. `script.py`).
+ * @returns Language string identifier (e.g. `"python"`, `"javascript"`, `"text"`).
+ */
 export function detectLanguage(fileName: string): string {
   const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
   return EXT_TO_LANGUAGE[ext] ?? "text";
@@ -150,6 +175,12 @@ void main() {
 `,
 };
 
+/**
+ * Returns starter template code for a newly created file in the specified language.
+ *
+ * @param language - Target language ID.
+ * @param fileName - Name of the file.
+ */
 export function starterFor(language: string, fileName: string): string {
   const starter = STARTER_CODE[language];
   if (starter !== undefined) return starter;
@@ -158,6 +189,13 @@ export function starterFor(language: string, fileName: string): string {
 
 // ── Tree helpers (immutable) ─────────────────────────────────────────────
 
+/**
+ * Searches the tree recursively for a node with the given ID.
+ *
+ * @param tree - Root array of workspace nodes.
+ * @param id - The target node ID.
+ * @returns Object with the matched node and its parent ID, or null if not found.
+ */
 export function findNode(
   tree: WorkspaceNode[],
   id: string
@@ -172,6 +210,9 @@ export function findNode(
   return null;
 }
 
+/**
+ * Immutably adds a new node to the workspace tree under the specified parent folder.
+ */
 export function createNode(
   tree: WorkspaceNode[],
   parentId: string | null,
@@ -189,6 +230,9 @@ export function createNode(
   });
 }
 
+/**
+ * Immutably removes a node and all of its descendants from the workspace tree by ID.
+ */
 export function deleteNode(tree: WorkspaceNode[], id: string): WorkspaceNode[] {
   const without = tree.filter((n) => n.id !== id);
   if (without.length !== tree.length) return without;
@@ -197,6 +241,9 @@ export function deleteNode(tree: WorkspaceNode[], id: string): WorkspaceNode[] {
   );
 }
 
+/**
+ * Immutably renames a node within the workspace tree.
+ */
 export function renameNode(
   tree: WorkspaceNode[],
   id: string,
@@ -211,6 +258,9 @@ export function renameNode(
   });
 }
 
+/**
+ * Immutably updates the text content of a file node in the workspace tree.
+ */
 export function updateFileContent(
   tree: WorkspaceNode[],
   id: string,
@@ -225,6 +275,9 @@ export function updateFileContent(
   });
 }
 
+/**
+ * Immutably updates the associated language of a file node in the workspace tree.
+ */
 export function setFileLanguage(
   tree: WorkspaceNode[],
   id: string,
@@ -239,6 +292,9 @@ export function setFileLanguage(
   });
 }
 
+/**
+ * Recursively extracts all file nodes from the tree into a flat array.
+ */
 export function flattenFiles(tree: WorkspaceNode[]): WorkspaceFile[] {
   const files: WorkspaceFile[] = [];
   for (const n of tree) {
@@ -248,13 +304,20 @@ export function flattenFiles(tree: WorkspaceNode[]): WorkspaceFile[] {
   return files;
 }
 
+/**
+ * Flat representation of a workspace file including its relative directory path.
+ */
 export interface WorkspaceFileWithPath {
+  /** Full relative path from the workspace root (e.g. `src/utils/math.js`). */
   path: string;
   name: string;
   language: string;
   content: string;
 }
 
+/**
+ * Recursively flattens the tree into a list of files with their full relative path strings.
+ */
 export function flattenFilesWithPaths(
   tree: WorkspaceNode[],
   prefix = ""
@@ -336,6 +399,9 @@ function mergeNode(
  * existing same-name files. Never deletes workspace entries — local-only
  * files are preserved and synced back to the sandbox.
  */
+/**
+ * Merges a list of remote or sandbox files into the local workspace tree immutably.
+ */
 export function mergeSandboxFiles(
   tree: WorkspaceNode[],
   sandboxFiles: { path: string; content: string }[]
@@ -382,6 +448,9 @@ export function mergeSandboxFiles(
   return result;
 }
 
+/**
+ * Checks if a sibling node with the same name already exists in the given folder.
+ */
 export function isDuplicateName(
   tree: WorkspaceNode[],
   parentId: string | null,
@@ -411,6 +480,9 @@ function defaultWorkspace(): WorkspaceNode[] {
   ];
 }
 
+/**
+ * Loads the workspace tree from browser localStorage or returns default files.
+ */
 export function loadWorkspace(): WorkspaceNode[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -423,6 +495,9 @@ export function loadWorkspace(): WorkspaceNode[] {
   }
 }
 
+/**
+ * Persists the workspace tree snapshot to browser localStorage.
+ */
 export function saveWorkspace(tree: WorkspaceNode[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tree));

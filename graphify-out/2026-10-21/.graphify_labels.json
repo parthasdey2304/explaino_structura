@@ -1,0 +1,13 @@
+{
+  "1": "dataStructures.ts",
+  "2": "dependencies",
+  "4": "AITextSidebar.tsx",
+  "5": "instrumentation.ts",
+  "7": "compilerOptions",
+  "8": "AIChatPanel.tsx",
+  "9": "TerminalService",
+  "10": "quickshape.ts",
+  "14": "ExcalidrawErrorBoundary",
+  "16": "emmet.d.ts",
+  "22": "postcss.config.mjs"
+}
