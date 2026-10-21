@@ -1,12 +1,12 @@
 # Graph Report - explaino_structura  (2026-10-21)
 
 ## Corpus Check
-- 61 files · ~108,821 words
+- 61 files · ~108,743 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 5 file(s) not represented in the graph (top: (none) 2, .example 1, .ico 1)
 
 ## Summary
-- 599 nodes · 1190 edges · 29 communities (28 shown, 1 thin omitted)
+- 599 nodes · 1189 edges · 29 communities (28 shown, 1 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 13 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
@@ -88,8 +88,8 @@ Cohesion: 0.08
 Nodes (25): dependencies, codemirror, @codemirror/commands, @codemirror/lang-cpp, @codemirror/lang-html, @codemirror/lang-java, @codemirror/lang-javascript, @codemirror/lang-python (+17 more)
 
 ### Community 3 - "ExcalidrawWrapper.tsx"
-Cohesion: 0.05
-Nodes (68): @excalidraw/excalidraw, react, CommandPalette(), fuzzyMatch(), PaletteCommand, boxOf(), ExcalidrawComponent, ExcalidrawWrapper() (+60 more)
+Cohesion: 0.06
+Nodes (62): @excalidraw/excalidraw, react, CommandPalette(), fuzzyMatch(), PaletteCommand, boxOf(), ExcalidrawComponent, ExcalidrawWrapper() (+54 more)
 
 ### Community 4 - "AITextSidebar.tsx"
 Cohesion: 0.11
@@ -132,8 +132,8 @@ Cohesion: 0.16
 Nodes (11): executeDart(), Judge0Response, executeHTML(), executors, executeJava(), extractPublicClassName(), Judge0Response, executeJavaScript() (+3 more)
 
 ### Community 14 - "ExcalidrawErrorBoundary"
-Cohesion: 0.21
-Nodes (6): lucide-react, ExcalidrawWrapper, Home(), ExcalidrawErrorBoundary, Props, State
+Cohesion: 0.13
+Nodes (12): lucide-react, ExcalidrawWrapper, Home(), ExcalidrawErrorBoundary, Props, State, loadTodos(), nextTodoId() (+4 more)
 
 ### Community 15 - "CodeEditorPanel.tsx"
 Cohesion: 0.17
@@ -189,7 +189,7 @@ Nodes (3): optionalDependencies, lightningcss-win32-x64-msvc, @next/swc-win32-x6
 
 ## Knowledge Gaps
 - **13 isolated node(s):** `perfect-freehand`, `react-colorful`, `react-dom`, `zustand`, `@next/swc-win32-x64-msvc` (+8 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 216 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 217 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **1 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
@@ -204,7 +204,7 @@ _Questions this graph is uniquely positioned to answer:_
 - **Why does `lucide-react` connect `ExcalidrawErrorBoundary` to `workspace.ts`, `dataStructures.ts`, `ExcalidrawWrapper.tsx`, `AITextSidebar.tsx`, `instrumentation.ts`, `AIChatPanel.tsx`, `getEditorSettings`, `ExplainoPanel.tsx`, `CodeEditorPanel.tsx`, `package.json`?**
   _High betweenness centrality (0.088) - this node is a cross-community bridge._
 - **Should `dataStructures.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.06927551560021153 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07103825136612021 - nodes in this community are weakly interconnected._
 - **Why does `@excalidraw/excalidraw` connect `ExcalidrawWrapper.tsx` to `dataStructures.ts`, `TerminalService`, `quickshape.ts`, `ExplainoPanel.tsx`, `package.json`?**
   _High betweenness centrality (0.076) - this node is a cross-community bridge._
 - **Should `dependencies` be split into smaller, more focused modules?**

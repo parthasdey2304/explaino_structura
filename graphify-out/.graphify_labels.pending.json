@@ -1,20 +1,16 @@
 {
-  "0": "workspace.ts",
+  "0": "CodeEditorPanel.tsx",
   "3": "ExcalidrawWrapper.tsx",
+  "4": "hooks/index.ts",
   "6": "devDependencies",
-  "11": "getEditorSettings",
+  "11": "GeminiLiveSession",
   "12": "ExplainoPanel.tsx",
-  "13": "executors/index.ts",
-  "15": "CodeEditorPanel.tsx",
   "17": "package.json",
   "18": "highlight.ts",
   "19": "emmetExtension.ts",
   "20": "eslint.config.mjs",
   "21": "Features",
-  "23": "clang.ts",
-  "24": "snippets.ts",
   "25": "createCodeCardSvg",
   "26": "scripts",
-  "27": "python.ts",
   "28": "optionalDependencies"
 }

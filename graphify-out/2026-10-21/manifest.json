@@ -180,9 +180,9 @@
     "semantic_hash": "b8b5a3b4fc7af385e33660ff3930fc72"
   },
   "src/lib/dataStructures.ts": {
-    "mtime": 1792582152.1439154,
-    "seen": 1792582184.275396,
-    "ast_hash": "54b404458bbe100d22dff10007fdddae",
+    "mtime": 1792582313.0536406,
+    "seen": 1792582339.3329587,
+    "ast_hash": "a85883063337c8703dfc2f067f988e0e",
     "semantic_hash": ""
   },
   "src/lib/editorSettings.ts": {
@@ -306,10 +306,10 @@
     "semantic_hash": "0a2f4ed9289b65cd3feb4fb4ab3a4fcd"
   },
   "archify-out/architecture.json": {
-    "mtime": 1791123752.2320218,
-    "seen": 1791126085.8306105,
-    "ast_hash": "57d29251e76c0e7c24189453a5153408",
-    "semantic_hash": "57d29251e76c0e7c24189453a5153408"
+    "mtime": 1792582208.2327738,
+    "seen": 1792582339.3328846,
+    "ast_hash": "ae3a18aecf8b6804aeff92c1f85e51e6",
+    "semantic_hash": ""
   },
   "src/components/CommandPalette.tsx": {
     "mtime": 1791303027.6218898,
