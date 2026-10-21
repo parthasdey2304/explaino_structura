@@ -3,11 +3,22 @@
 import React, { useState, useRef, useCallback } from "react";
 import { X, Monitor, Globe, RotateCcw, Maximize2, ChevronDown } from "lucide-react";
 
+/**
+ * Dock placement layout options for the embedded iframe panel.
+ * - `right` / `left`: Vertical splits on the right or left edge.
+ * - `top` / `bottom`: Horizontal splits on the top or bottom edge.
+ */
 export type IframePanelLayout = "right" | "left" | "top" | "bottom";
 
-interface IframePanelProps {
+/**
+ * Props passed to the IframePanel component.
+ */
+export interface IframePanelProps {
+  /** Callback fired when the user clicks the close (X) button in the toolbar. */
   onClose: () => void;
+  /** Current dock layout placement of the panel. */
   layout: IframePanelLayout;
+  /** Callback to change the dock layout (e.g. from right to bottom). */
   onLayoutChange: (layout: IframePanelLayout) => void;
 }
 

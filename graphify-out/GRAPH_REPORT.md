@@ -1,20 +1,22 @@
-# Graph Report - explaino_structura  (2026-10-05)
+# Graph Report - explaino_structura  (2026-10-21)
 
 ## Corpus Check
-- cluster-only mode — file stats not available
+- 61 files · ~108,743 words
+- Verdict: corpus is large enough that graph structure adds value.
+- Unclassified: 5 file(s) not represented in the graph (top: (none) 2, .example 1, .ico 1)
 
 ## Summary
-- 558 nodes · 965 edges · 23 communities (17 shown, 6 thin omitted)
+- 599 nodes · 1189 edges · 29 communities (28 shown, 1 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 13 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `6ae6f5b8`
+- Built from commit: `d25ca95a`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- CodeEditorPanel.tsx
+- workspace.ts
 - dataStructures.ts
 - dependencies
 - ExcalidrawWrapper.tsx
@@ -26,134 +28,184 @@
 - TerminalService
 - quickshape.ts
 - getEditorSettings
-- ExplanioPanel.tsx
-- GeminiLiveSession
+- ExplainoPanel.tsx
+- executors/index.ts
 - ExcalidrawErrorBoundary
-- LaserOverlay.tsx
+- CodeEditorPanel.tsx
 - emmet.d.ts
-- chat/route.ts
-- api/execute/route.ts
-- layout.tsx
+- package.json
+- highlight.ts
+- emmetExtension.ts
 - eslint.config.mjs
-- next.config.ts
+- Features
 - postcss.config.mjs
+- clang.ts
+- snippets.ts
+- createCodeCardSvg
+- scripts
+- python.ts
+- optionalDependencies
 
 ## God Nodes (most connected - your core abstractions)
-1. `CodeEditorPanel()` - 25 edges
-2. `ExcalidrawWrapper()` - 19 edges
-3. `AIChatPanel()` - 16 edges
-4. `compilerOptions` - 16 edges
-5. `GeminiLiveSession` - 15 edges
-6. `TerminalService` - 14 edges
-7. `recognizeShape()` - 13 edges
-8. `getEditorSettings()` - 11 edges
-9. `createCodeCardSvg()` - 11 edges
-10. `applyAction()` - 10 edges
+1. `CodeEditorPanel()` - 32 edges
+2. `ExcalidrawWrapper()` - 32 edges
+3. `react` - 21 edges
+4. `AIChatPanel()` - 18 edges
+5. `GeminiLiveSession` - 16 edges
+6. `compilerOptions` - 16 edges
+7. `lucide-react` - 15 edges
+8. `DataStructuresPanel()` - 14 edges
+9. `TerminalService` - 14 edges
+10. `recognizeShape()` - 13 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `PanelState` --references--> `WorkspaceNode`  [EXTRACTED]
-  src/components/CodeEditorPanel.tsx → src/lib/workspace.ts
-- `FileExplorerProps` --references--> `WorkspaceNode`  [EXTRACTED]
-  src/components/FileExplorer.tsx → src/lib/workspace.ts
-- `TreeNodeProps` --references--> `WorkspaceNode`  [EXTRACTED]
-  src/components/FileExplorer.tsx → src/lib/workspace.ts
-- `CodeEditorPanel()` --calls--> `getEditorSettings()`  [EXTRACTED]
-  src/components/CodeEditorPanel.tsx → src/lib/editorSettings.ts
-- `CodeEditorPanel()` --calls--> `subscribeEditorSettings()`  [EXTRACTED]
-  src/components/CodeEditorPanel.tsx → src/lib/editorSettings.ts
+- `CodeEditorPanel()` --calls--> `AIChatPanel()`  [EXTRACTED]
+  src/components/CodeEditorPanel.tsx → src/components/AIChatPanel.tsx
+- `code()` --calls--> `highlightCode()`  [EXTRACTED]
+  src/components/AITextSidebar.tsx → src/lib/ai/highlight.ts
+- `AITextSidebar()` --calls--> `chatStreamAuto()`  [EXTRACTED]
+  src/components/AITextSidebar.tsx → src/lib/ai/mistral.ts
+- `ExcalidrawWrapper()` --calls--> `AITextSidebar()`  [EXTRACTED]
+  src/components/ExcalidrawWrapper.tsx → src/components/AITextSidebar.tsx
+- `ExcalidrawWrapper()` --calls--> `CanvasStructureControls()`  [EXTRACTED]
+  src/components/ExcalidrawWrapper.tsx → src/components/CanvasStructureControls.tsx
 
 ## Import Cycles
 - None detected.
 
-## Communities (23 total, 6 thin omitted)
+## Communities (29 total, 1 thin omitted)
 
-### Community 0 - "CodeEditorPanel.tsx"
-Cohesion: 0.05
-Nodes (64): baseLangExtension(), cmHighlight, cmTheme, CodeEditorPanel(), CodeEditorPanelProps, FILE_ICON_COLORS, langExtension(), LANGUAGES (+56 more)
+### Community 0 - "workspace.ts"
+Cohesion: 0.14
+Nodes (26): PanelState, Creating, FileExplorer(), FileExplorerProps, InlineInput(), Renaming, TreeNode(), TreeNodeProps (+18 more)
 
 ### Community 1 - "dataStructures.ts"
 Cohesion: 0.07
-Nodes (49): CanvasStructureControls(), CanvasStructureControlsProps, ViewportBox, BuilderState, DataStructuresPanel(), DataStructuresPanelProps, ICONS, initBuilderState() (+41 more)
+Nodes (58): CanvasStructureControls(), CanvasStructureControlsProps, ViewportBox, ArrayPreview(), BinaryTreePreview(), BuilderState, DataStructuresPanel(), DataStructuresPanelProps (+50 more)
 
 ### Community 2 - "dependencies"
-Cohesion: 0.04
-Nodes (49): codemirror, @codemirror/commands, @codemirror/lang-cpp, @codemirror/lang-html, @codemirror/lang-java, @codemirror/lang-javascript, @codemirror/lang-python, @codemirror/language (+41 more)
+Cohesion: 0.08
+Nodes (25): dependencies, codemirror, @codemirror/commands, @codemirror/lang-cpp, @codemirror/lang-html, @codemirror/lang-java, @codemirror/lang-javascript, @codemirror/lang-python (+17 more)
 
 ### Community 3 - "ExcalidrawWrapper.tsx"
-Cohesion: 0.07
-Nodes (39): boxOf(), DSMeta, ExcalidrawComponent, ExcalidrawWrapper(), load(), harvestLabels(), isPointPair(), LINEAR_TYPES (+31 more)
+Cohesion: 0.06
+Nodes (62): @excalidraw/excalidraw, react, CommandPalette(), fuzzyMatch(), PaletteCommand, boxOf(), ExcalidrawComponent, ExcalidrawWrapper() (+54 more)
 
 ### Community 4 - "AITextSidebar.tsx"
-Cohesion: 0.07
-Nodes (35): AITextSidebar(), AITextSidebarProps, AssistantBody(), CANONICAL_ORDER, code(), copyText(), createSpeechRecognition(), extractSolutions() (+27 more)
+Cohesion: 0.11
+Nodes (26): dompurify, marked, AITextSidebar(), AITextSidebarProps, AssistantBody(), CANONICAL_ORDER, code(), copyText() (+18 more)
 
 ### Community 5 - "instrumentation.ts"
-Cohesion: 0.09
-Nodes (28): VisualizerPanel(), VisualizerPanelProps, Analysis, analyze(), AsyncFunctionCtor, BOUNDARY_STOP_WORDS, BraceKind, formatLogArg() (+20 more)
+Cohesion: 0.10
+Nodes (32): ArrayVisualizer(), MemoryBlock(), ObjectVisualizer(), VariableCard(), VisualizerPanel(), VisualizerPanelProps, Analysis, analyze() (+24 more)
 
 ### Community 6 - "devDependencies"
-Cohesion: 0.06
-Nodes (32): eslint, eslint-config-next, lightningcss-win32-x64-msvc, @next/swc-win32-x64-msvc, devDependencies, eslint, eslint-config-next, tailwindcss (+24 more)
+Cohesion: 0.20
+Nodes (10): devDependencies, eslint, eslint-config-next, tailwindcss, @tailwindcss/postcss, @types/dompurify, @types/node, @types/react (+2 more)
 
 ### Community 7 - "compilerOptions"
-Cohesion: 0.07
-Nodes (28): dom, dom.iterable, esnext, **/*.mts, .next/dev/types/**/*.ts, next-env.d.ts, .next/types/**/*.ts, node_modules (+20 more)
+Cohesion: 0.11
+Nodes (18): compilerOptions, allowJs, esModuleInterop, incremental, isolatedModules, jsx, lib, module (+10 more)
 
 ### Community 8 - "AIChatPanel.tsx"
-Cohesion: 0.15
-Nodes (25): AIChatPanel(), AIChatPanelProps, AttachedFile, DisplayMessage, loadChatHistory(), nextId(), renderMarkdown(), saveChatHistory() (+17 more)
+Cohesion: 0.10
+Nodes (27): AIChatPanel(), AIChatPanelProps, AttachedFile, DisplayMessage, loadChatHistory(), nextId(), renderMarkdown(), saveChatHistory() (+19 more)
 
 ### Community 9 - "TerminalService"
-Cohesion: 0.11
-Nodes (12): POST(), POST(), POST(), POST(), POST(), HistoryEntry, Terminal(), TerminalProps (+4 more)
+Cohesion: 0.07
+Nodes (20): nextConfig, e2b, next, ChatMessage, isChatMessage(), POST(), ExecuteBody, LANGUAGE_IDS (+12 more)
 
 ### Community 10 - "quickshape.ts"
 Cohesion: 0.15
 Nodes (26): angleBetween(), baseOf(), bboxOf(), buildShapeElement(), deflection(), dist(), fitEllipse(), HOLD_MS (+18 more)
 
 ### Community 11 - "getEditorSettings"
-Cohesion: 0.13
-Nodes (22): OPTIONS, SettingsMenu(), DEFAULTS, EditorSettings, getEditorSettings(), readFromStorage(), setEditorSettings(), subscribeEditorSettings() (+14 more)
+Cohesion: 0.40
+Nodes (8): OPTIONS, SettingsMenu(), DEFAULTS, EditorSettings, getEditorSettings(), readFromStorage(), setEditorSettings(), subscribeEditorSettings()
 
-### Community 12 - "ExplanioPanel.tsx"
-Cohesion: 0.21
-Nodes (14): blobToDataUrl(), buildFrameThumbs(), clipElementsToRegion(), clipSceneToRegion(), contentBBox(), ExplanioFrame, ExplanioNote, ExplanioPanel() (+6 more)
+### Community 12 - "ExplainoPanel.tsx"
+Cohesion: 0.12
+Nodes (18): firebase, blobToDataUrl(), buildFrameThumbs(), clipElementsToRegion(), clipSceneToRegion(), contentBBox(), ExplainoFrame, ExplainoNote (+10 more)
+
+### Community 13 - "executors/index.ts"
+Cohesion: 0.16
+Nodes (11): executeDart(), Judge0Response, executeHTML(), executors, executeJava(), extractPublicClassName(), Judge0Response, executeJavaScript() (+3 more)
 
 ### Community 14 - "ExcalidrawErrorBoundary"
-Cohesion: 0.20
-Nodes (4): ExcalidrawWrapper, ExcalidrawErrorBoundary, Props, State
+Cohesion: 0.13
+Nodes (12): lucide-react, ExcalidrawWrapper, Home(), ExcalidrawErrorBoundary, Props, State, loadTodos(), nextTodoId() (+4 more)
 
-### Community 15 - "LaserOverlay.tsx"
-Cohesion: 0.36
-Nodes (7): drawTipDot(), LASER_RED, LaserOverlay(), paintFrame(), tracePath(), Trail, TrailPoint
+### Community 15 - "CodeEditorPanel.tsx"
+Cohesion: 0.17
+Nodes (18): baseLangExtension(), cmHighlight, cmTheme, CodeEditorPanel(), CodeEditorPanelProps, FILE_ICON_COLORS, langExtension(), LANGUAGES (+10 more)
 
 ### Community 16 - "emmet.d.ts"
 Cohesion: 0.40
 Nodes (4): emmet, ExtractedAbbreviation, ExtractOptions, UserConfig
 
-### Community 17 - "chat/route.ts"
+### Community 17 - "package.json"
+Cohesion: 0.11
+Nodes (17): name, private, version, codemirror, lightningcss-win32-x64-msvc, @next/swc-win32-x64-msvc, perfect-freehand, react-colorful (+9 more)
+
+### Community 18 - "highlight.ts"
+Cohesion: 0.15
+Nodes (13): @codemirror/lang-cpp, @codemirror/lang-html, @codemirror/lang-java, @codemirror/lang-javascript, @codemirror/lang-python, @codemirror/language, @codemirror/legacy-modes, ALIASES (+5 more)
+
+### Community 19 - "emmetExtension.ts"
+Cohesion: 0.19
+Nodes (10): @codemirror/commands, @codemirror/state, @codemirror/view, emmet, createTabKeymap(), EmmetExpansion, expandEmmetAtCursor(), snippetSource() (+2 more)
+
+### Community 20 - "eslint.config.mjs"
+Cohesion: 0.50
+Nodes (3): eslintConfig, eslint, eslint-config-next
+
+### Community 21 - "Features"
+Cohesion: 0.17
+Nodes (11): AI Assistant (Mistral, bring-your-own-key), Code Editor & Terminal, Data Structure Diagrams (on-canvas, not overlays), Environment Variables (`.env.local`), Explaino Structura, Features, Getting Started, Project Structure (+3 more)
+
+### Community 23 - "clang.ts"
+Cohesion: 0.33
+Nodes (8): cachedModules, executeC(), executeCpp(), getCompiler(), isClangLoaded(), loadCdnModule(), loadingModules, runClang()
+
+### Community 24 - "snippets.ts"
+Cohesion: 0.22
+Nodes (8): C_FAMILY_SNIPPETS, CPP_SNIPPETS, DART_SNIPPETS, JAVA_SNIPPETS, JAVASCRIPT_SNIPPETS, PYTHON_SNIPPETS, SnippetDef, SNIPPETS_BY_LANGUAGE
+
+### Community 25 - "createCodeCardSvg"
+Cohesion: 0.32
+Nodes (5): createCodeCardSvg(), compensateForDarkCanvas(), hexToRgb(), rgbToHex(), toBase64()
+
+### Community 26 - "scripts"
+Cohesion: 0.40
+Nodes (5): scripts, build, dev, lint, start
+
+### Community 27 - "python.ts"
+Cohesion: 0.50
+Nodes (3): ensurePyodide(), executePython(), isPyodideLoaded()
+
+### Community 28 - "optionalDependencies"
 Cohesion: 0.67
-Nodes (3): ChatMessage, isChatMessage(), POST()
+Nodes (3): optionalDependencies, lightningcss-win32-x64-msvc, @next/swc-win32-x64-msvc
 
 ## Knowledge Gaps
-- **168 isolated node(s):** `CodeEditorPanelProps`, `RunStatus`, `Creating`, `Renaming`, `Judge0Response` (+163 more)
-  These have ≤1 connection - possible missing edges or undocumented components.
-- **6 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **13 isolated node(s):** `perfect-freehand`, `react-colorful`, `react-dom`, `zustand`, `@next/swc-win32-x64-msvc` (+8 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 217 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **1 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `GeminiLiveSession` connect `GeminiLiveSession` to `AIChatPanel.tsx`?**
-  _High betweenness centrality (0.028) - this node is a cross-community bridge._
-- **Why does `createCodeCardSvg()` connect `AITextSidebar.tsx` to `ExcalidrawWrapper.tsx`?**
-  _High betweenness centrality (0.018) - this node is a cross-community bridge._
-- **What connects `CodeEditorPanelProps`, `RunStatus`, `Creating` to the rest of the system?**
-  _168 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `CodeEditorPanel.tsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.05495151337055539 - nodes in this community are weakly interconnected._
+- **Why does `react` connect `ExcalidrawWrapper.tsx` to `workspace.ts`, `dataStructures.ts`, `AITextSidebar.tsx`, `instrumentation.ts`, `AIChatPanel.tsx`, `TerminalService`, `quickshape.ts`, `getEditorSettings`, `ExplainoPanel.tsx`, `ExcalidrawErrorBoundary`, `CodeEditorPanel.tsx`, `package.json`?**
+  _High betweenness centrality (0.154) - this node is a cross-community bridge._
+- **What connects `perfect-freehand`, `react-colorful`, `react-dom` to the rest of the system?**
+  _13 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `workspace.ts` be split into smaller, more focused modules?**
+  _Cohesion score 0.14285714285714285 - nodes in this community are weakly interconnected._
+- **Why does `lucide-react` connect `ExcalidrawErrorBoundary` to `workspace.ts`, `dataStructures.ts`, `ExcalidrawWrapper.tsx`, `AITextSidebar.tsx`, `instrumentation.ts`, `AIChatPanel.tsx`, `getEditorSettings`, `ExplainoPanel.tsx`, `CodeEditorPanel.tsx`, `package.json`?**
+  _High betweenness centrality (0.088) - this node is a cross-community bridge._
 - **Should `dataStructures.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.07071887784921099 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07103825136612021 - nodes in this community are weakly interconnected._
+- **Why does `@excalidraw/excalidraw` connect `ExcalidrawWrapper.tsx` to `dataStructures.ts`, `TerminalService`, `quickshape.ts`, `ExplainoPanel.tsx`, `package.json`?**
+  _High betweenness centrality (0.076) - this node is a cross-community bridge._
 - **Should `dependencies` be split into smaller, more focused modules?**
-  _Cohesion score 0.04081632653061224 - nodes in this community are weakly interconnected._
-- **Should `ExcalidrawWrapper.tsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.07246376811594203 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08 - nodes in this community are weakly interconnected._

@@ -162,15 +162,28 @@ function langExtension(language: string): Extension {
   return [baseLangExtension(language), snippetLanguageData(language)];
 }
 
-type RunStatus = "idle" | "running" | "loading" | "done" | "error" | "timeout";
+/**
+ * Current execution status of the active file in the code editor.
+ */
+export type RunStatus = "idle" | "running" | "loading" | "done" | "error" | "timeout";
 
-interface PanelState {
+/**
+ * Persistent tab and file selection state of the CodeEditorPanel.
+ */
+export interface PanelState {
+  /** Workspace file/folder tree hierarchy. */
   tree: WorkspaceNode[];
+  /** Array of file IDs currently opened as tabs in the editor. */
   tabs: string[];
+  /** File ID of the currently active/focused editor tab, or null. */
   activeFileId: string | null;
 }
 
-interface CodeEditorPanelProps {
+/**
+ * Props accepted by the CodeEditorPanel component.
+ */
+export interface CodeEditorPanelProps {
+  /** Callback fired to close the full code editor panel. */
   onClose: () => void;
 }
 
