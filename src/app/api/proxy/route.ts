@@ -116,19 +116,45 @@ export async function GET(req: NextRequest) {
     window.location.href = '/api/proxy?url=' + encodeURIComponent(dest);
   }, true);
 
+  // Intercept Enter key in search input boxes (e.g. Google Search textarea name="q" or input name="q")
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      var target = e.target;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        var name = (target.name || '').toLowerCase();
+        var val = target.value ? target.value.trim() : '';
+        if (!val) return;
+        var form = target.closest('form');
+        var isSearch = name === 'q' || name === 'query' || name === 'search' || (form && form.getAttribute('role') === 'search') || (form && form.action && form.action.includes('search'));
+        if (isSearch) {
+          e.preventDefault();
+          e.stopPropagation();
+          var actionUrl = form && form.action ? form.action : (window.location.origin + '/search');
+          var separator = actionUrl.indexOf('?') !== -1 ? '&' : '?';
+          var finalUrl = actionUrl + separator + 'q=' + encodeURIComponent(val);
+          try {
+            window.parent.postMessage({ type: 'canvas-browser:navigate', url: finalUrl }, '*');
+          } catch(err) {}
+          window.location.href = '/api/proxy?url=' + encodeURIComponent(finalUrl);
+        }
+      }
+    }
+  }, true);
+
   // Intercept form submissions (e.g. Google Search) and route through proxy
   document.addEventListener('submit', function(e) {
     var form = e.target;
-    if (!form || !form.action) return;
+    if (!form) return;
     var method = (form.method || 'GET').toUpperCase();
     if (method === 'GET') {
       e.preventDefault();
+      e.stopPropagation();
       var formData = new FormData(form);
       var params = new URLSearchParams();
       formData.forEach(function(value, key) {
         params.append(key, value);
       });
-      var actionUrl = form.action;
+      var actionUrl = form.action || (window.location.origin + '/search');
       var separator = actionUrl.indexOf('?') !== -1 ? '&' : '?';
       var finalUrl = actionUrl + separator + params.toString();
       try {
@@ -137,6 +163,29 @@ export async function GET(req: NextRequest) {
       window.location.href = '/api/proxy?url=' + encodeURIComponent(finalUrl);
     }
   }, true);
+
+  // Transparently route client-side relative and origin fetches through proxy to avoid CORS blocks
+  var origFetch = window.fetch;
+  if (origFetch) {
+    window.fetch = function(input, init) {
+      try {
+        var rawUrl = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+        if (rawUrl && !rawUrl.startsWith('data:') && !rawUrl.startsWith('blob:') && !rawUrl.startsWith('/api/proxy')) {
+          var targetUrl = rawUrl;
+          if (rawUrl.startsWith('/') || rawUrl.startsWith('./')) {
+            targetUrl = origin + (rawUrl.startsWith('/') ? '' : '/') + rawUrl;
+          }
+          if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
+            var proxied = '/api/proxy?url=' + encodeURIComponent(targetUrl);
+            if (typeof input === 'string') {
+              return origFetch.call(this, proxied, init);
+            }
+          }
+        }
+      } catch (err) {}
+      return origFetch.apply(this, arguments);
+    };
+  }
 })();
 </script>
 `;
