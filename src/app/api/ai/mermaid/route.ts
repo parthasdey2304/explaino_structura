@@ -8,7 +8,8 @@ const SYSTEM_PROMPT =
   "1. Output ONLY the raw Mermaid code. No markdown fences (do not write ``` or ```mermaid), no backticks.\n" +
   "2. Do NOT include conversational filler, greetings, comments, or explanations.\n" +
   "3. Choose the most appropriate diagram type: sequenceDiagram, flowchart TD/LR, classDiagram, stateDiagram-v2, or erDiagram.\n" +
-  "4. Ensure node labels, arrows, and syntax are 100% valid Mermaid syntax.";
+  "4. Ensure node labels, arrows, and syntax are 100% valid Mermaid syntax.\n" +
+  "5. In sequence diagrams, always use 'participant' (e.g. participant Client as 💻 Client) instead of 'actor' to render modern clean rectangular cards instead of stick figures.";
 
 function cleanMermaidCode(raw: string): string {
   let cleaned = raw.trim();
@@ -31,8 +32,8 @@ function getFallbackMermaid(prompt: string): string {
   if (p.includes("tcp") || p.includes("handshake") || p.includes("syn")) {
     return [
       "sequenceDiagram",
-      "    actor Client",
-      "    actor Server",
+      "    participant Client as 💻 Client",
+      "    participant Server as 🖥️ Server",
       "    Client->>Server: SYN",
       "    Note over Server: Server receives SYN",
       "    Server->>Client: SYN-ACK",
@@ -52,7 +53,7 @@ function getFallbackMermaid(prompt: string): string {
   ) {
     return [
       "sequenceDiagram",
-      "    actor User",
+      "    participant User as 👤 User",
       "    participant Client as Client App",
       "    participant Auth as Auth Server",
       "    participant API as API Server",
