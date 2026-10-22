@@ -37,6 +37,8 @@ import { createCodeCardSvg } from "@/lib/ai/highlight";
 import TodoPanel from "./TodoOverlay";
 import LaserOverlay from "./LaserOverlay";
 import RightCanvasToolbar from "./RightCanvasToolbar";
+import SmartBoardDock from "./SmartBoardDock";
+import { getOptimalSaveDebounceMs, getDeviceProfile } from "@/lib/deviceOptimization";
 
 const TextToDiagramModal = dynamic(() => import("./TextToDiagramModal"), {
   ssr: false,
@@ -53,7 +55,7 @@ import {
   type DataStructureDef,
   type StructureId,
 } from "@/lib/dataStructures";
-import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic, ListTodo, Monitor, LogOut, Terminal, MessageSquare, Layers, GitBranch, MousePointer, Square, Circle, Diamond, ArrowRight, Minus, PenTool, Type, Eraser, ZoomIn, ZoomOut, Maximize2, RotateCcw, Trash2, Download, RefreshCw } from "lucide-react";
+import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic, ListTodo, Monitor, LogOut, Terminal, MessageSquare, Layers, GitBranch, MousePointer, Square, Circle, Diamond, ArrowRight, Minus, PenTool, Type, Eraser, ZoomIn, ZoomOut, Maximize2, RotateCcw, Trash2, Download, RefreshCw, Hand, Sliders } from "lucide-react";
 import { performClientLogout } from "./AuthGate";
 
 /**
@@ -380,6 +382,8 @@ export default function ExcalidrawWrapper() {
   });
   const [iframePanelLayout, setIframePanelLayout] = useState<IframePanelLayout>("center");
   const [isScreenActive, setIsScreenActive] = useState<boolean>(false);
+  const [deviceProfile, setDeviceProfile] = useState(() => getDeviceProfile());
+  const localSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeToolType, setActiveToolType] = useState<string>("selection");
   const [showDataStructuresPanel, setShowDataStructuresPanel] = useState(false);
   const [showTodos, setShowTodos] = useState(false);
@@ -436,6 +440,91 @@ export default function ExcalidrawWrapper() {
 
   // Save scene to Firestore (debounced auto-save)
   const autoSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setDeviceProfile(getDeviceProfile());
+  }, []);
+
+  // Hardware pen / stylus auto-detection for smart boards & tablets
+  useEffect(() => {
+    const handlePointerDown = (e: PointerEvent) => {
+      if (e.pointerType === "pen") {
+        const api = excalidrawAPI.current;
+        if (!api) return;
+        const currentTool = api.getAppState().activeTool?.type;
+        if (currentTool !== "freedraw" && currentTool !== "eraser") {
+          api.setActiveTool({ type: "freedraw" });
+          setActiveToolType("freedraw");
+        }
+      }
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown, { capture: true });
+    };
+  }, []);
+
+  const handleSmartBoardToolSelect = useCallback(
+    (tool: "pen" | "handDraw" | "pan" | "eraser") => {
+      const api = excalidrawAPI.current;
+      if (!api) return;
+
+      if (tool === "pen") {
+        api.setActiveTool({ type: "freedraw" });
+        api.updateScene({
+          appState: {
+            currentItemStrokeWidth: 1.5,
+            currentItemRoughness: 0,
+          } as unknown as AppState,
+        });
+        setActiveToolType("freedraw");
+      } else if (tool === "handDraw") {
+        api.setActiveTool({ type: "freedraw" });
+        api.updateScene({
+          appState: {
+            currentItemStrokeWidth: 3.5,
+            currentItemRoughness: 1,
+          } as unknown as AppState,
+        });
+        setActiveToolType("freedraw");
+      } else if (tool === "pan") {
+        api.setActiveTool({ type: "hand" });
+        setActiveToolType("hand");
+      } else if (tool === "eraser") {
+        api.setActiveTool({ type: "eraser" });
+        setActiveToolType("eraser");
+      }
+    },
+    []
+  );
+
+  const handleCanvasUndo = useCallback(() => {
+    const event = new KeyboardEvent("keydown", {
+      key: "z",
+      code: "KeyZ",
+      ctrlKey: true,
+      metaKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(event);
+    document.querySelector(".excalidraw")?.dispatchEvent(event);
+  }, []);
+
+  const handleCanvasRedo = useCallback(() => {
+    const event = new KeyboardEvent("keydown", {
+      key: "y",
+      code: "KeyY",
+      ctrlKey: true,
+      metaKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(event);
+    document.querySelector(".excalidraw")?.dispatchEvent(event);
+  }, []);
+
   const latestSceneRef = useRef<{
     elements: readonly ExcalidrawElement[];
     appState: AppState;
@@ -611,15 +700,21 @@ export default function ExcalidrawWrapper() {
         setTextAnchor((prev) => (prev === null ? prev : null));
       }
 
-      // Immediate local backup
-      try {
-        localStorage.setItem(
-          STORAGE_KEY,
-          serializeAsJSON(elements, appState, files, "local")
-        );
-      } catch {
-        // ignore quota errors
-      }
+      // Debounced local backup (optimized for low-RAM 1GB Android smart boards)
+      if (localSaveTimerRef.current) clearTimeout(localSaveTimerRef.current);
+      localSaveTimerRef.current = setTimeout(() => {
+        try {
+          const s = latestSceneRef.current;
+          if (s) {
+            localStorage.setItem(
+              STORAGE_KEY,
+              serializeAsJSON(s.elements, s.appState, s.files, "local")
+            );
+          }
+        } catch {
+          // ignore quota errors
+        }
+      }, getOptimalSaveDebounceMs());
 
       // Debounced Firestore save
       if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
@@ -1671,6 +1766,40 @@ export default function ExcalidrawWrapper() {
           run: () => api()?.setActiveTool({ type: "freedraw" }),
         },
         {
+          id: "smartboard-pen",
+          label: "Smart Board: Pen Writing Mode",
+          category: "Smart Board",
+          shortcut: "Pen",
+          icon: <PenTool size={15} />,
+          run: () => handleSmartBoardToolSelect("pen"),
+        },
+        {
+          id: "smartboard-hand",
+          label: "Smart Board: Hand / Finger Draw Mode",
+          category: "Smart Board",
+          shortcut: "Finger",
+          icon: <Sliders size={15} />,
+          run: () => handleSmartBoardToolSelect("handDraw"),
+        },
+        {
+          id: "smartboard-pan",
+          label: "Smart Board: Hand Pan (Palm Rejection)",
+          category: "Smart Board",
+          shortcut: "Pan",
+          icon: <Hand size={15} />,
+          run: () => handleSmartBoardToolSelect("pan"),
+        },
+        {
+          id: "system-pwa-install",
+          label: "System: Install App (PWA) on Board / Phone",
+          category: "System",
+          shortcut: "Install",
+          icon: <Download size={15} />,
+          run: () => {
+            window.dispatchEvent(new Event("beforeinstallprompt"));
+          },
+        },
+        {
           id: "tool-text",
           label: "Tool: Text Box",
           category: "Tools",
@@ -2195,9 +2324,21 @@ export default function ExcalidrawWrapper() {
             onInsertTable={handleInsertTable}
             theme={theme}
             onToggleTheme={() => setTheme(theme === "dark" ? "light" : "dark")}
+            penActive={activeToolType === "freedraw"}
+            onTogglePen={() => handleSmartBoardToolSelect("pen")}
           />
         </div>
       )}
+
+      {/* Floating Smart Board Dock for touchscreens, smart boards, and phones */}
+      <SmartBoardDock
+        activeToolType={activeToolType}
+        onSelectTool={handleSmartBoardToolSelect}
+        onUndo={handleCanvasUndo}
+        onRedo={handleCanvasRedo}
+        theme={theme}
+        isLowEnd={deviceProfile.isLowEnd}
+      />
 
       {/* Todo overlay — toggled by the top-left corner button */}
       {showTodos && <TodoPanel onClose={() => setShowTodos(false)} />}

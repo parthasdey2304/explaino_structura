@@ -9,6 +9,7 @@ import {
   Grid3x3,
   Sun,
   Moon,
+  Pen,
 } from "lucide-react";
 
 export interface RightCanvasToolbarProps {
@@ -22,6 +23,8 @@ export interface RightCanvasToolbarProps {
   onInsertTable: () => void;
   theme: "light" | "dark";
   onToggleTheme: () => void;
+  penActive?: boolean;
+  onTogglePen?: () => void;
 }
 
 interface ToolItem {
@@ -46,10 +49,25 @@ export default function RightCanvasToolbar({
   onInsertTable,
   theme,
   onToggleTheme,
+  penActive = false,
+  onTogglePen,
 }: RightCanvasToolbarProps) {
   const isDark = theme === "dark";
 
   const tools: ToolItem[] = [
+    ...(onTogglePen
+      ? [
+          {
+            id: "pen",
+            label: "Smart Board Pen",
+            shortcut: "P",
+            description: "Freehand drawing and stylus writing optimized for smart boards and touchscreens.",
+            icon: Pen,
+            active: penActive,
+            onClick: onTogglePen,
+          },
+        ]
+      : []),
     {
       id: "laser",
       label: "Laser Pointer",
@@ -147,7 +165,7 @@ export default function RightCanvasToolbar({
                 <Icon size={18} strokeWidth={isActive ? 2.5 : 2.1} />
               </button>
 
-              {/* Rich Tooltip with robust padding & typography (Floats to the left of the button) */}
+              {/* Rich Tooltip */}
               <div
                 role="tooltip"
                 className="pointer-events-none absolute right-[calc(100%+12px)] top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-150 z-50 whitespace-nowrap translate-x-1 group-hover:translate-x-0 group-focus-within:translate-x-0"

@@ -7,6 +7,7 @@ import {
   sceneCoordsToViewportCoords,
 } from "@excalidraw/excalidraw";
 import type { Zoom } from "@excalidraw/excalidraw/types";
+import { getHealthCheckIntervalMs } from "@/lib/deviceOptimization";
 
 export type CanvasScreenMode = "interact" | "annotate";
 export type IframePanelLayout = "center" | "left" | "right" | "top" | "bottom";
@@ -160,7 +161,7 @@ export default function IframePanel({
   // Periodic health check every 15 seconds & on initial mount
   useEffect(() => {
     checkServerHealth();
-    const interval = setInterval(checkServerHealth, 15000);
+    const interval = setInterval(checkServerHealth, getHealthCheckIntervalMs());
     return () => clearInterval(interval);
   }, [checkServerHealth]);
 

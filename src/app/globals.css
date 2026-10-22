@@ -119,6 +119,22 @@ canvas {
   touch-action: none;
 }
 
+/* Smart Board & Mobile Touch Optimizations */
+canvas,
+.excalidraw,
+.excalidraw-container,
+.excalidraw .excalidraw-canvas {
+  touch-action: none !important;
+  -webkit-touch-callout: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+/* Hardware GPU layer promotion for low-RAM Android smart boards & lag-free ink */
+.excalidraw .excalidraw-canvas {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
 /* â”€â”€ Island (floating panel) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .excalidraw-island {
   background-color: var(--island-bg-color);
