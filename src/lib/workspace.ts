@@ -78,17 +78,79 @@ export function detectLanguage(fileName: string): string {
 }
 
 export const STARTER_CODE: Record<string, string> = {
-  javascript: `// JavaScript — try the Visualize button (Eye icon) to step through!
-let x = 5;
-let y = 10;
-let sum = x + y;
-let arr = [3, 1, 4, 1, 5];
-arr.sort();
-for (let i = 0; i < arr.length; i++) {
-  sum += arr[i];
+    javascript: `/**
+ * Explaino Structura — Binary Search Tree & Graph Engine
+ * Demonstrates node insertion, in-order depth-first traversal, and path search.
+ * Complexity: Insertion O(log N), Traversal O(N), Space O(N)
+ */
+
+class TreeNode {
+  constructor(value) {
+    this.value = value;
+    this.left = null;
+    this.right = null;
+  }
 }
-let message = "Done";
-console.log(message, sum);
+
+class BinarySearchTree {
+  constructor() {
+    this.root = null;
+  }
+
+  // Insert a new value adhering to BST invariants: O(log N)
+  insert(value) {
+    const newNode = new TreeNode(value);
+    if (!this.root) {
+      this.root = newNode;
+      return;
+    }
+
+    let current = this.root;
+    while (true) {
+      if (value < current.value) {
+        if (!current.left) {
+          current.left = newNode;
+          break;
+        }
+        current = current.left;
+      } else {
+        if (!current.right) {
+          current.right = newNode;
+          break;
+        }
+        current = current.right;
+      }
+    }
+  }
+
+  // Depth-first in-order traversal: returns elements in sorted order
+  inOrderTraversal(node = this.root, result = []) {
+    if (node) {
+      this.inOrderTraversal(node.left, result);
+      result.push(node.value);
+      this.inOrderTraversal(node.right, result);
+    }
+    return result;
+  }
+
+  // Search for target value: O(log N) average, O(N) worst case
+  search(target) {
+    let current = this.root;
+    while (current) {
+      if (current.value === target) return true;
+      current = target < current.value ? current.left : current.right;
+    }
+    return false;
+  }
+}
+
+// Instantiate and populate tree on whiteboard canvas
+const bst = new BinarySearchTree();
+[42, 17, 65, 8, 29, 53, 91, 3, 12, 35].forEach((v) => bst.insert(v));
+
+console.log("In-order sorted values:", bst.inOrderTraversal());
+console.log("Search for 29:", bst.search(29)); // true
+console.log("Search for 99:", bst.search(99)); // false
 `,
   python: `# Python 3 — runs via Pyodide (WebAssembly), no API needed
 def greet(name):

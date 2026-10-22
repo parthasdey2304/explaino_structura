@@ -47,23 +47,27 @@ Built with **Next.js 16 (Turbopack)**, **TypeScript**, **Tailwind CSS v4**, and 
 
 ---
 
-### 💻 Embedded VS Code / Code-Server
+### 💻 Embedded VS Code & Code-Server IDE
 
-Embed a real **VS Code / code-server** editor directly inside the whiteboard coordinate space with a sleek macOS-style window frame.
+Explaino Structura features a full-fledged **VS Code-style development environment** and **code-server workspace** directly integrated with the infinite whiteboard canvas. Write, run, and step through 60+ line algorithms in JavaScript, Python, C++, Java, Dart, and HTML with real-time syntax highlighting, line numbers, and file management.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/parthasdey2304/explaino_structura/main/docs/assets/readme_vscode_screen_dark.png" alt="Embedded VS Code Screen in Dark Mode" width="92%" />
+  <img src="https://raw.githubusercontent.com/parthasdey2304/explaino_structura/main/docs/assets/readme_vscode_editor_dark.png" alt="Explaino Structura VS Code IDE and Canvas in Dark Mode" width="94%" />
 </p>
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/parthasdey2304/explaino_structura/main/docs/assets/readme_code_editor_panel_focused.png" alt="VS Code Editor Panel with 70+ lines of Binary Search Tree implementation" width="88%" />
+</p>
+
+- **Real Code & Rich Algorithms**: Pre-configured with a complete 74-line `BinarySearchTree` and graph traversal engine showing node definitions, O(log N) insertion, in-order depth-first traversal, and path search.
+- **True Dark Mode Styling**: Authentic `#1e1e1e` editor canvas, `#252526` activity headers, line gutter numbering (lines 1–74+), and syntax-highlighted tokens.
 - **Dual Interaction Modes**:
-  - **🖱️ Interact Mode**: Full mouse and keyboard interaction inside the editor, terminal, file explorer, and extensions.
-  - **✏️ Draw Mode**: Draw directly on top of your code, highlight execution paths, and diagram variable references.
+  - **🖱️ Interact Mode**: Full mouse and keyboard interaction inside the editor, terminal, file explorer, and tabs.
+  - **✏️ Draw Mode**: Draw directly beside or on top of your code, annotate algorithmic steps, highlight recursion stacks, and sketch data structure pointers.
+- **Multi-Language WebAssembly & Container Runners**: Run JavaScript locally, Python 3 via Pyodide WebAssembly, C/C++ with Clang, or connect to remote container execution.
 - **Dynamic Status Indicator**: Real-time heartbeat dot (🟢 *Healthy & Online*, 🟡 *Connecting / Booting*, 🔴 *Offline / 502*).
-- **Multi-Aspect Ratio Selection**: Switch viewports on the fly:
-  - Landscape: `16:10` (macOS default), `16:9` (presentation), `20:9` (ultra-wide)
-  - Portrait: `10:16`, `9:16`, `9:20` (mobile app view)
-- **Automatic Auth Injection**: Auto-logs into code-server session with secure cookie sync.
-- **Trackpad Safety**: Dedicated gesture shielding prevents browser swipe-back navigation while panning code.
+- **Multi-Aspect Ratio Selection**: Switch viewports on the fly (`16:10` macOS default, `16:9` presentation, `20:9` ultra-wide, `10:16`, `9:16`, `9:20`).
+- **Trackpad Safety**: Dedicated gesture shielding prevents browser swipe-back navigation while panning or typing.
 
 ---
 
