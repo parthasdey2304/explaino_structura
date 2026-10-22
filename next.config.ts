@@ -3,19 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   transpilePackages: ["@excalidraw/excalidraw"],
   skipTrailingSlashRedirect: true,
-  async redirects() {
-    return [
-      {
-        source: "/code-server",
-        destination: "/code-server/",
-        permanent: true,
-      },
-    ];
-  },
   async rewrites() {
     return [
       {
-        source: "/code-server/",
+        source: "/code-server",
         destination: "http://13.49.76.201/",
       },
       {
