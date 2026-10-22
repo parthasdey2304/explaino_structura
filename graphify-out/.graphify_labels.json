@@ -1,11 +1,1 @@
-{
-  "1": "dataStructures.ts",
-  "2": "dependencies",
-  "5": "instrumentation.ts",
-  "7": "compilerOptions",
-  "8": "AIChatPanel.tsx",
-  "9": "TerminalService",
-  "10": "quickshape.ts",
-  "16": "emmet.d.ts",
-  "22": "postcss.config.mjs"
-}
+{"0": "CodeEditorPanel.tsx", "1": "dataStructures.ts", "2": "dependencies", "3": "ExcalidrawWrapper.tsx", "4": "react", "5": "instrumentation.ts", "6": "devDependencies", "7": "compilerOptions", "8": "AIChatPanel.tsx", "9": "TerminalService", "10": "quickshape.ts", "11": "GeminiLiveSession", "12": "ExplainoPanel.tsx", "13": "manifest.json", "14": "service.ts", "15": "next", "16": "emmet.d.ts", "17": "package.json", "18": "highlight.ts", "19": "emmetExtension.ts", "20": "eslint.config.mjs", "21": "⚡ Explaino Structura", "22": "postcss.config.mjs", "23": "VSCodeScreenView.tsx", "24": "LaserOverlay.tsx", "25": "createCodeCardSvg", "26": "scripts", "27": "login/route.ts", "28": "optionalDependencies", "29": "code-server-login/route.ts", "30": "proxy/route.ts", "31": "layout.tsx", "32": "chat/route.ts", "33": "mermaid/route.ts", "34": "logout/route.ts", "35": "sw.js"}
