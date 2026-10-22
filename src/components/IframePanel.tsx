@@ -14,6 +14,7 @@ import {
   GripHorizontal,
   Copy,
   Check,
+  Loader2,
 } from "lucide-react";
 
 /**
@@ -43,7 +44,8 @@ export interface IframePanelProps {
   onLayoutChange: (layout: IframePanelLayout) => void;
 }
 
-const CODE_SERVER_URL = "http://13.49.76.201";
+const CODE_SERVER_EXTERNAL_URL = "http://13.49.76.201";
+const CODE_SERVER_PROXY_PATH = "/code-server/";
 const CODE_SERVER_PWD = "14d26b731d1571af7802cfe5";
 
 export interface SizePreset {
@@ -67,15 +69,29 @@ const LAYOUT_OPTIONS: { value: IframePanelLayout; label: string }[] = [
   { value: "bottom", label: "Bottom" },
 ];
 
+function isCodeServerUrl(u: string): boolean {
+  const s = u.trim();
+  return (
+    !s ||
+    s === CODE_SERVER_PROXY_PATH ||
+    s === "/code-server" ||
+    s === CODE_SERVER_EXTERNAL_URL ||
+    s === CODE_SERVER_EXTERNAL_URL + "/" ||
+    s.startsWith(CODE_SERVER_EXTERNAL_URL) ||
+    s.startsWith("/code-server")
+  );
+}
+
 export default function IframePanel({ onClose, layout, onLayoutChange }: IframePanelProps) {
-  const [url, setUrl] = useState(CODE_SERVER_URL);
-  const [inputUrl, setInputUrl] = useState(CODE_SERVER_URL);
+  const [url, setUrl] = useState(CODE_SERVER_PROXY_PATH);
+  const [inputUrl, setInputUrl] = useState(CODE_SERVER_EXTERNAL_URL);
   const [sizeKey, setSizeKey] = useState<string>("medium");
   const [mode, setMode] = useState<CanvasScreenMode>("interact");
   const [showLayoutMenu, setShowLayoutMenu] = useState(false);
   const [showSizeMenu, setShowSizeMenu] = useState(false);
   const [copiedPwd, setCopiedPwd] = useState(false);
   const [isHttpsHost, setIsHttpsHost] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Dragging state
   const [customPos, setCustomPos] = useState<{ x: number; y: number } | null>(null);
@@ -86,17 +102,32 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      setIsHttpsHost(window.location.protocol === "https:");
+      const isHttps = window.location.protocol === "https:";
+      setIsHttpsHost(isHttps);
+      // On HTTPS, use the proxy path so browsers never block it as Mixed-Content
+      if (isHttps) {
+        setUrl(CODE_SERVER_PROXY_PATH);
+      } else {
+        setUrl(CODE_SERVER_EXTERNAL_URL);
+      }
     }
   }, []);
 
   const currentSize = SIZE_PRESETS.find((s) => s.value === sizeKey) ?? SIZE_PRESETS[1];
 
   const handleNavigate = useCallback(() => {
+    setIsLoading(true);
     let nav = inputUrl.trim();
-    if (!nav) {
-      nav = CODE_SERVER_URL;
-    } else if (!nav.startsWith("http://") && !nav.startsWith("https://")) {
+    if (!nav || isCodeServerUrl(nav)) {
+      const resolved =
+        typeof window !== "undefined" && window.location.protocol === "https:"
+          ? CODE_SERVER_PROXY_PATH
+          : CODE_SERVER_EXTERNAL_URL;
+      setUrl(resolved);
+      setInputUrl(CODE_SERVER_EXTERNAL_URL);
+      return;
+    }
+    if (!nav.startsWith("http://") && !nav.startsWith("https://") && !nav.startsWith("/")) {
       nav = "https://" + nav;
     }
     setUrl(nav);
@@ -111,6 +142,7 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
   );
 
   const handleReload = useCallback(() => {
+    setIsLoading(true);
     if (iframeRef.current) {
       // eslint-disable-next-line no-self-assign
       iframeRef.current.src = iframeRef.current.src;
@@ -118,8 +150,13 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
   }, []);
 
   const handleResetCodeServer = useCallback(() => {
-    setUrl(CODE_SERVER_URL);
-    setInputUrl(CODE_SERVER_URL);
+    setIsLoading(true);
+    const resolved =
+      typeof window !== "undefined" && window.location.protocol === "https:"
+        ? CODE_SERVER_PROXY_PATH
+        : CODE_SERVER_EXTERNAL_URL;
+    setUrl(resolved);
+    setInputUrl(CODE_SERVER_EXTERNAL_URL);
   }, []);
 
   const handleCopyPassword = useCallback(() => {
@@ -237,6 +274,7 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
   };
 
   const isHttpOnHttps = isHttpsHost && url.startsWith("http://");
+  const externalHref = isCodeServerUrl(url) ? CODE_SERVER_EXTERNAL_URL : url;
 
   return (
     <div ref={panelRef} style={panelStyle}>
@@ -427,11 +465,11 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
           <Code2 size={13} />
         </button>
         <a
-          href={url}
+          href={externalHref}
           target="_blank"
           rel="noopener noreferrer"
           style={{ ...toolbarBtnStyle, textDecoration: "none" }}
-          title="Open in new tab (recommended if blocked on HTTPS)"
+          title="Open in new tab (direct link)"
         >
           <ExternalLink size={13} />
         </a>
@@ -459,7 +497,7 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
         </button>
       </div>
 
-      {/* Mixed Content Notice Banner (only when HTTPS parent loads HTTP iframe) */}
+      {/* Mixed Content Notice Banner (only shown if a raw external HTTP URL is explicitly opened on HTTPS) */}
       {isHttpOnHttps && (
         <div
           style={{
@@ -474,10 +512,10 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
           }}
         >
           <span>
-            ⚠️ Browser Mixed-Content: Browsers may block HTTP inside HTTPS. If screen is blank:
+            ⚠️ Browser Mixed-Content: External HTTP sites may be restricted by the browser on HTTPS.
           </span>
           <a
-            href={url}
+            href={externalHref}
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -506,10 +544,33 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
           background: "#18181b",
         }}
       >
+        {/* Loading Spinner */}
+        {isLoading && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "#18181b",
+              color: "#a1a1aa",
+              gap: 8,
+              zIndex: 5,
+            }}
+          >
+            <Loader2 size={24} className="animate-spin text-indigo-400" />
+            <span style={{ fontSize: 11 }}>Connecting to screen…</span>
+          </div>
+        )}
+
         <iframe
           ref={iframeRef}
           src={url}
           title="Canvas Screen (16:10)"
+          onLoad={() => setIsLoading(false)}
+          onError={() => setIsLoading(false)}
           style={{
             position: "absolute",
             inset: 0,
@@ -520,7 +581,7 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
             pointerEvents: mode === "annotate" ? "none" : "auto",
           }}
           allow="clipboard-read; clipboard-write; fullscreen"
-          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-top-navigation allow-top-navigation-by-user-activation"
+          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-top-navigation allow-top-navigation-by-user-activation"
         />
 
         {/* Annotate mode badge indicator over iframe */}
