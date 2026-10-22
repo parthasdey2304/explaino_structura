@@ -95,9 +95,14 @@ export async function GET(req: NextRequest) {
 <base href="${origin}/" />
 <script>
 (function() {
+  var targetOrigin = ${JSON.stringify(origin)};
+  var targetBaseUrl = ${JSON.stringify(fullBaseUrl)};
+
+  console.log('[Explaino Browser] Loaded page: ' + targetBaseUrl + ' (origin: ' + targetOrigin + ')');
+
   // Notify parent of current loaded page
   try {
-    window.parent.postMessage({ type: 'canvas-browser:navigate', url: ${JSON.stringify(fullBaseUrl)} }, '*');
+    window.parent.postMessage({ type: 'canvas-browser:navigate', url: targetBaseUrl }, '*');
   } catch (err) {}
 
   // Intercept standard link clicks and route through the proxy
@@ -129,7 +134,13 @@ export async function GET(req: NextRequest) {
         if (isSearch) {
           e.preventDefault();
           e.stopPropagation();
-          var actionUrl = form && form.action ? form.action : (window.location.origin + '/search');
+          var baseSearch = targetOrigin + '/search';
+          var actionUrl = form && form.action ? form.action : baseSearch;
+          if (actionUrl.startsWith('/') || actionUrl.startsWith('./')) {
+            actionUrl = targetOrigin + (actionUrl.startsWith('/') ? '' : '/') + actionUrl;
+          } else if (!actionUrl.startsWith('http://') && !actionUrl.startsWith('https://')) {
+            actionUrl = baseSearch;
+          }
           var separator = actionUrl.indexOf('?') !== -1 ? '&' : '?';
           var finalUrl = actionUrl + separator + 'q=' + encodeURIComponent(val);
           try {
@@ -154,7 +165,13 @@ export async function GET(req: NextRequest) {
       formData.forEach(function(value, key) {
         params.append(key, value);
       });
-      var actionUrl = form.action || (window.location.origin + '/search');
+      var baseSearch = targetOrigin + '/search';
+      var actionUrl = form.action || baseSearch;
+      if (actionUrl.startsWith('/') || actionUrl.startsWith('./')) {
+        actionUrl = targetOrigin + (actionUrl.startsWith('/') ? '' : '/') + actionUrl;
+      } else if (!actionUrl.startsWith('http://') && !actionUrl.startsWith('https://')) {
+        actionUrl = baseSearch;
+      }
       var separator = actionUrl.indexOf('?') !== -1 ? '&' : '?';
       var finalUrl = actionUrl + separator + params.toString();
       try {
@@ -171,19 +188,43 @@ export async function GET(req: NextRequest) {
       try {
         var rawUrl = typeof input === 'string' ? input : (input && input.url ? input.url : '');
         if (rawUrl && !rawUrl.startsWith('data:') && !rawUrl.startsWith('blob:') && !rawUrl.startsWith('/api/proxy')) {
-          var targetUrl = rawUrl;
+          var destUrl = rawUrl;
           if (rawUrl.startsWith('/') || rawUrl.startsWith('./')) {
-            targetUrl = origin + (rawUrl.startsWith('/') ? '' : '/') + rawUrl;
+            destUrl = targetOrigin + (rawUrl.startsWith('/') ? '' : '/') + rawUrl;
           }
-          if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
-            var proxied = '/api/proxy?url=' + encodeURIComponent(targetUrl);
+          if (destUrl.startsWith('http://') || destUrl.startsWith('https://')) {
+            var proxied = '/api/proxy?url=' + encodeURIComponent(destUrl);
             if (typeof input === 'string') {
               return origFetch.call(this, proxied, init);
+            } else if (input && typeof input === 'object') {
+              var newReq = new Request(proxied, input);
+              return origFetch.call(this, newReq, init);
             }
           }
         }
       } catch (err) {}
       return origFetch.apply(this, arguments);
+    };
+  }
+
+  // Intercept XMLHttpRequest to route dynamic search requests and background APIs through proxy
+  if (window.XMLHttpRequest) {
+    var origOpen = window.XMLHttpRequest.prototype.open;
+    window.XMLHttpRequest.prototype.open = function(method, url) {
+      var rest = Array.prototype.slice.call(arguments, 2);
+      try {
+        var raw = typeof url === 'string' ? url : String(url || '');
+        if (raw && !raw.startsWith('data:') && !raw.startsWith('blob:') && !raw.startsWith('/api/proxy')) {
+          var destUrl = raw;
+          if (raw.startsWith('/') || raw.startsWith('./')) {
+            destUrl = targetOrigin + (raw.startsWith('/') ? '' : '/') + raw;
+          }
+          if (destUrl.startsWith('http://') || destUrl.startsWith('https://')) {
+            url = '/api/proxy?url=' + encodeURIComponent(destUrl);
+          }
+        }
+      } catch (err) {}
+      return origOpen.apply(this, [method, url].concat(rest));
     };
   }
 })();
