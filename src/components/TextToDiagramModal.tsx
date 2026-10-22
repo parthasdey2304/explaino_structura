@@ -285,7 +285,8 @@ export default function TextToDiagramModal({
       >
         {/* Header Bar */}
         <div
-          className={`flex items-center justify-between px-6 py-5 sm:px-8 sm:py-5 border-b shrink-0 ${
+          style={{ padding: "18px 28px" }}
+          className={`text-to-diagram-header flex items-center justify-between px-6 py-5 sm:px-8 sm:py-5 border-b shrink-0 ${
             isDark ? "border-zinc-800/90 bg-[#17171d]" : "border-zinc-200/90 bg-zinc-50/90"
           }`}
         >
@@ -371,7 +372,8 @@ export default function TextToDiagramModal({
         <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
           {/* Left Column: Prompt Input Studio */}
           <div
-            className={`w-full md:w-[44%] flex flex-col p-6 sm:p-7 border-b md:border-b-0 md:border-r overflow-y-auto shrink-0 ${
+            style={{ padding: "24px 28px" }}
+            className={`text-to-diagram-sidebar w-full md:w-[44%] flex flex-col p-6 sm:p-7 border-b md:border-b-0 md:border-r overflow-y-auto shrink-0 ${
               isDark ? "border-zinc-800/80 bg-[#16161b]" : "border-zinc-200/80 bg-white"
             }`}
           >
@@ -486,7 +488,8 @@ export default function TextToDiagramModal({
 
                 {/* Pro Tip Card */}
                 <div
-                  className={`mt-auto p-4 rounded-xl border text-xs leading-relaxed ${
+                  style={{ padding: "14px 18px" }}
+                  className={`text-to-diagram-tip mt-auto p-4 rounded-xl border text-xs leading-relaxed ${
                     isDark
                       ? "bg-indigo-950/25 border-indigo-900/40 text-indigo-300/90"
                       : "bg-indigo-50/60 border-indigo-200/80 text-indigo-900"
@@ -683,7 +686,8 @@ export default function TextToDiagramModal({
 
         {/* Modal Footer */}
         <div
-          className={`flex items-center justify-between px-6 py-4 sm:px-8 sm:py-5 border-t shrink-0 ${
+          style={{ padding: "18px 28px" }}
+          className={`text-to-diagram-footer flex items-center justify-between px-6 py-4 sm:px-8 sm:py-5 border-t shrink-0 ${
             isDark ? "border-zinc-800/90 bg-[#17171d]" : "border-zinc-200/90 bg-zinc-50/90"
           }`}
         >
@@ -696,6 +700,7 @@ export default function TextToDiagramModal({
             <button
               type="button"
               onClick={onClose}
+              style={{ padding: "10px 22px" }}
               className={`px-5 py-2.5 sm:px-6 sm:py-2.5 text-xs sm:text-sm font-semibold rounded-xl transition-all cursor-pointer border ${
                 isDark
                   ? "text-zinc-300 hover:text-white bg-zinc-800/90 hover:bg-zinc-700/90 border-zinc-700/80"
@@ -711,6 +716,8 @@ export default function TextToDiagramModal({
               disabled={isInserting || !mermaidCode.trim() || !!renderError}
               className="inline-flex items-center justify-center gap-2 px-6 py-2.5 sm:px-7 sm:py-2.5 text-xs sm:text-sm font-semibold rounded-xl text-white transition-all shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.98]"
               style={{
+                padding: "12px 28px",
+                marginRight: "4px",
                 background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
                 boxShadow: "0 4px 16px rgba(99, 102, 241, 0.4)",
               }}

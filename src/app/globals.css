@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@source "../components";
+@source "../app";
 
 /* ============================================================
    EXPLAINO â€” Excalidraw-inspired Design System
@@ -4856,4 +4858,33 @@ canvas,
   .bottom-controls-right.ai-text-dock .excalidraw-button span {
     display: none !important;
   }
+}
+
+/* ============================================================
+   TEXT TO DIAGRAM MODAL PADDING SAFEGUARDS
+   Guarantees generous padding on header, sidebar, preview and footer
+   ============================================================ */
+.text-to-diagram-header {
+  padding: 18px 28px !important;
+  box-sizing: border-box !important;
+}
+
+.text-to-diagram-sidebar {
+  padding: 24px 28px !important;
+  box-sizing: border-box !important;
+}
+
+.text-to-diagram-preview {
+  padding: 20px 24px !important;
+  box-sizing: border-box !important;
+}
+
+.text-to-diagram-footer {
+  padding: 18px 28px !important;
+  box-sizing: border-box !important;
+}
+
+.text-to-diagram-tip {
+  padding: 14px 18px !important;
+  box-sizing: border-box !important;
 }
