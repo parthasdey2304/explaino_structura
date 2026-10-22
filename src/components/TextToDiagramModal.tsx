@@ -61,6 +61,101 @@ const INITIAL_MERMAID = [
   "    Note over Client,Server: TCP Connection Established",
 ].join("\n");
 
+
+function sanitizeSequenceDiagramLifelines(elements: any[]): any[] {
+  const rects = elements.filter(
+    (el) => el.type === "rectangle" && el.width > 0 && el.height > 0
+  );
+
+  const processedElements: any[] = [];
+  const linesToReorder: any[] = [];
+
+  for (const el of elements) {
+    const isVerticalLine =
+      el.type === "line" &&
+      (el.width === 0 ||
+        (Array.isArray(el.points) &&
+          el.points.length === 2 &&
+          Math.abs(el.points[0][0] - el.points[1][0]) <= 3)) &&
+      (el.height > 30 ||
+        (Array.isArray(el.points) &&
+          el.points.length === 2 &&
+          Math.abs(el.points[0][1] - el.points[1][1]) > 30));
+
+    if (!isVerticalLine) {
+      if (el.type === "rectangle") {
+        if (!el.backgroundColor || el.backgroundColor === "transparent" || el.backgroundColor === "none") {
+          el.backgroundColor = "#fff9db";
+        }
+        el.fillStyle = "solid";
+      }
+      processedElements.push(el);
+      continue;
+    }
+
+    const lineX = el.x;
+    const startY = Math.min(el.y, el.y + (el.height ?? 0));
+    const totalHeight = Math.abs(el.height ?? (el.points?.[1]?.[1] ?? 0));
+    const endY = startY + totalHeight;
+
+    const overlapping = rects.filter((rect) => {
+      const rx = rect.x;
+      const rw = rect.width;
+      const ry = rect.y;
+      const rh = rect.height;
+
+      const crossesHorizontally = lineX >= rx - 2 && lineX <= rx + rw + 2;
+      const crossesVertically = startY < ry + rh && endY > ry;
+      return crossesHorizontally && crossesVertically;
+    });
+
+    if (overlapping.length === 0) {
+      linesToReorder.push(el);
+      continue;
+    }
+
+    overlapping.sort((a, b) => a.y - b.y);
+
+    let curY = startY;
+    for (let i = 0; i < overlapping.length; i++) {
+      const rect = overlapping[i];
+      const rectTop = rect.y;
+      const rectBottom = rect.y + rect.height;
+
+      if (rectTop > curY + 2) {
+        const segHeight = rectTop - curY;
+        linesToReorder.push({
+          ...el,
+          id: el.id ? `${el.id}-seg-${Math.round(curY)}` : undefined,
+          y: curY,
+          height: segHeight,
+          points: [
+            [0, 0],
+            [0, segHeight],
+          ],
+        });
+      }
+      curY = Math.max(curY, rectBottom);
+    }
+
+    if (endY > curY + 2) {
+      const segHeight = endY - curY;
+      linesToReorder.push({
+        ...el,
+        id: el.id ? `${el.id}-seg-${Math.round(curY)}` : undefined,
+        y: curY,
+        height: segHeight,
+        points: [
+          [0, 0],
+          [0, segHeight],
+        ],
+      });
+    }
+  }
+
+  return [...linesToReorder, ...processedElements];
+}
+
 export default function TextToDiagramModal({
   isOpen,
   onClose,
@@ -239,8 +334,9 @@ export default function TextToDiagramModal({
         throw new Error("No elements generated from this Mermaid diagram.");
       }
 
-      const excalidrawElements = convertToExcalidrawElements(elements);
-      onInsert(excalidrawElements);
+            const sanitizedElements = sanitizeSequenceDiagramLifelines(elements);
+      const excalidrawElements = convertToExcalidrawElements(sanitizedElements);
+            onInsert(excalidrawElements);
       onClose();
     } catch (err) {
       const msg =
