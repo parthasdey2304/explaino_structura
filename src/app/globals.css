@@ -4762,6 +4762,7 @@ canvas,
     right: 12px;
   }
 
+
   .todo-panel {
     top: calc(1rem + 2rem + 8px);
     left: 12px;
@@ -4836,4 +4837,23 @@ canvas,
   overscroll-behavior: none !important;
   overscroll-behavior-x: none !important;
   overscroll-behavior-y: none !important;
+}
+
+/* Phone breakpoint (<640px): collapse Explaino & AI Text launcher buttons to compact icon-only buttons */
+@media (max-width: 640px) {
+  .bottom-controls-right.ai-text-dock .excalidraw-button {
+    min-width: 2.25rem !important;
+    width: 2.25rem !important;
+    height: 2.25rem !important;
+    padding: 0 !important;
+    border-radius: 0.75rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28) !important;
+  }
+
+  .bottom-controls-right.ai-text-dock .excalidraw-button span {
+    display: none !important;
+  }
 }

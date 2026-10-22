@@ -2531,7 +2531,7 @@ export default function ExcalidrawWrapper() {
           aria-label="Explaino"
         >
           <Mic size={16} strokeWidth={2.2} />
-          <span style={{ marginLeft: 4 }}>Explaino</span>
+          <span className="hidden sm:inline" style={{ marginLeft: 4 }}>Explaino</span>
         </button>
         <button
           type="button"
@@ -2548,7 +2548,7 @@ export default function ExcalidrawWrapper() {
           aria-label="AI Text"
         >
           <Sparkles size={16} strokeWidth={2.2} />
-          <span style={{ marginLeft: 4 }}>AI Text</span>
+          <span className="hidden sm:inline" style={{ marginLeft: 4 }}>AI Text</span>
         </button>
       </div>
 
