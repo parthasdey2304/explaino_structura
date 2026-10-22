@@ -298,7 +298,7 @@ export default function TextToDiagramModal({
             <div>
               <div className="flex items-center gap-2.5">
                 <h2 className="text-base sm:text-lg font-bold tracking-tight">Text to Diagram</h2>
-                <span className="text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
+                <span style={{ padding: "3px 10px", lineHeight: "1.2" }} className="text-to-diagram-ai-badge text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
                   AI Powered
                 </span>
               </div>
@@ -311,7 +311,8 @@ export default function TextToDiagramModal({
           {/* Right Header: Segmented Tab Switch & Close */}
           <div className="flex items-center gap-3">
             <div
-              className={`inline-flex items-center p-1 rounded-xl border ${
+              style={{ padding: "4px" }}
+              className={`text-to-diagram-tab-container inline-flex items-center p-1 rounded-xl border ${
                 isDark
                   ? "bg-zinc-950/80 border-zinc-800/90"
                   : "bg-zinc-200/70 border-zinc-300/80"
@@ -320,7 +321,8 @@ export default function TextToDiagramModal({
               <button
                 type="button"
                 onClick={() => setActiveTab("text")}
-                className={`flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                style={{ padding: "7px 16px", lineHeight: "1.2" }}
+                className={`text-to-diagram-tab-btn flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   activeTab === "text"
                     ? isDark
                       ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/40"
@@ -336,7 +338,8 @@ export default function TextToDiagramModal({
               <button
                 type="button"
                 onClick={() => setActiveTab("mermaid")}
-                className={`flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                style={{ padding: "7px 16px", lineHeight: "1.2" }}
+                className={`text-to-diagram-tab-btn flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   activeTab === "mermaid"
                     ? isDark
                       ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/40"
@@ -389,7 +392,8 @@ export default function TextToDiagramModal({
                       <span>Describe Your Diagram</span>
                     </label>
                     <span
-                      className={`text-[11px] font-mono px-2.5 py-1 rounded-md border ${
+                      style={{ padding: "4px 9px", lineHeight: "1.2" }}
+                      className={`text-to-diagram-shortcut-badge text-[11px] font-mono px-2.5 py-1 rounded-md border ${
                         isDark
                           ? "bg-zinc-900 border-zinc-800 text-zinc-400"
                           : "bg-zinc-100 border-zinc-200 text-zinc-600"
@@ -405,7 +409,8 @@ export default function TextToDiagramModal({
                     onChange={(e) => setPrompt(e.target.value)}
                     placeholder="e.g. sequence diagram of user authentication, microservices architecture with kafka and redis, database ER schema..."
                     rows={4}
-                    className={`w-full p-4 text-xs sm:text-sm rounded-xl border outline-none transition-all resize-none leading-relaxed ${
+                    style={{ padding: "14px 16px", minHeight: "110px", boxSizing: "border-box" }}
+                    className={`text-to-diagram-textarea w-full p-4 text-xs sm:text-sm rounded-xl border outline-none transition-all resize-none leading-relaxed ${
                       isDark
                         ? "bg-zinc-900/90 border-zinc-800 text-zinc-100 placeholder-zinc-500 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/25"
                         : "bg-zinc-50 border-zinc-300 text-zinc-900 placeholder-zinc-400 focus:border-[#6965db] focus:ring-2 focus:ring-[#6965db]/20"
@@ -433,7 +438,8 @@ export default function TextToDiagramModal({
                           key={ex.label}
                           type="button"
                           onClick={() => handleSelectTemplate(ex)}
-                          className={`flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          style={{ padding: "10px 14px", boxSizing: "border-box" }}
+                          className={`text-to-diagram-template-btn flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all cursor-pointer ${
                             isActive
                               ? isDark
                                 ? "bg-indigo-950/70 border-indigo-500 text-indigo-300 shadow-sm"
@@ -514,7 +520,8 @@ export default function TextToDiagramModal({
                     <button
                       type="button"
                       onClick={handleCopyCode}
-                      className={`text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-colors cursor-pointer ${
+                      style={{ padding: "6px 14px", lineHeight: "1.2" }}
+                      className={`text-to-diagram-action-btn text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-colors cursor-pointer ${
                         isDark
                           ? "border-zinc-700 bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300"
                           : "border-zinc-200 bg-zinc-100 hover:bg-zinc-200 text-zinc-700"
@@ -527,7 +534,8 @@ export default function TextToDiagramModal({
                     <button
                       type="button"
                       onClick={() => updateMermaidPreview(mermaidCode)}
-                      className={`text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-colors cursor-pointer ${
+                      style={{ padding: "6px 14px", lineHeight: "1.2" }}
+                      className={`text-to-diagram-action-btn text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-colors cursor-pointer ${
                         isDark
                           ? "border-zinc-700 bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300"
                           : "border-zinc-200 bg-zinc-100 hover:bg-zinc-200 text-zinc-700"
@@ -549,7 +557,8 @@ export default function TextToDiagramModal({
                   }}
                   rows={14}
                   spellCheck={false}
-                  className={`w-full flex-1 p-4 font-mono text-xs rounded-xl border outline-none transition-all resize-none leading-relaxed ${
+                  style={{ padding: "14px 16px", boxSizing: "border-box" }}
+                  className={`text-to-diagram-textarea w-full flex-1 p-4 font-mono text-xs rounded-xl border outline-none transition-all resize-none leading-relaxed ${
                     isDark
                       ? "bg-zinc-900 border-zinc-800 text-zinc-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                       : "bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#6965db] focus:ring-2 focus:ring-[#6965db]/20"
@@ -579,14 +588,15 @@ export default function TextToDiagramModal({
                 <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
                   Interactive Preview
                 </span>
-                <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-md bg-zinc-800/90 border border-zinc-700/60 text-zinc-400">
+                <span style={{ padding: "3px 10px", lineHeight: "1.2" }} className="text-to-diagram-ready-badge text-[11px] font-medium px-2.5 py-0.5 rounded-md bg-zinc-800/90 border border-zinc-700/60 text-zinc-400">
                   Ready to insert
                 </span>
               </div>
 
               {/* Floating Canvas Zoom HUD */}
               <div
-                className={`flex items-center gap-1.5 p-1 rounded-xl border backdrop-blur-md shadow-sm ${
+                style={{ padding: "4px 8px" }}
+                className={`text-to-diagram-zoom-hud flex items-center gap-1.5 p-1 rounded-xl border backdrop-blur-md shadow-sm ${
                   isDark
                     ? "bg-zinc-900/90 border-zinc-700/80"
                     : "bg-white/95 border-zinc-300"
@@ -605,7 +615,8 @@ export default function TextToDiagramModal({
                 <button
                   type="button"
                   onClick={() => setZoomScale(1)}
-                  className={`px-2.5 py-1 text-xs font-mono rounded-lg font-medium transition cursor-pointer ${
+                  style={{ padding: "4px 8px" }}
+                  className={`text-to-diagram-zoom-label px-2.5 py-1 text-xs font-mono rounded-lg font-medium transition cursor-pointer ${
                     isDark ? "text-zinc-300 hover:text-white hover:bg-zinc-800" : "text-zinc-700 hover:text-zinc-900 hover:bg-zinc-100"
                   }`}
                   title="Reset Zoom (100%)"
@@ -637,15 +648,16 @@ export default function TextToDiagramModal({
 
             {/* Diagram Preview Surface with Whiteboard Dot Grid */}
             <div
-              className={`flex-1 min-h-0 rounded-2xl border relative flex items-center justify-center overflow-auto p-8 sm:p-10 transition-colors shadow-inner ${
-                isDark ? "bg-[#17171c] border-zinc-800/90 shadow-black/40" : "bg-white border-zinc-200 shadow-zinc-200/50"
-              }`}
               style={{
+                padding: "28px",
                 backgroundImage: isDark
                   ? "radial-gradient(circle, rgba(255, 255, 255, 0.12) 1.2px, transparent 1.2px)"
                   : "radial-gradient(circle, rgba(0, 0, 0, 0.1) 1.2px, transparent 1.2px)",
                 backgroundSize: "20px 20px",
               }}
+              className={`text-to-diagram-preview-canvas flex-1 min-h-0 rounded-2xl border relative flex items-center justify-center overflow-auto p-8 sm:p-10 transition-colors shadow-inner ${
+                isDark ? "bg-[#17171c] border-zinc-800/90 shadow-black/40" : "bg-white border-zinc-200 shadow-zinc-200/50"
+              }`}
             >
               {isGenerating ? (
                 <div className="flex flex-col items-center justify-center gap-3.5 text-zinc-400 py-12">
