@@ -4795,3 +4795,16 @@ canvas {
 .ai-text__codewrap .tok-punctuation,
 .ai-text__codewrap .tok-labelName { color: #d4d4d4; }
 .ai-text__codewrap .tok-invalid { color: #f44747; }
+
+
+/* Ensure Excalidraw's main hamburger menu (3 bars) and UI layers always sit on top of the canvas screen */
+.excalidraw .layer-ui__wrapper {
+  z-index: 10 !important;
+}
+
+.excalidraw .main-menu,
+.excalidraw .dropdown-menu,
+.excalidraw .dropdown-menu-container,
+.excalidraw .main-menu-container {
+  z-index: 50 !important;
+}

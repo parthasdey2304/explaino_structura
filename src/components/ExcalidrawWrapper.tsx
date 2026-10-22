@@ -1769,6 +1769,7 @@ export default function ExcalidrawWrapper() {
       {showIframePanel && (
         <IframePanel
           onClose={() => setShowIframePanel(false)}
+          viewport={viewport}
           layout={iframePanelLayout}
           onLayoutChange={setIframePanelLayout}
         />

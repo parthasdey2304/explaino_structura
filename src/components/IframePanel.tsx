@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   X,
-  Monitor,
   Globe,
   RotateCcw,
   Maximize2,
@@ -15,15 +14,13 @@ import {
   Copy,
   Check,
   Loader2,
+  Crosshair,
 } from "lucide-react";
-
-/**
- * Dock placement layout options for the canvas-embedded screen.
- * - `center`: Centered in canvas (matches 16:10 virtual display layout).
- * - `left` / `right`: Aligned to canvas left or right edges.
- * - `top` / `bottom`: Aligned to canvas top or bottom edges.
- */
-export type IframePanelLayout = "center" | "left" | "right" | "top" | "bottom";
+import {
+  viewportCoordsToSceneCoords,
+  sceneCoordsToViewportCoords,
+} from "@excalidraw/excalidraw";
+import type { Zoom } from "@excalidraw/excalidraw/types";
 
 /**
  * Interactive mode of the canvas screen.
@@ -32,16 +29,25 @@ export type IframePanelLayout = "center" | "left" | "right" | "top" | "bottom";
  */
 export type CanvasScreenMode = "interact" | "annotate";
 
-/**
- * Props passed to the IframePanel component.
- */
+export type IframePanelLayout = "center" | "left" | "right" | "top" | "bottom";
+
+export interface CanvasViewport {
+  zoom: Zoom;
+  offsetLeft: number;
+  offsetTop: number;
+  scrollX: number;
+  scrollY: number;
+}
+
 export interface IframePanelProps {
   /** Callback fired when the user clicks the close (X) button in the toolbar. */
   onClose: () => void;
-  /** Current dock layout placement of the panel. */
-  layout: IframePanelLayout;
-  /** Callback to change the dock layout (e.g. from center to right). */
-  onLayoutChange: (layout: IframePanelLayout) => void;
+  /** Current canvas viewport state (for panning and zooming in sync with Excalidraw). */
+  viewport?: CanvasViewport;
+  /** Optional layout preset */
+  layout?: IframePanelLayout;
+  /** Optional layout change callback */
+  onLayoutChange?: (layout: IframePanelLayout) => void;
 }
 
 const CODE_SERVER_EXTERNAL_URL = "http://13.49.76.201";
@@ -51,22 +57,15 @@ const CODE_SERVER_PWD = "14d26b731d1571af7802cfe5";
 export interface SizePreset {
   label: string;
   value: string;
-  widthPx: number;
+  width: number;
+  height: number;
 }
 
 const SIZE_PRESETS: SizePreset[] = [
-  { label: "Small (680px)", value: "small", widthPx: 680 },
-  { label: "Medium (920px)", value: "medium", widthPx: 920 },
-  { label: "Large (1120px)", value: "large", widthPx: 1120 },
-  { label: "XL (1340px)", value: "xl", widthPx: 1340 },
-];
-
-const LAYOUT_OPTIONS: { value: IframePanelLayout; label: string }[] = [
-  { value: "center", label: "Center (Canvas)" },
-  { value: "left", label: "Left Edge" },
-  { value: "right", label: "Right Edge" },
-  { value: "top", label: "Top" },
-  { value: "bottom", label: "Bottom" },
+  { label: "Small (680×425)", value: "small", width: 680, height: 425 },
+  { label: "Medium (920×575)", value: "medium", width: 920, height: 575 },
+  { label: "Large (1120×700)", value: "large", width: 1120, height: 700 },
+  { label: "XL (1340×838)", value: "xl", width: 1340, height: 837.5 },
 ];
 
 function isCodeServerUrl(u: string): boolean {
@@ -84,29 +83,42 @@ function isCodeServerUrl(u: string): boolean {
   );
 }
 
-export default function IframePanel({ onClose, layout, onLayoutChange }: IframePanelProps) {
+export default function IframePanel({ onClose, viewport }: IframePanelProps) {
   const [url, setUrl] = useState(CODE_SERVER_PROXY_PATH);
   const [inputUrl, setInputUrl] = useState(CODE_SERVER_EXTERNAL_URL);
   const [sizeKey, setSizeKey] = useState<string>("medium");
   const [mode, setMode] = useState<CanvasScreenMode>("interact");
-  const [showLayoutMenu, setShowLayoutMenu] = useState(false);
   const [showSizeMenu, setShowSizeMenu] = useState(false);
   const [copiedPwd, setCopiedPwd] = useState(false);
   const [isHttpsHost, setIsHttpsHost] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Dragging state
-  const [customPos, setCustomPos] = useState<{ x: number; y: number } | null>(null);
+  // Scene-space coordinates: anchored inside the canvas so it pans & zooms with drawings
+  const [scenePos, setScenePos] = useState<{
+    sceneX: number;
+    sceneY: number;
+    sceneWidth: number;
+    sceneHeight: number;
+  } | null>(null);
+
   const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef<{ mouseX: number; mouseY: number; startX: number; startY: number } | null>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const [isResizing, setIsResizing] = useState(false);
+  const dragStartRef = useRef<{
+    mouseX: number;
+    mouseY: number;
+    startSceneX: number;
+    startSceneY: number;
+    startWidth: number;
+    startHeight: number;
+  } | null>(null);
+
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const isHttps = window.location.protocol === "https:";
       setIsHttpsHost(isHttps);
-      // On HTTPS, use the proxy path so browsers never block it as Mixed-Content
       if (isHttps) {
         setUrl(CODE_SERVER_PROXY_PATH);
       } else {
@@ -114,6 +126,24 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
       }
     }
   }, []);
+
+  // Initialize scene coordinates centered in the current canvas viewport
+  useEffect(() => {
+    if (scenePos === null && viewport) {
+      const center = viewportCoordsToSceneCoords(
+        { clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 },
+        viewport
+      );
+      const defaultWidth = 920;
+      const defaultHeight = (defaultWidth * 10) / 16;
+      setScenePos({
+        sceneX: center.x - defaultWidth / 2,
+        sceneY: center.y - defaultHeight / 2,
+        sceneWidth: defaultWidth,
+        sceneHeight: defaultHeight,
+      });
+    }
+  }, [viewport, scenePos]);
 
   const currentSize = SIZE_PRESETS.find((s) => s.value === sizeKey) ?? SIZE_PRESETS[1];
 
@@ -167,36 +197,75 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
     setTimeout(() => setCopiedPwd(false), 2000);
   }, []);
 
-  // Drag handlers
+  // Recenter screen in the user's current view on canvas
+  const handleRecenter = useCallback(() => {
+    if (!viewport) return;
+    const center = viewportCoordsToSceneCoords(
+      { clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 },
+      viewport
+    );
+    const width = scenePos?.sceneWidth ?? 920;
+    const height = scenePos?.sceneHeight ?? (width * 10) / 16;
+    setScenePos({
+      sceneX: center.x - width / 2,
+      sceneY: center.y - height / 2,
+      sceneWidth: width,
+      sceneHeight: height,
+    });
+  }, [viewport, scenePos]);
+
+  // Dragging handlers (moving screen across canvas)
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest("button, input, select, a")) return;
-    if (!panelRef.current) return;
-    const rect = panelRef.current.getBoundingClientRect();
+    if ((e.target as HTMLElement).closest("button, input, select, a, .screen-resize-handle")) return;
+    if (!scenePos) return;
     dragStartRef.current = {
       mouseX: e.clientX,
       mouseY: e.clientY,
-      startX: rect.left,
-      startY: rect.top,
+      startSceneX: scenePos.sceneX,
+      startSceneY: scenePos.sceneY,
+      startWidth: scenePos.sceneWidth,
+      startHeight: scenePos.sceneHeight,
     };
     setIsDragging(true);
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDragging || !dragStartRef.current) return;
-    const dx = e.clientX - dragStartRef.current.mouseX;
-    const dy = e.clientY - dragStartRef.current.mouseY;
-    const maxX = Math.max(10, window.innerWidth - 120);
-    const maxY = Math.max(10, window.innerHeight - 80);
-    setCustomPos({
-      x: Math.max(10, Math.min(maxX, dragStartRef.current.startX + dx)),
-      y: Math.max(10, Math.min(maxY, dragStartRef.current.startY + dy)),
-    });
+    if (!scenePos || !dragStartRef.current) return;
+    const zoom = viewport?.zoom.value ?? 1;
+
+    if (isDragging) {
+      const dx = (e.clientX - dragStartRef.current.mouseX) / zoom;
+      const dy = (e.clientY - dragStartRef.current.mouseY) / zoom;
+      setScenePos((prev) =>
+        prev
+          ? {
+              ...prev,
+              sceneX: dragStartRef.current!.startSceneX + dx,
+              sceneY: dragStartRef.current!.startSceneY + dy,
+            }
+          : null
+      );
+    } else if (isResizing) {
+      const dx = (e.clientX - dragStartRef.current.mouseX) / zoom;
+      const newWidth = Math.max(480, dragStartRef.current.startWidth + dx);
+      const newHeight = (newWidth * 10) / 16; // Maintain strict 16:10
+      setScenePos((prev) =>
+        prev
+          ? {
+              ...prev,
+              sceneWidth: newWidth,
+              sceneHeight: newHeight,
+            }
+          : null
+      );
+    }
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (isDragging) {
+    if (isDragging || isResizing) {
       setIsDragging(false);
+      setIsResizing(false);
       dragStartRef.current = null;
       try {
         (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
@@ -204,61 +273,54 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
     }
   };
 
-  // Compute position styling
-  const getPositionStyle = (): React.CSSProperties => {
-    if (customPos) {
-      return {
-        position: "fixed",
-        left: `${customPos.x}px`,
-        top: `${customPos.y}px`,
-        transform: "none",
-      };
-    }
-    switch (layout) {
-      case "left":
-        return {
-          position: "fixed",
-          left: "2.5rem",
-          top: "50%",
-          transform: "translateY(-50%)",
-        };
-      case "right":
-        return {
-          position: "fixed",
-          right: "2.5rem",
-          top: "50%",
-          transform: "translateY(-50%)",
-        };
-      case "top":
-        return {
-          position: "fixed",
-          left: "50%",
-          top: "4.5rem",
-          transform: "translateX(-50%)",
-        };
-      case "bottom":
-        return {
-          position: "fixed",
-          left: "50%",
-          bottom: "2.5rem",
-          transform: "translateX(-50%)",
-        };
-      case "center":
-      default:
-        return {
-          position: "fixed",
-          left: "50%",
-          top: "50%",
-          transform: "translate(-50%, -50%)",
-        };
+  const handleResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    if (!scenePos) return;
+    dragStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      startSceneX: scenePos.sceneX,
+      startSceneY: scenePos.sceneY,
+      startWidth: scenePos.sceneWidth,
+      startHeight: scenePos.sceneHeight,
+    };
+    setIsResizing(true);
+    if (panelRef.current) {
+      panelRef.current.setPointerCapture?.(e.pointerId);
     }
   };
 
+  // Convert scene coordinates to screen viewport coordinates
+  const viewportCoords = useMemo(() => {
+    if (!scenePos || !viewport) {
+      return {
+        x: window.innerWidth / 2 - 460,
+        y: window.innerHeight / 2 - 287.5,
+        width: 920,
+        height: 575,
+      };
+    }
+    const screenTopLeft = sceneCoordsToViewportCoords(
+      { sceneX: scenePos.sceneX, sceneY: scenePos.sceneY },
+      viewport
+    );
+    const zoom = viewport.zoom.value;
+    return {
+      x: screenTopLeft.x,
+      y: screenTopLeft.y,
+      width: Math.max(280, scenePos.sceneWidth * zoom),
+      height: Math.max(175, scenePos.sceneHeight * zoom),
+    };
+  }, [scenePos, viewport]);
+
   const panelStyle: React.CSSProperties = {
-    ...getPositionStyle(),
-    width: `min(${currentSize.widthPx}px, 86vw, calc((100vh - 110px) * 16 / 10))`,
-    aspectRatio: "16 / 10",
-    zIndex: 60,
+    position: "fixed",
+    left: `${viewportCoords.x}px`,
+    top: `${viewportCoords.y}px`,
+    width: `${viewportCoords.width}px`,
+    height: `${viewportCoords.height}px`,
+    // z-index: 3 puts the screen above drawings, but BELOW the Excalidraw UI (hamburger menu is z-index: 50)
+    zIndex: 3,
     display: "flex",
     flexDirection: "column",
     background: "#18181b",
@@ -266,13 +328,13 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
     border:
       mode === "annotate"
         ? "2px solid #818cf8"
-        : "1px solid rgba(255, 255, 255, 0.16)",
+        : "1px solid rgba(255, 255, 255, 0.18)",
     boxShadow:
       mode === "annotate"
         ? "0 0 0 4px rgba(129, 140, 248, 0.28), 0 25px 65px rgba(0, 0, 0, 0.85)"
         : "0 22px 60px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08)",
     overflow: "hidden",
-    userSelect: isDragging ? "none" : "auto",
+    userSelect: isDragging || isResizing ? "none" : "auto",
   };
 
   const isHttpOnHttps = isHttpsHost && url.startsWith("http://");
@@ -296,7 +358,7 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
           userSelect: "none",
           cursor: isDragging ? "grabbing" : "grab",
         }}
-        title="Drag header to move screen anywhere on canvas"
+        title="Drag header to move screen anywhere on the whiteboard canvas"
       >
         {/* Drag handle icon & title */}
         <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#a1a1aa", marginRight: 2 }}>
@@ -343,61 +405,22 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
           )}
         </button>
 
-        {/* Position picker */}
-        <div style={{ position: "relative" }}>
-          <button
-            type="button"
-            onClick={() => {
-              setShowLayoutMenu((v) => !v);
-              setShowSizeMenu(false);
-            }}
-            style={toolbarBtnStyle}
-            title="Change screen position on canvas"
-          >
-            <Monitor size={13} />
-            <span style={{ marginLeft: 3, fontSize: 11 }}>
-              {customPos ? "Custom" : LAYOUT_OPTIONS.find((o) => o.value === layout)?.label ?? layout}
-            </span>
-            <ChevronDown size={11} style={{ marginLeft: 1 }} />
-          </button>
-          {showLayoutMenu && (
-            <DropdownMenu
-              items={[
-                ...LAYOUT_OPTIONS.map((o) => ({
-                  label: o.label,
-                  active: !customPos && o.value === layout,
-                  onClick: () => {
-                    setCustomPos(null);
-                    onLayoutChange(o.value);
-                    setShowLayoutMenu(false);
-                  },
-                })),
-                ...(customPos
-                  ? [
-                      {
-                        label: "Reset to Center",
-                        active: false,
-                        onClick: () => {
-                          setCustomPos(null);
-                          onLayoutChange("center");
-                          setShowLayoutMenu(false);
-                        },
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-          )}
-        </div>
+        {/* Recenter on Canvas */}
+        <button
+          type="button"
+          onClick={handleRecenter}
+          style={toolbarBtnStyle}
+          title="Recenter screen in the current canvas view"
+        >
+          <Crosshair size={13} />
+          <span style={{ marginLeft: 3, fontSize: 11 }}>Center View</span>
+        </button>
 
         {/* Size picker */}
         <div style={{ position: "relative" }}>
           <button
             type="button"
-            onClick={() => {
-              setShowSizeMenu((v) => !v);
-              setShowLayoutMenu(false);
-            }}
+            onClick={() => setShowSizeMenu((v) => !v)}
             style={toolbarBtnStyle}
             title="Change 16:10 display size"
           >
@@ -412,6 +435,15 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
                 active: sizeKey === p.value,
                 onClick: () => {
                   setSizeKey(p.value);
+                  setScenePos((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          sceneWidth: p.width,
+                          sceneHeight: p.height,
+                        }
+                      : null
+                  );
                   setShowSizeMenu(false);
                 },
               }))}
@@ -613,6 +645,35 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
             <span>Draw Mode Active: Pen strokes draw onto whiteboard canvas over screen</span>
           </div>
         )}
+
+        {/* Interactive 16:10 Corner Resize Handle */}
+        <div
+          onPointerDown={handleResizeStart}
+          className="screen-resize-handle"
+          style={{
+            position: "absolute",
+            right: 0,
+            bottom: 0,
+            width: 18,
+            height: 18,
+            cursor: "nwse-resize",
+            zIndex: 15,
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "flex-end",
+            padding: 3,
+          }}
+          title="Drag to resize 16:10 screen on canvas"
+        >
+          <div
+            style={{
+              width: 8,
+              height: 8,
+              borderRight: "2px solid rgba(255,255,255,0.4)",
+              borderBottom: "2px solid rgba(255,255,255,0.4)",
+            }}
+          />
+        </div>
       </div>
 
       {/* Bottom Status / Aspect Info Bar */}
@@ -630,7 +691,7 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span>16 : 10 Virtual Display</span>
+          <span>16:10 Canvas Display</span>
           <span>•</span>
           <span>Mode: {mode === "interact" ? "💻 Interact (Click to Code)" : "✏️ Draw (Click to Code)"}</span>
         </div>
