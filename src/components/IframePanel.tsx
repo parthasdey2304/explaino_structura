@@ -15,6 +15,9 @@ import {
   Check,
   Loader2,
   Crosshair,
+  ArrowLeft,
+  ArrowRight,
+  Bookmark,
 } from "lucide-react";
 import {
   viewportCoordsToSceneCoords,
@@ -68,7 +71,15 @@ const SIZE_PRESETS: SizePreset[] = [
   { label: "XL (1340×838)", value: "xl", width: 1340, height: 837.5 },
 ];
 
-function isCodeServerUrl(u: string): boolean {
+const BOOKMARKS = [
+  { label: "Google", url: "https://www.google.com" },
+  { label: "DuckDuckGo", url: "https://duckduckgo.com" },
+  { label: "Code Server", url: "http://13.49.76.201" },
+  { label: "Wikipedia", url: "https://en.wikipedia.org" },
+  { label: "GitHub", url: "https://github.com" },
+];
+
+function isCodeServerTarget(u: string): boolean {
   const s = u.trim();
   return (
     !s ||
@@ -83,14 +94,40 @@ function isCodeServerUrl(u: string): boolean {
   );
 }
 
+function resolveBrowserNavigation(input: string): { iframeSrc: string; displayUrl: string; isCodeServer: boolean } {
+  const trimmed = input.trim();
+  if (!trimmed || isCodeServerTarget(trimmed)) {
+    return {
+      iframeSrc: CODE_SERVER_PROXY_PATH,
+      displayUrl: CODE_SERVER_EXTERNAL_URL,
+      isCodeServer: true,
+    };
+  }
+
+  let target = trimmed;
+  // If it's a search query (no protocol and no dot)
+  if (!target.startsWith("http://") && !target.startsWith("https://") && !target.includes(".")) {
+    target = `https://www.google.com/search?q=${encodeURIComponent(target)}`;
+  } else if (!target.startsWith("http://") && !target.startsWith("https://")) {
+    target = "https://" + target;
+  }
+
+  return {
+    iframeSrc: `/api/proxy?url=${encodeURIComponent(target)}`,
+    displayUrl: target,
+    isCodeServer: false,
+  };
+}
+
 export default function IframePanel({ onClose, viewport }: IframePanelProps) {
-  const [url, setUrl] = useState(CODE_SERVER_PROXY_PATH);
+  const [iframeSrc, setIframeSrc] = useState(CODE_SERVER_PROXY_PATH);
   const [inputUrl, setInputUrl] = useState(CODE_SERVER_EXTERNAL_URL);
+  const [currentDisplayUrl, setCurrentDisplayUrl] = useState(CODE_SERVER_EXTERNAL_URL);
   const [sizeKey, setSizeKey] = useState<string>("medium");
   const [mode, setMode] = useState<CanvasScreenMode>("interact");
   const [showSizeMenu, setShowSizeMenu] = useState(false);
+  const [showBookmarksMenu, setShowBookmarksMenu] = useState(false);
   const [copiedPwd, setCopiedPwd] = useState(false);
-  const [isHttpsHost, setIsHttpsHost] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Scene-space coordinates: anchored inside the canvas so it pans & zooms with drawings
@@ -115,16 +152,16 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // Listen to navigation events from the proxy-injected script inside iframe
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const isHttps = window.location.protocol === "https:";
-      setIsHttpsHost(isHttps);
-      if (isHttps) {
-        setUrl(CODE_SERVER_PROXY_PATH);
-      } else {
-        setUrl(CODE_SERVER_EXTERNAL_URL);
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data && e.data.type === "canvas-browser:navigate" && typeof e.data.url === "string") {
+        setInputUrl(e.data.url);
+        setCurrentDisplayUrl(e.data.url);
       }
-    }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
   }, []);
 
   // Initialize scene coordinates centered in the current canvas viewport
@@ -147,24 +184,17 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
 
   const currentSize = SIZE_PRESETS.find((s) => s.value === sizeKey) ?? SIZE_PRESETS[1];
 
-  const handleNavigate = useCallback(() => {
+  const navigateTo = useCallback((target: string) => {
     setIsLoading(true);
-    let nav = inputUrl.trim();
-    if (!nav || isCodeServerUrl(nav)) {
-      const resolved =
-        typeof window !== "undefined" && window.location.protocol === "https:"
-          ? CODE_SERVER_PROXY_PATH
-          : CODE_SERVER_EXTERNAL_URL;
-      setUrl(resolved);
-      setInputUrl(CODE_SERVER_EXTERNAL_URL);
-      return;
-    }
-    if (!nav.startsWith("http://") && !nav.startsWith("https://") && !nav.startsWith("/")) {
-      nav = "https://" + nav;
-    }
-    setUrl(nav);
-    setInputUrl(nav);
-  }, [inputUrl]);
+    const resolved = resolveBrowserNavigation(target);
+    setIframeSrc(resolved.iframeSrc);
+    setInputUrl(resolved.displayUrl);
+    setCurrentDisplayUrl(resolved.displayUrl);
+  }, []);
+
+  const handleNavigate = useCallback(() => {
+    navigateTo(inputUrl);
+  }, [inputUrl, navigateTo]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -172,6 +202,18 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
     },
     [handleNavigate]
   );
+
+  const handleBack = useCallback(() => {
+    try {
+      iframeRef.current?.contentWindow?.history.back();
+    } catch {}
+  }, []);
+
+  const handleForward = useCallback(() => {
+    try {
+      iframeRef.current?.contentWindow?.history.forward();
+    } catch {}
+  }, []);
 
   const handleReload = useCallback(() => {
     setIsLoading(true);
@@ -182,14 +224,8 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
   }, []);
 
   const handleResetCodeServer = useCallback(() => {
-    setIsLoading(true);
-    const resolved =
-      typeof window !== "undefined" && window.location.protocol === "https:"
-        ? CODE_SERVER_PROXY_PATH
-        : CODE_SERVER_EXTERNAL_URL;
-    setUrl(resolved);
-    setInputUrl(CODE_SERVER_EXTERNAL_URL);
-  }, []);
+    navigateTo(CODE_SERVER_EXTERNAL_URL);
+  }, [navigateTo]);
 
   const handleCopyPassword = useCallback(() => {
     navigator.clipboard.writeText(CODE_SERVER_PWD);
@@ -319,8 +355,7 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
     top: `${viewportCoords.y}px`,
     width: `${viewportCoords.width}px`,
     height: `${viewportCoords.height}px`,
-    // z-index: 3 puts the screen above drawings, but BELOW the Excalidraw UI (hamburger menu is z-index: 50)
-    zIndex: 3,
+    zIndex: 3, // Above canvas drawings, below Excalidraw UI & menus
     display: "flex",
     flexDirection: "column",
     background: "#18181b",
@@ -337,8 +372,7 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
     userSelect: isDragging || isResizing ? "none" : "auto",
   };
 
-  const isHttpOnHttps = isHttpsHost && url.startsWith("http://");
-  const externalHref = isCodeServerUrl(url) ? CODE_SERVER_EXTERNAL_URL : url;
+  const isCodeServerActive = isCodeServerTarget(currentDisplayUrl);
 
   return (
     <div ref={panelRef} style={panelStyle}>
@@ -350,7 +384,7 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 6,
+          gap: 5,
           padding: "6px 10px",
           background: "#202023",
           borderBottom: "1px solid rgba(255,255,255,0.08)",
@@ -364,14 +398,40 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
         <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#a1a1aa", marginRight: 2 }}>
           <GripHorizontal size={14} style={{ opacity: 0.7 }} />
           <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.02em", color: "#e4e4e7" }}>
-            Screen
+            Browser
           </span>
           <span style={{ fontSize: 10, color: "#71717a", padding: "1px 4px", background: "rgba(255,255,255,0.06)", borderRadius: 3 }}>
             16:10
           </span>
         </div>
 
-        {/* Mode Toggle: Code / Interact vs Draw on Canvas */}
+        {/* Browser History Buttons: Back & Forward */}
+        <button
+          type="button"
+          onClick={handleBack}
+          style={toolbarBtnStyle}
+          title="Back"
+        >
+          <ArrowLeft size={13} />
+        </button>
+        <button
+          type="button"
+          onClick={handleForward}
+          style={toolbarBtnStyle}
+          title="Forward"
+        >
+          <ArrowRight size={13} />
+        </button>
+        <button
+          type="button"
+          onClick={handleReload}
+          style={toolbarBtnStyle}
+          title="Reload"
+        >
+          <RotateCcw size={13} />
+        </button>
+
+        {/* Mode Toggle: Code/Browse vs Draw on Canvas */}
         <button
           type="button"
           onClick={() => setMode((m) => (m === "interact" ? "annotate" : "interact"))}
@@ -388,8 +448,8 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
           }}
           title={
             mode === "annotate"
-              ? "Drawing mode active: Pen strokes draw onto canvas over this screen. Click to switch to Code / Interact mode."
-              : "Interact mode active: Clicks & keys go to VS Code/website. Click to switch to Draw mode to annotate."
+              ? "Drawing mode active: Pen strokes draw onto canvas over this screen. Click to switch to Browse / Interact mode."
+              : "Interact mode active: Clicks & keys go to web page/VS Code. Click to switch to Draw mode to annotate."
           }
         >
           {mode === "annotate" ? (
@@ -400,7 +460,7 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
           ) : (
             <>
               <Code2 size={13} />
-              <span style={{ marginLeft: 3 }}>Interact & Code</span>
+              <span style={{ marginLeft: 3 }}>Interact & Browse</span>
             </>
           )}
         </button>
@@ -410,17 +470,20 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
           type="button"
           onClick={handleRecenter}
           style={toolbarBtnStyle}
-          title="Recenter screen in the current canvas view"
+          title="Recenter screen in current canvas view"
         >
           <Crosshair size={13} />
-          <span style={{ marginLeft: 3, fontSize: 11 }}>Center View</span>
+          <span style={{ marginLeft: 3, fontSize: 11 }}>Center</span>
         </button>
 
         {/* Size picker */}
         <div style={{ position: "relative" }}>
           <button
             type="button"
-            onClick={() => setShowSizeMenu((v) => !v)}
+            onClick={() => {
+              setShowSizeMenu((v) => !v);
+              setShowBookmarksMenu(false);
+            }}
             style={toolbarBtnStyle}
             title="Change 16:10 display size"
           >
@@ -451,14 +514,42 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
           )}
         </div>
 
-        {/* URL bar */}
+        {/* Quick Bookmarks / Search Presets */}
+        <div style={{ position: "relative" }}>
+          <button
+            type="button"
+            onClick={() => {
+              setShowBookmarksMenu((v) => !v);
+              setShowSizeMenu(false);
+            }}
+            style={toolbarBtnStyle}
+            title="Bookmarks & quick sites"
+          >
+            <Bookmark size={13} />
+            <ChevronDown size={11} style={{ marginLeft: 1 }} />
+          </button>
+          {showBookmarksMenu && (
+            <DropdownMenu
+              items={BOOKMARKS.map((b) => ({
+                label: b.label,
+                active: currentDisplayUrl === b.url,
+                onClick: () => {
+                  navigateTo(b.url);
+                  setShowBookmarksMenu(false);
+                },
+              }))}
+            />
+          )}
+        </div>
+
+        {/* Omnibox / Search & URL bar */}
         <Globe size={13} style={{ color: "#a1a1aa", flexShrink: 0 }} />
         <input
           type="text"
           value={inputUrl}
           onChange={(e) => setInputUrl(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Enter website URL or load code-server"
+          placeholder="Enter website URL or search (e.g. google.com, react, binary tree)"
           style={{
             flex: 1,
             height: 24,
@@ -478,96 +569,57 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
           type="button"
           onClick={handleNavigate}
           style={{ ...toolbarBtnStyle, padding: "0 8px", fontSize: 11 }}
-          title="Navigate"
+          title="Go / Search"
         >
           Go
         </button>
         <button
           type="button"
-          onClick={handleReload}
-          style={toolbarBtnStyle}
-          title="Reload screen"
-        >
-          <RotateCcw size={13} />
-        </button>
-        <button
-          type="button"
           onClick={handleResetCodeServer}
           style={toolbarBtnStyle}
-          title="Reset to code-server"
+          title="Quick switch to Code Server"
         >
           <Code2 size={13} />
         </button>
         <a
-          href={externalHref}
+          href={currentDisplayUrl}
           target="_blank"
           rel="noopener noreferrer"
           style={{ ...toolbarBtnStyle, textDecoration: "none" }}
-          title="Open in new tab (direct link)"
+          title="Open in external browser tab"
         >
           <ExternalLink size={13} />
         </a>
-        <button
-          type="button"
-          onClick={handleCopyPassword}
-          style={{
-            ...toolbarBtnStyle,
-            fontSize: 11,
-            color: copiedPwd ? "#86efac" : "#d4d4d8",
-            borderColor: copiedPwd ? "rgba(34, 197, 94, 0.4)" : undefined,
-          }}
-          title={`Copy code-server password (${CODE_SERVER_PWD})`}
-        >
-          {copiedPwd ? <Check size={12} /> : <Copy size={12} />}
-          <span style={{ marginLeft: 2 }}>{copiedPwd ? "Copied" : "Pwd"}</span>
-        </button>
+
+        {/* Code Server Password Helper (only visible when code-server is active) */}
+        {isCodeServerActive && (
+          <button
+            type="button"
+            onClick={handleCopyPassword}
+            style={{
+              ...toolbarBtnStyle,
+              fontSize: 11,
+              color: copiedPwd ? "#86efac" : "#d4d4d8",
+              borderColor: copiedPwd ? "rgba(34, 197, 94, 0.4)" : undefined,
+            }}
+            title={`Copy code-server password (${CODE_SERVER_PWD})`}
+          >
+            {copiedPwd ? <Check size={12} /> : <Copy size={12} />}
+            <span style={{ marginLeft: 2 }}>{copiedPwd ? "Copied" : "Pwd"}</span>
+          </button>
+        )}
+
         <button
           type="button"
           onClick={onClose}
           style={{ ...toolbarBtnStyle, marginLeft: 2 }}
-          title="Close screen"
+          title="Close browser"
         >
           <X size={14} />
         </button>
       </div>
 
-      {/* Mixed Content Notice Banner (only shown if a raw external HTTP URL is explicitly opened on HTTPS) */}
-      {isHttpOnHttps && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            background: "rgba(234, 88, 12, 0.15)",
-            borderBottom: "1px solid rgba(234, 88, 12, 0.3)",
-            padding: "3px 10px",
-            fontSize: 11,
-            color: "#fdba74",
-          }}
-        >
-          <span>
-            ⚠️ Browser Mixed-Content: External HTTP sites may be restricted by the browser on HTTPS.
-          </span>
-          <a
-            href={externalHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 3,
-              color: "#fb923c",
-              textDecoration: "underline",
-              fontWeight: 500,
-              marginLeft: 8,
-            }}
-          >
-            Open in new tab ↗
-          </a>
-        </div>
-      )}
-
-      {/* Main Screen / Iframe Container */}
+      {/* Main Browser / Iframe Container */}
       <div
         style={{
           flex: 1,
@@ -595,14 +647,14 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
             }}
           >
             <Loader2 size={24} className="animate-spin text-indigo-400" />
-            <span style={{ fontSize: 11 }}>Connecting to screen…</span>
+            <span style={{ fontSize: 11 }}>Loading page…</span>
           </div>
         )}
 
         <iframe
           ref={iframeRef}
-          src={url}
-          title="Canvas Screen (16:10)"
+          src={iframeSrc}
+          title="Canvas Browser (16:10)"
           onLoad={() => setIsLoading(false)}
           onError={() => setIsLoading(false)}
           style={{
@@ -614,7 +666,7 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
             display: "block",
             pointerEvents: mode === "annotate" ? "none" : "auto",
           }}
-          allow="clipboard-read; clipboard-write; fullscreen"
+          allow="clipboard-read; clipboard-write; fullscreen; camera; microphone"
           sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-top-navigation allow-top-navigation-by-user-activation"
         />
 
@@ -691,15 +743,12 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span>16:10 Canvas Display</span>
+          <span>16:10 Canvas Browser</span>
           <span>•</span>
-          <span>Mode: {mode === "interact" ? "💻 Interact (Click to Code)" : "✏️ Draw (Click to Code)"}</span>
+          <span>{isCodeServerActive ? "Code Server Active" : currentDisplayUrl}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span>code-server password:</span>
-          <code style={{ color: "#a1a1aa", background: "rgba(255,255,255,0.06)", padding: "1px 4px", borderRadius: 2 }}>
-            {CODE_SERVER_PWD}
-          </code>
+          <span>Mode: {mode === "interact" ? "💻 Interact (Click to Code/Browse)" : "✏️ Draw (Click to Browse)"}</span>
         </div>
       </div>
     </div>
