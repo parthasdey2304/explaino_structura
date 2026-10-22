@@ -1,14 +1,35 @@
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
-import { X, Monitor, Globe, RotateCcw, Maximize2, ChevronDown } from "lucide-react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import {
+  X,
+  Monitor,
+  Globe,
+  RotateCcw,
+  Maximize2,
+  ChevronDown,
+  ExternalLink,
+  Code2,
+  PenTool,
+  GripHorizontal,
+  Copy,
+  Check,
+} from "lucide-react";
 
 /**
- * Dock placement layout options for the embedded iframe panel.
- * - `right` / `left`: Vertical splits on the right or left edge.
- * - `top` / `bottom`: Horizontal splits on the top or bottom edge.
+ * Dock placement layout options for the canvas-embedded screen.
+ * - `center`: Centered in canvas (matches 16:10 virtual display layout).
+ * - `left` / `right`: Aligned to canvas left or right edges.
+ * - `top` / `bottom`: Aligned to canvas top or bottom edges.
  */
-export type IframePanelLayout = "right" | "left" | "top" | "bottom";
+export type IframePanelLayout = "center" | "left" | "right" | "top" | "bottom";
+
+/**
+ * Interactive mode of the canvas screen.
+ * - `interact`: Clicks & keystrokes pass to the iframe (typing code in VS Code, browsing).
+ * - `annotate`: Mouse events pass through to Excalidraw canvas (drawing notes & shapes over the screen).
+ */
+export type CanvasScreenMode = "interact" | "annotate";
 
 /**
  * Props passed to the IframePanel component.
@@ -18,22 +39,30 @@ export interface IframePanelProps {
   onClose: () => void;
   /** Current dock layout placement of the panel. */
   layout: IframePanelLayout;
-  /** Callback to change the dock layout (e.g. from right to bottom). */
+  /** Callback to change the dock layout (e.g. from center to right). */
   onLayoutChange: (layout: IframePanelLayout) => void;
 }
 
 const CODE_SERVER_URL = "http://13.49.76.201";
+const CODE_SERVER_PWD = "14d26b731d1571af7802cfe5";
 
-const SIZE_PRESETS = [
-  { label: "Small", value: 35 },
-  { label: "Medium", value: 50 },
-  { label: "Large", value: 65 },
-  { label: "XL", value: 80 },
+export interface SizePreset {
+  label: string;
+  value: string;
+  widthPx: number;
+}
+
+const SIZE_PRESETS: SizePreset[] = [
+  { label: "Small (680px)", value: "small", widthPx: 680 },
+  { label: "Medium (920px)", value: "medium", widthPx: 920 },
+  { label: "Large (1120px)", value: "large", widthPx: 1120 },
+  { label: "XL (1340px)", value: "xl", widthPx: 1340 },
 ];
 
 const LAYOUT_OPTIONS: { value: IframePanelLayout; label: string }[] = [
-  { value: "right", label: "Right" },
-  { value: "left", label: "Left" },
+  { value: "center", label: "Center (Canvas)" },
+  { value: "left", label: "Left Edge" },
+  { value: "right", label: "Right Edge" },
   { value: "top", label: "Top" },
   { value: "bottom", label: "Bottom" },
 ];
@@ -41,61 +70,37 @@ const LAYOUT_OPTIONS: { value: IframePanelLayout; label: string }[] = [
 export default function IframePanel({ onClose, layout, onLayoutChange }: IframePanelProps) {
   const [url, setUrl] = useState(CODE_SERVER_URL);
   const [inputUrl, setInputUrl] = useState(CODE_SERVER_URL);
-  const [sizePercent, setSizePercent] = useState(50);
+  const [sizeKey, setSizeKey] = useState<string>("medium");
+  const [mode, setMode] = useState<CanvasScreenMode>("interact");
   const [showLayoutMenu, setShowLayoutMenu] = useState(false);
   const [showSizeMenu, setShowSizeMenu] = useState(false);
+  const [copiedPwd, setCopiedPwd] = useState(false);
+  const [isHttpsHost, setIsHttpsHost] = useState(false);
+
+  // Dragging state
+  const [customPos, setCustomPos] = useState<{ x: number; y: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef<{ mouseX: number; mouseY: number; startX: number; startY: number } | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const isVertical = layout === "left" || layout === "right";
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsHttpsHost(window.location.protocol === "https:");
+    }
+  }, []);
 
-  // Panel style based on layout
-  const panelStyle: React.CSSProperties = isVertical
-    ? {
-        position: "fixed",
-        top: 0,
-        [layout]: 0,
-        width: `${sizePercent}%`,
-        height: "100vh",
-        zIndex: 60,
-        display: "flex",
-        flexDirection: "column",
-        background: "#1e1e1e",
-        borderLeft: layout === "right" ? "2px solid rgba(255,255,255,0.1)" : undefined,
-        borderRight: layout === "left" ? "2px solid rgba(255,255,255,0.1)" : undefined,
-        boxShadow:
-          layout === "right"
-            ? "-4px 0 24px rgba(0,0,0,0.35)"
-            : "4px 0 24px rgba(0,0,0,0.35)",
-      }
-    : {
-        position: "fixed",
-        left: 0,
-        [layout]: 0,
-        width: "100vw",
-        height: `${sizePercent}%`,
-        zIndex: 60,
-        display: "flex",
-        flexDirection: "column",
-        background: "#1e1e1e",
-        borderTop: layout === "bottom" ? "2px solid rgba(255,255,255,0.1)" : undefined,
-        borderBottom: layout === "top" ? "2px solid rgba(255,255,255,0.1)" : undefined,
-        boxShadow:
-          layout === "bottom"
-            ? "0 -4px 24px rgba(0,0,0,0.35)"
-            : "0 4px 24px rgba(0,0,0,0.35)",
-      };
-
-  // Compute iframe wrapper style to preserve 16:10 aspect ratio when in vertical split
-  const iframeWrapperStyle: React.CSSProperties = isVertical
-    ? { flex: 1, overflow: "hidden", position: "relative" }
-    : { flex: 1, overflow: "hidden", position: "relative" };
+  const currentSize = SIZE_PRESETS.find((s) => s.value === sizeKey) ?? SIZE_PRESETS[1];
 
   const handleNavigate = useCallback(() => {
     let nav = inputUrl.trim();
-    if (nav && !nav.startsWith("http://") && !nav.startsWith("https://")) {
+    if (!nav) {
+      nav = CODE_SERVER_URL;
+    } else if (!nav.startsWith("http://") && !nav.startsWith("https://")) {
       nav = "https://" + nav;
     }
     setUrl(nav);
+    setInputUrl(nav);
   }, [inputUrl]);
 
   const handleKeyDown = useCallback(
@@ -106,29 +111,199 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
   );
 
   const handleReload = useCallback(() => {
-    // Reload by re-setting same src
     if (iframeRef.current) {
       // eslint-disable-next-line no-self-assign
       iframeRef.current.src = iframeRef.current.src;
     }
   }, []);
 
+  const handleResetCodeServer = useCallback(() => {
+    setUrl(CODE_SERVER_URL);
+    setInputUrl(CODE_SERVER_URL);
+  }, []);
+
+  const handleCopyPassword = useCallback(() => {
+    navigator.clipboard.writeText(CODE_SERVER_PWD);
+    setCopiedPwd(true);
+    setTimeout(() => setCopiedPwd(false), 2000);
+  }, []);
+
+  // Drag handlers
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest("button, input, select, a")) return;
+    if (!panelRef.current) return;
+    const rect = panelRef.current.getBoundingClientRect();
+    dragStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      startX: rect.left,
+      startY: rect.top,
+    };
+    setIsDragging(true);
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging || !dragStartRef.current) return;
+    const dx = e.clientX - dragStartRef.current.mouseX;
+    const dy = e.clientY - dragStartRef.current.mouseY;
+    const maxX = Math.max(10, window.innerWidth - 120);
+    const maxY = Math.max(10, window.innerHeight - 80);
+    setCustomPos({
+      x: Math.max(10, Math.min(maxX, dragStartRef.current.startX + dx)),
+      y: Math.max(10, Math.min(maxY, dragStartRef.current.startY + dy)),
+    });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isDragging) {
+      setIsDragging(false);
+      dragStartRef.current = null;
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+      } catch {}
+    }
+  };
+
+  // Compute position styling
+  const getPositionStyle = (): React.CSSProperties => {
+    if (customPos) {
+      return {
+        position: "fixed",
+        left: `${customPos.x}px`,
+        top: `${customPos.y}px`,
+        transform: "none",
+      };
+    }
+    switch (layout) {
+      case "left":
+        return {
+          position: "fixed",
+          left: "2.5rem",
+          top: "50%",
+          transform: "translateY(-50%)",
+        };
+      case "right":
+        return {
+          position: "fixed",
+          right: "2.5rem",
+          top: "50%",
+          transform: "translateY(-50%)",
+        };
+      case "top":
+        return {
+          position: "fixed",
+          left: "50%",
+          top: "4.5rem",
+          transform: "translateX(-50%)",
+        };
+      case "bottom":
+        return {
+          position: "fixed",
+          left: "50%",
+          bottom: "2.5rem",
+          transform: "translateX(-50%)",
+        };
+      case "center":
+      default:
+        return {
+          position: "fixed",
+          left: "50%",
+          top: "50%",
+          transform: "translate(-50%, -50%)",
+        };
+    }
+  };
+
+  const panelStyle: React.CSSProperties = {
+    ...getPositionStyle(),
+    width: `min(${currentSize.widthPx}px, 86vw, calc((100vh - 110px) * 16 / 10))`,
+    aspectRatio: "16 / 10",
+    zIndex: 60,
+    display: "flex",
+    flexDirection: "column",
+    background: "#18181b",
+    borderRadius: 14,
+    border:
+      mode === "annotate"
+        ? "2px solid #818cf8"
+        : "1px solid rgba(255, 255, 255, 0.16)",
+    boxShadow:
+      mode === "annotate"
+        ? "0 0 0 4px rgba(129, 140, 248, 0.28), 0 25px 65px rgba(0, 0, 0, 0.85)"
+        : "0 22px 60px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08)",
+    overflow: "hidden",
+    userSelect: isDragging ? "none" : "auto",
+  };
+
+  const isHttpOnHttps = isHttpsHost && url.startsWith("http://");
+
   return (
-    <div style={panelStyle}>
-      {/* Toolbar */}
+    <div ref={panelRef} style={panelStyle}>
+      {/* Sleek Top Header / Toolbar & Drag Handle */}
       <div
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
         style={{
           display: "flex",
           alignItems: "center",
           gap: 6,
           padding: "6px 10px",
-          background: "#252526",
+          background: "#202023",
           borderBottom: "1px solid rgba(255,255,255,0.08)",
           flexShrink: 0,
           userSelect: "none",
+          cursor: isDragging ? "grabbing" : "grab",
         }}
+        title="Drag header to move screen anywhere on canvas"
       >
-        {/* Layout picker */}
+        {/* Drag handle icon & title */}
+        <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#a1a1aa", marginRight: 2 }}>
+          <GripHorizontal size={14} style={{ opacity: 0.7 }} />
+          <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.02em", color: "#e4e4e7" }}>
+            Screen
+          </span>
+          <span style={{ fontSize: 10, color: "#71717a", padding: "1px 4px", background: "rgba(255,255,255,0.06)", borderRadius: 3 }}>
+            16:10
+          </span>
+        </div>
+
+        {/* Mode Toggle: Code / Interact vs Draw on Canvas */}
+        <button
+          type="button"
+          onClick={() => setMode((m) => (m === "interact" ? "annotate" : "interact"))}
+          style={{
+            ...toolbarBtnStyle,
+            background:
+              mode === "annotate"
+                ? "rgba(129, 140, 248, 0.25)"
+                : "rgba(34, 197, 94, 0.16)",
+            borderColor:
+              mode === "annotate" ? "#818cf8" : "rgba(34, 197, 94, 0.4)",
+            color: mode === "annotate" ? "#c7d2fe" : "#86efac",
+            fontWeight: 600,
+          }}
+          title={
+            mode === "annotate"
+              ? "Drawing mode active: Pen strokes draw onto canvas over this screen. Click to switch to Code / Interact mode."
+              : "Interact mode active: Clicks & keys go to VS Code/website. Click to switch to Draw mode to annotate."
+          }
+        >
+          {mode === "annotate" ? (
+            <>
+              <PenTool size={13} />
+              <span style={{ marginLeft: 3 }}>Draw on Canvas</span>
+            </>
+          ) : (
+            <>
+              <Code2 size={13} />
+              <span style={{ marginLeft: 3 }}>Interact & Code</span>
+            </>
+          )}
+        </button>
+
+        {/* Position picker */}
         <div style={{ position: "relative" }}>
           <button
             type="button"
@@ -137,24 +312,40 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
               setShowSizeMenu(false);
             }}
             style={toolbarBtnStyle}
-            title="Change layout"
+            title="Change screen position on canvas"
           >
-            <Monitor size={14} />
-            <span style={{ marginLeft: 4, fontSize: 11 }}>
-              {LAYOUT_OPTIONS.find((o) => o.value === layout)?.label ?? layout}
+            <Monitor size={13} />
+            <span style={{ marginLeft: 3, fontSize: 11 }}>
+              {customPos ? "Custom" : LAYOUT_OPTIONS.find((o) => o.value === layout)?.label ?? layout}
             </span>
-            <ChevronDown size={12} style={{ marginLeft: 2 }} />
+            <ChevronDown size={11} style={{ marginLeft: 1 }} />
           </button>
           {showLayoutMenu && (
             <DropdownMenu
-              items={LAYOUT_OPTIONS.map((o) => ({
-                label: o.label,
-                active: o.value === layout,
-                onClick: () => {
-                  onLayoutChange(o.value);
-                  setShowLayoutMenu(false);
-                },
-              }))}
+              items={[
+                ...LAYOUT_OPTIONS.map((o) => ({
+                  label: o.label,
+                  active: !customPos && o.value === layout,
+                  onClick: () => {
+                    setCustomPos(null);
+                    onLayoutChange(o.value);
+                    setShowLayoutMenu(false);
+                  },
+                })),
+                ...(customPos
+                  ? [
+                      {
+                        label: "Reset to Center",
+                        active: false,
+                        onClick: () => {
+                          setCustomPos(null);
+                          onLayoutChange("center");
+                          setShowLayoutMenu(false);
+                        },
+                      },
+                    ]
+                  : []),
+              ]}
             />
           )}
         </div>
@@ -168,45 +359,43 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
               setShowLayoutMenu(false);
             }}
             style={toolbarBtnStyle}
-            title="Change size"
+            title="Change 16:10 display size"
           >
-            <Maximize2 size={14} />
-            <span style={{ marginLeft: 4, fontSize: 11 }}>{sizePercent}%</span>
-            <ChevronDown size={12} style={{ marginLeft: 2 }} />
+            <Maximize2 size={13} />
+            <span style={{ marginLeft: 3, fontSize: 11 }}>{currentSize.label.split(" ")[0]}</span>
+            <ChevronDown size={11} style={{ marginLeft: 1 }} />
           </button>
           {showSizeMenu && (
             <DropdownMenu
-              items={[
-                ...SIZE_PRESETS.map((p) => ({
-                  label: `${p.label} (${p.value}%)`,
-                  active: sizePercent === p.value,
-                  onClick: () => {
-                    setSizePercent(p.value);
-                    setShowSizeMenu(false);
-                  },
-                })),
-              ]}
+              items={SIZE_PRESETS.map((p) => ({
+                label: p.label,
+                active: sizeKey === p.value,
+                onClick: () => {
+                  setSizeKey(p.value);
+                  setShowSizeMenu(false);
+                },
+              }))}
             />
           )}
         </div>
 
         {/* URL bar */}
-        <Globe size={14} style={{ color: "#aaa", flexShrink: 0 }} />
+        <Globe size={13} style={{ color: "#a1a1aa", flexShrink: 0 }} />
         <input
           type="text"
           value={inputUrl}
           onChange={(e) => setInputUrl(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Enter URL or leave blank for code-server"
+          placeholder="Enter website URL or load code-server"
           style={{
             flex: 1,
-            height: 26,
+            height: 24,
             padding: "0 8px",
             borderRadius: 4,
-            border: "1px solid rgba(255,255,255,0.15)",
-            background: "rgba(255,255,255,0.06)",
-            color: "#e4e4e7",
-            fontSize: 12,
+            border: "1px solid rgba(255,255,255,0.14)",
+            background: "rgba(0,0,0,0.25)",
+            color: "#f4f4f5",
+            fontSize: 11,
             outline: "none",
             fontFamily: "monospace",
             minWidth: 0,
@@ -216,7 +405,7 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
         <button
           type="button"
           onClick={handleNavigate}
-          style={{ ...toolbarBtnStyle, padding: "0 10px" }}
+          style={{ ...toolbarBtnStyle, padding: "0 8px", fontSize: 11 }}
           title="Navigate"
         >
           Go
@@ -225,94 +414,191 @@ export default function IframePanel({ onClose, layout, onLayoutChange }: IframeP
           type="button"
           onClick={handleReload}
           style={toolbarBtnStyle}
-          title="Reload"
+          title="Reload screen"
         >
-          <RotateCcw size={14} />
+          <RotateCcw size={13} />
+        </button>
+        <button
+          type="button"
+          onClick={handleResetCodeServer}
+          style={toolbarBtnStyle}
+          title="Reset to code-server"
+        >
+          <Code2 size={13} />
+        </button>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ ...toolbarBtnStyle, textDecoration: "none" }}
+          title="Open in new tab (recommended if blocked on HTTPS)"
+        >
+          <ExternalLink size={13} />
+        </a>
+        <button
+          type="button"
+          onClick={handleCopyPassword}
+          style={{
+            ...toolbarBtnStyle,
+            fontSize: 11,
+            color: copiedPwd ? "#86efac" : "#d4d4d8",
+            borderColor: copiedPwd ? "rgba(34, 197, 94, 0.4)" : undefined,
+          }}
+          title={`Copy code-server password (${CODE_SERVER_PWD})`}
+        >
+          {copiedPwd ? <Check size={12} /> : <Copy size={12} />}
+          <span style={{ marginLeft: 2 }}>{copiedPwd ? "Copied" : "Pwd"}</span>
         </button>
         <button
           type="button"
           onClick={onClose}
-          style={{ ...toolbarBtnStyle, marginLeft: "auto" }}
-          title="Close"
+          style={{ ...toolbarBtnStyle, marginLeft: 2 }}
+          title="Close screen"
         >
-          <X size={15} />
+          <X size={14} />
         </button>
       </div>
 
-      {/* Iframe area */}
-      <div style={iframeWrapperStyle}>
-        {/* 16:10 aspect ratio container when in a side split */}
-        {isVertical ? (
-          <iframe
-            ref={iframeRef}
-            src={url}
-            title="Iframe Panel"
+      {/* Mixed Content Notice Banner (only when HTTPS parent loads HTTP iframe) */}
+      {isHttpOnHttps && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            background: "rgba(234, 88, 12, 0.15)",
+            borderBottom: "1px solid rgba(234, 88, 12, 0.3)",
+            padding: "3px 10px",
+            fontSize: 11,
+            color: "#fdba74",
+          }}
+        >
+          <span>
+            ⚠️ Browser Mixed-Content: Browsers may block HTTP inside HTTPS. If screen is blank:
+          </span>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 3,
+              color: "#fb923c",
+              textDecoration: "underline",
+              fontWeight: 500,
+              marginLeft: 8,
+            }}
+          >
+            Open in new tab ↗
+          </a>
+        </div>
+      )}
+
+      {/* Main Screen / Iframe Container */}
+      <div
+        style={{
+          flex: 1,
+          position: "relative",
+          width: "100%",
+          height: "100%",
+          overflow: "hidden",
+          background: "#18181b",
+        }}
+      >
+        <iframe
+          ref={iframeRef}
+          src={url}
+          title="Canvas Screen (16:10)"
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            border: "none",
+            display: "block",
+            pointerEvents: mode === "annotate" ? "none" : "auto",
+          }}
+          allow="clipboard-read; clipboard-write; fullscreen"
+          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-top-navigation allow-top-navigation-by-user-activation"
+        />
+
+        {/* Annotate mode badge indicator over iframe */}
+        {mode === "annotate" && (
+          <div
             style={{
               position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              border: "none",
-              display: "block",
+              top: 10,
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "rgba(30, 27, 75, 0.92)",
+              color: "#c7d2fe",
+              border: "1px solid rgba(129, 140, 248, 0.4)",
+              borderRadius: 20,
+              padding: "4px 12px",
+              fontSize: 11,
+              fontWeight: 500,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              boxShadow: "0 4px 14px rgba(0,0,0,0.4)",
+              pointerEvents: "none",
+              zIndex: 10,
             }}
-            allow="clipboard-read; clipboard-write; fullscreen"
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-top-navigation allow-top-navigation-by-user-activation"
-          />
-        ) : (
-          <iframe
-            ref={iframeRef}
-            src={url}
-            title="Iframe Panel"
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              border: "none",
-              display: "block",
-            }}
-            allow="clipboard-read; clipboard-write; fullscreen"
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-top-navigation allow-top-navigation-by-user-activation"
-          />
+          >
+            <PenTool size={12} />
+            <span>Draw Mode Active: Pen strokes draw onto whiteboard canvas over screen</span>
+          </div>
         )}
       </div>
 
-      {/* 16:10 aspect hint bar (only in side layouts) */}
-      {isVertical && (
-        <div
-          style={{
-            textAlign: "center",
-            fontSize: 10,
-            color: "rgba(255,255,255,0.25)",
-            padding: "3px 0",
-            flexShrink: 0,
-            borderTop: "1px solid rgba(255,255,255,0.05)",
-          }}
-        >
-          16 : 10 display
+      {/* Bottom Status / Aspect Info Bar */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "3px 10px",
+          fontSize: 10,
+          color: "rgba(255,255,255,0.4)",
+          background: "#1c1c1f",
+          borderTop: "1px solid rgba(255,255,255,0.06)",
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span>16 : 10 Virtual Display</span>
+          <span>•</span>
+          <span>Mode: {mode === "interact" ? "💻 Interact (Click to Code)" : "✏️ Draw (Click to Code)"}</span>
         </div>
-      )}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span>code-server password:</span>
+          <code style={{ color: "#a1a1aa", background: "rgba(255,255,255,0.06)", padding: "1px 4px", borderRadius: 2 }}>
+            {CODE_SERVER_PWD}
+          </code>
+        </div>
+      </div>
     </div>
   );
 }
 
-// ── tiny shared styles ──────────────────────────────────────────────────────
+// ── Shared mini styles ──────────────────────────────────────────────────────
 
 const toolbarBtnStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  height: 26,
-  padding: "0 7px",
+  height: 24,
+  padding: "0 6px",
   borderRadius: 4,
   border: "1px solid rgba(255,255,255,0.12)",
   background: "rgba(255,255,255,0.07)",
   color: "#d4d4d4",
   cursor: "pointer",
-  fontSize: 12,
+  fontSize: 11,
   gap: 2,
   flexShrink: 0,
-  transition: "background 0.15s",
+  transition: "all 0.15s ease",
 };
 
 function DropdownMenu({
@@ -327,11 +613,11 @@ function DropdownMenu({
         top: "calc(100% + 4px)",
         left: 0,
         zIndex: 200,
-        background: "#2d2d2d",
-        border: "1px solid rgba(255,255,255,0.12)",
+        background: "#27272a",
+        border: "1px solid rgba(255,255,255,0.14)",
         borderRadius: 6,
         minWidth: 140,
-        boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
         overflow: "hidden",
       }}
     >
@@ -343,13 +629,13 @@ function DropdownMenu({
           style={{
             display: "block",
             width: "100%",
-            padding: "8px 14px",
-            background: item.active ? "rgba(100,100,255,0.2)" : "transparent",
-            color: item.active ? "#a5b4fc" : "#d4d4d4",
+            padding: "7px 12px",
+            background: item.active ? "rgba(129, 140, 248, 0.22)" : "transparent",
+            color: item.active ? "#c7d2fe" : "#d4d4d4",
             border: "none",
             cursor: "pointer",
             textAlign: "left",
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: item.active ? 600 : 400,
           }}
         >

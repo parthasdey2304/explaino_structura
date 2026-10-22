@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
@@ -355,7 +355,7 @@ export default function ExcalidrawWrapper() {
   const [showCodePanel, setShowCodePanel] = useState(false);
   const showCodePanelRef = useRef(false);
   const [showIframePanel, setShowIframePanel] = useState(false);
-  const [iframePanelLayout, setIframePanelLayout] = useState<IframePanelLayout>("right");
+  const [iframePanelLayout, setIframePanelLayout] = useState<IframePanelLayout>("center");
   const [showDataStructuresPanel, setShowDataStructuresPanel] = useState(false);
   const [showTodos, setShowTodos] = useState(false);
   const [showAiTextPanel, setShowAiTextPanel] = useState(false);
