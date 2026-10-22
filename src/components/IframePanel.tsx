@@ -54,7 +54,7 @@ export interface IframePanelProps {
 }
 
 const CODE_SERVER_EXTERNAL_URL = "http://13.49.76.201";
-const CODE_SERVER_PROXY_PATH = "/code-server/login";
+const CODE_SERVER_PROXY_PATH = "/code-server/";
 const CODE_SERVER_PWD = "14d26b731d1571af7802cfe5";
 
 export interface SizePreset {
@@ -221,6 +221,16 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
       // eslint-disable-next-line no-self-assign
       iframeRef.current.src = iframeRef.current.src;
     }
+  }, []);
+
+  const handleIframeLoad = useCallback(() => {
+    setIsLoading(false);
+    try {
+      const pathname = iframeRef.current?.contentWindow?.location?.pathname;
+      if (pathname === "/" || pathname === "") {
+        setIframeSrc(CODE_SERVER_PROXY_PATH);
+      }
+    } catch {}
   }, []);
 
   const handleResetCodeServer = useCallback(() => {
@@ -655,7 +665,7 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
           ref={iframeRef}
           src={iframeSrc}
           title="Canvas Browser (16:10)"
-          onLoad={() => setIsLoading(false)}
+          onLoad={handleIframeLoad}
           onError={() => setIsLoading(false)}
           style={{
             position: "absolute",
