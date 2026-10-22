@@ -18,6 +18,9 @@ import {
   ArrowLeft,
   ArrowRight,
   Bookmark,
+  Smartphone,
+  Monitor,
+  RotateCw,
 } from "lucide-react";
 import {
   viewportCoordsToSceneCoords,
@@ -56,6 +59,113 @@ export interface IframePanelProps {
 const CODE_SERVER_EXTERNAL_URL = "http://13.49.76.201";
 const CODE_SERVER_PROXY_PATH = "/code-server/";
 const CODE_SERVER_PWD = "14d26b731d1571af7802cfe5";
+
+export interface AspectRatioOption {
+  key: string;
+  label: string;
+  sublabel: string;
+  ratioW: number;
+  ratioH: number;
+  orientation: "landscape" | "portrait";
+  flipKey: string;
+}
+
+export const ASPECT_RATIOS: AspectRatioOption[] = [
+  // Landscape Ratios
+  {
+    key: "16:10",
+    label: "16:10",
+    sublabel: "Laptop / Default",
+    ratioW: 16,
+    ratioH: 10,
+    orientation: "landscape",
+    flipKey: "10:16",
+  },
+  {
+    key: "16:9",
+    label: "16:9",
+    sublabel: "Widescreen",
+    ratioW: 16,
+    ratioH: 9,
+    orientation: "landscape",
+    flipKey: "9:16",
+  },
+  {
+    key: "20:9",
+    label: "20:9",
+    sublabel: "Ultrawide",
+    ratioW: 20,
+    ratioH: 9,
+    orientation: "landscape",
+    flipKey: "9:20",
+  },
+
+  // Portrait Ratios
+  {
+    key: "10:16",
+    label: "10:16",
+    sublabel: "Tablet Portrait",
+    ratioW: 10,
+    ratioH: 16,
+    orientation: "portrait",
+    flipKey: "16:10",
+  },
+  {
+    key: "9:16",
+    label: "9:16",
+    sublabel: "Mobile Portrait",
+    ratioW: 9,
+    ratioH: 16,
+    orientation: "portrait",
+    flipKey: "16:9",
+  },
+  {
+    key: "9:20",
+    label: "9:20",
+    sublabel: "Tall Mobile (20:9)",
+    ratioW: 9,
+    ratioH: 20,
+    orientation: "portrait",
+    flipKey: "20:9",
+  },
+];
+
+export function getSizePresetsForRatio(ratio: AspectRatioOption): SizePreset[] {
+  if (ratio.orientation === "portrait") {
+    const baseWidths = [
+      { key: "small", label: "Small", w: 340 },
+      { key: "medium", label: "Medium", w: 420 },
+      { key: "large", label: "Large", w: 500 },
+      { key: "xl", label: "XL", w: 580 },
+    ];
+    return baseWidths.map(({ key, label, w }) => {
+      const h = Math.round((w * ratio.ratioH) / ratio.ratioW);
+      return {
+        label: `${label} (${w}×${h})`,
+        value: key,
+        width: w,
+        height: h,
+      };
+    });
+  }
+
+  // Landscape
+  const baseWidths = [
+    { key: "small", label: "Small", w: 680 },
+    { key: "medium", label: "Medium", w: 920 },
+    { key: "large", label: "Large", w: 1120 },
+    { key: "xl", label: "XL", w: 1340 },
+  ];
+  return baseWidths.map(({ key, label, w }) => {
+    const h = Math.round((w * ratio.ratioH) / ratio.ratioW);
+    return {
+      label: `${label} (${w}×${h})`,
+      value: key,
+      width: w,
+      height: h,
+    };
+  });
+}
 
 export interface SizePreset {
   label: string;
@@ -130,6 +240,7 @@ export interface CanvasScreenSavedState {
   url?: string;
   sizeKey?: string;
   mode?: CanvasScreenMode;
+  aspectRatioKey?: string;
 }
 
 export function loadSavedScreenState(): CanvasScreenSavedState | null {
@@ -155,6 +266,7 @@ export function saveScreenState(partial: Partial<CanvasScreenSavedState>): void 
       url: existing?.url ?? CODE_SERVER_EXTERNAL_URL,
       sizeKey: existing?.sizeKey ?? "medium",
       mode: existing?.mode ?? "interact",
+      aspectRatioKey: existing?.aspectRatioKey ?? "16:10",
       ...partial,
     };
     localStorage.setItem(CANVAS_SCREEN_STORAGE_KEY, JSON.stringify(next));
@@ -170,6 +282,8 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
   const [currentDisplayUrl, setCurrentDisplayUrl] = useState(initialResolved.displayUrl);
   const [sizeKey, setSizeKey] = useState<string>(saved?.sizeKey || "medium");
   const [mode, setMode] = useState<CanvasScreenMode>(saved?.mode || "interact");
+  const [aspectRatioKey, setAspectRatioKey] = useState<string>(saved?.aspectRatioKey || "16:10");
+  const [showAspectMenu, setShowAspectMenu] = useState(false);
   const [showSizeMenu, setShowSizeMenu] = useState(false);
   const [showBookmarksMenu, setShowBookmarksMenu] = useState(false);
   const [copiedPwd, setCopiedPwd] = useState(false);
@@ -257,7 +371,89 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
     }
   }, [viewport, scenePos]);
 
-  const currentSize = SIZE_PRESETS.find((s) => s.value === sizeKey) ?? SIZE_PRESETS[1];
+  const activeRatio = useMemo(
+    () => ASPECT_RATIOS.find((r) => r.key === aspectRatioKey) || ASPECT_RATIOS[0],
+    [aspectRatioKey]
+  );
+
+  const sizePresets = useMemo(
+    () => getSizePresetsForRatio(activeRatio),
+    [activeRatio]
+  );
+
+  const currentSize = useMemo(
+    () => sizePresets.find((s) => s.value === sizeKey) ?? sizePresets[1],
+    [sizePresets, sizeKey]
+  );
+
+  const handleSelectAspectRatio = useCallback(
+    (targetKey: string) => {
+      const targetRatio = ASPECT_RATIOS.find((r) => r.key === targetKey);
+      if (!targetRatio) return;
+
+      setAspectRatioKey(targetRatio.key);
+      setShowAspectMenu(false);
+
+      setScenePos((prev) => {
+        if (!prev) return null;
+
+        let nextWidth: number;
+        let nextHeight: number;
+
+        if (targetRatio.orientation !== activeRatio.orientation) {
+          // Flip between Landscape and Portrait
+          if (targetRatio.orientation === "portrait") {
+            // Keep height proportional to view, compute narrower portrait width
+            const targetH = Math.max(540, Math.min(800, prev.sceneHeight));
+            nextHeight = targetH;
+            nextWidth = Math.round((targetH * targetRatio.ratioW) / targetRatio.ratioH);
+          } else {
+            // Keep height proportional to view, compute wider landscape width
+            const targetH = Math.max(450, Math.min(650, prev.sceneHeight));
+            nextHeight = targetH;
+            nextWidth = Math.round((targetH * targetRatio.ratioW) / targetRatio.ratioH);
+          }
+        } else {
+          // Same orientation, maintain width and adjust height
+          nextWidth = prev.sceneWidth;
+          nextHeight = Math.round((nextWidth * targetRatio.ratioH) / targetRatio.ratioW);
+        }
+
+        const next = {
+          ...prev,
+          sceneWidth: nextWidth,
+          sceneHeight: nextHeight,
+        };
+        latestScenePosRef.current = next;
+
+        saveScreenState({
+          aspectRatioKey: targetRatio.key,
+          sceneWidth: nextWidth,
+          sceneHeight: nextHeight,
+        });
+
+        return next;
+      });
+    },
+    [activeRatio]
+  );
+
+  const handleFlipOrientation = useCallback(() => {
+    handleSelectAspectRatio(activeRatio.flipKey);
+  }, [activeRatio, handleSelectAspectRatio]);
+
+  // Close menus on outside click or escape
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      setShowAspectMenu(false);
+      setShowSizeMenu(false);
+      setShowBookmarksMenu(false);
+    };
+    if (showAspectMenu || showSizeMenu || showBookmarksMenu) {
+      window.addEventListener("click", handleGlobalClick);
+      return () => window.removeEventListener("click", handleGlobalClick);
+    }
+  }, [showAspectMenu, showSizeMenu, showBookmarksMenu]);
   const isCodeServerActive = isCodeServerTarget(currentDisplayUrl);
 
   const navigateTo = useCallback((target: string) => {
@@ -375,8 +571,10 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
       setScenePos(next);
     } else if (isResizing) {
       const dx = (e.clientX - dragStartRef.current.mouseX) / zoom;
-      const newWidth = Math.max(480, dragStartRef.current.startWidth + dx);
-      const newHeight = (newWidth * 10) / 16; // Maintain strict 16:10
+
+      const minWidth = activeRatio.orientation === "portrait" ? 280 : 420;
+      const newWidth = Math.max(minWidth, dragStartRef.current.startWidth + dx);
+      const newHeight = Math.round((newWidth * activeRatio.ratioH) / activeRatio.ratioW);
       const next = {
         sceneX: dragStartRef.current.startSceneX,
         sceneY: dragStartRef.current.startSceneY,
@@ -497,9 +695,201 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
           <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.02em", color: "#e4e4e7" }}>
             Browser
           </span>
-          <span style={{ fontSize: 10, color: "#71717a", padding: "1px 4px", background: "rgba(255,255,255,0.06)", borderRadius: 3 }}>
-            16:10
-          </span>
+
+        </div>
+
+        {/* Aspect Ratio Selector & Orientation Toggle */}
+        <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 3 }}>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowAspectMenu((v) => !v);
+              setShowSizeMenu(false);
+              setShowAspectMenu(false);
+              setShowBookmarksMenu(false);
+            }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 10.5,
+              fontWeight: 600,
+              color: activeRatio.orientation === "portrait" ? "#c7d2fe" : "#e4e4e7",
+              padding: "2px 6px",
+              background:
+                activeRatio.orientation === "portrait"
+                  ? "rgba(129, 140, 248, 0.22)"
+                  : "rgba(255,255,255,0.08)",
+              border: `1px solid ${
+                activeRatio.orientation === "portrait"
+                  ? "rgba(129, 140, 248, 0.45)"
+                  : "rgba(255,255,255,0.12)"
+              }`,
+              borderRadius: 4,
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+            title={`Aspect ratio: ${activeRatio.label} (${activeRatio.sublabel}). Click to select 16:10, 10:16, 16:9, 9:16, 20:9, 9:20.`}
+            aria-label="Select screen aspect ratio"
+          >
+            {activeRatio.orientation === "portrait" ? (
+              <Smartphone size={11} style={{ color: "#a5b4fc" }} />
+            ) : (
+              <Monitor size={11} style={{ opacity: 0.85 }} />
+            )}
+            <span>{activeRatio.key}</span>
+            <ChevronDown size={10} style={{ opacity: 0.7 }} />
+          </button>
+
+          {/* Quick Flip Orientation Button (Landscape ↔ Portrait) */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleFlipOrientation();
+            }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 20,
+              height: 20,
+              padding: 0,
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 4,
+              color: "#a1a1aa",
+              cursor: "pointer",
+            }}
+            title={`Rotate screen to ${
+              activeRatio.orientation === "landscape" ? "Portrait" : "Landscape"
+            } (${activeRatio.flipKey})`}
+            aria-label="Rotate screen orientation"
+          >
+            <RotateCw size={11} />
+          </button>
+
+          {/* Aspect Ratio Dropdown Menu */}
+          {showAspectMenu && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 4px)",
+                left: 0,
+                zIndex: 220,
+                background: "#242427",
+                border: "1px solid rgba(255,255,255,0.14)",
+                borderRadius: 8,
+                minWidth: 210,
+                boxShadow: "0 12px 28px rgba(0,0,0,0.7), 0 0 0 1px rgba(0,0,0,0.2)",
+                overflow: "hidden",
+                padding: "4px",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Landscape section */}
+              <div
+                style={{
+                  padding: "5px 8px 3px",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  color: "#a1a1aa",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                }}
+              >
+                <Monitor size={11} />
+                <span>Landscape</span>
+              </div>
+              {ASPECT_RATIOS.filter((r) => r.orientation === "landscape").map((item) => {
+                const isActive = item.key === activeRatio.key;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => handleSelectAspectRatio(item.key)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      width: "100%",
+                      padding: "6px 8px",
+                      borderRadius: 5,
+                      background: isActive ? "rgba(129, 140, 248, 0.22)" : "transparent",
+                      color: isActive ? "#c7d2fe" : "#e4e4e7",
+                      border: "none",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontSize: 11,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontWeight: 600 }}>{item.label}</span>
+                      <span style={{ fontSize: 10, color: "#a1a1aa" }}>{item.sublabel}</span>
+                    </div>
+                    {isActive && <Check size={12} color="#818cf8" strokeWidth={2.5} />}
+                  </button>
+                );
+              })}
+
+              {/* Divider */}
+              <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "4px 0" }} />
+
+              {/* Portrait section */}
+              <div
+                style={{
+                  padding: "5px 8px 3px",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  color: "#a1a1aa",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                }}
+              >
+                <Smartphone size={11} />
+                <span>Portrait</span>
+              </div>
+              {ASPECT_RATIOS.filter((r) => r.orientation === "portrait").map((item) => {
+                const isActive = item.key === activeRatio.key;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => handleSelectAspectRatio(item.key)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      width: "100%",
+                      padding: "6px 8px",
+                      borderRadius: 5,
+                      background: isActive ? "rgba(129, 140, 248, 0.22)" : "transparent",
+                      color: isActive ? "#c7d2fe" : "#e4e4e7",
+                      border: "none",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontSize: 11,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontWeight: 600 }}>{item.label}</span>
+                      <span style={{ fontSize: 10, color: "#a1a1aa" }}>{item.sublabel}</span>
+                    </div>
+                    {isActive && <Check size={12} color="#818cf8" strokeWidth={2.5} />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+
         </div>
 
         {/* Browser History Buttons: Back & Forward */}
@@ -586,7 +976,7 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
               setShowBookmarksMenu(false);
             }}
             style={toolbarBtnStyle}
-            title="Change 16:10 display size"
+            title={`Change ${activeRatio.key} display size`}
           >
             <Maximize2 size={13} />
             <span style={{ marginLeft: 3, fontSize: 11 }}>{currentSize.label.split(" ")[0]}</span>
@@ -594,7 +984,7 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
           </button>
           {showSizeMenu && (
             <DropdownMenu
-              items={SIZE_PRESETS.map((p) => ({
+              items={sizePresets.map((p) => ({
                 label: p.label,
                 active: sizeKey === p.value,
                 onClick: () => {
@@ -614,6 +1004,7 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
                     return next;
                   });
                   setShowSizeMenu(false);
+              setShowAspectMenu(false);
                 },
               }))}
             />
@@ -627,6 +1018,7 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
             onClick={() => {
               setShowBookmarksMenu((v) => !v);
               setShowSizeMenu(false);
+              setShowAspectMenu(false);
             }}
             style={toolbarBtnStyle}
             title="Bookmarks & quick sites"
@@ -760,7 +1152,7 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
         <iframe
           ref={iframeRef}
           src={iframeSrc}
-          title="Canvas Browser (16:10)"
+          title={`Canvas Browser (${activeRatio.key})`}
           onLoad={handleIframeLoad}
           onError={() => setIsLoading(false)}
           style={{
@@ -820,7 +1212,7 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
             justifyContent: "flex-end",
             padding: 3,
           }}
-          title="Drag to resize 16:10 screen on canvas"
+          title={`Drag to resize ${activeRatio.key} screen on canvas`}
         >
           <div
             style={{
@@ -848,7 +1240,7 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span>16:10 Canvas Browser</span>
+          <span>{activeRatio.key} Canvas Browser ({activeRatio.orientation})</span>
           <span>•</span>
           <span>{isCodeServerActive ? "Code Server Active" : currentDisplayUrl}</span>
         </div>
