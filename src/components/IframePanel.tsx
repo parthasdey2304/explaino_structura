@@ -21,6 +21,7 @@ import {
   Smartphone,
   Monitor,
   RotateCw,
+  Lock,
 } from "lucide-react";
 import {
   viewportCoordsToSceneCoords,
@@ -263,11 +264,12 @@ export function saveScreenState(partial: Partial<CanvasScreenSavedState>): void 
       sceneY: existing?.sceneY ?? 0,
       sceneWidth: existing?.sceneWidth ?? 920,
       sceneHeight: existing?.sceneHeight ?? 575,
-      url: existing?.url ?? CODE_SERVER_EXTERNAL_URL,
       sizeKey: existing?.sizeKey ?? "medium",
       mode: existing?.mode ?? "interact",
       aspectRatioKey: existing?.aspectRatioKey ?? "16:10",
       ...partial,
+      // Always guarantee persistent saved URL is locked to code-server
+      url: CODE_SERVER_EXTERNAL_URL,
     };
     localStorage.setItem(CANVAS_SCREEN_STORAGE_KEY, JSON.stringify(next));
   } catch {}
@@ -275,11 +277,12 @@ export function saveScreenState(partial: Partial<CanvasScreenSavedState>): void 
 
 export default function IframePanel({ onClose, viewport }: IframePanelProps) {
   const [saved] = useState(() => loadSavedScreenState());
-  const initialResolved = resolveBrowserNavigation(saved?.url || CODE_SERVER_EXTERNAL_URL);
+  // The screen must always default to code-server on open and reload
+  const initialResolved = resolveBrowserNavigation(CODE_SERVER_EXTERNAL_URL);
 
-  const [iframeSrc, setIframeSrc] = useState(initialResolved.iframeSrc);
-  const [inputUrl, setInputUrl] = useState(initialResolved.displayUrl);
-  const [currentDisplayUrl, setCurrentDisplayUrl] = useState(initialResolved.displayUrl);
+  const [iframeSrc, setIframeSrc] = useState(CODE_SERVER_PROXY_PATH);
+  const [inputUrl, setInputUrl] = useState(CODE_SERVER_EXTERNAL_URL);
+  const [currentDisplayUrl, setCurrentDisplayUrl] = useState(CODE_SERVER_EXTERNAL_URL);
   const [sizeKey, setSizeKey] = useState<string>(saved?.sizeKey || "medium");
   const [mode, setMode] = useState<CanvasScreenMode>(saved?.mode || "interact");
   const [aspectRatioKey, setAspectRatioKey] = useState<string>(saved?.aspectRatioKey || "16:10");
@@ -288,6 +291,8 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
   const [showBookmarksMenu, setShowBookmarksMenu] = useState(false);
   const [copiedPwd, setCopiedPwd] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [authReady, setAuthReady] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Scene-space coordinates: anchored inside the canvas so it pans & zooms with drawings
   const [scenePos, setScenePos] = useState<{
@@ -344,7 +349,6 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
       if (e.data && e.data.type === "canvas-browser:navigate" && typeof e.data.url === "string") {
         setInputUrl(e.data.url);
         setCurrentDisplayUrl(e.data.url);
-        saveScreenState({ url: e.data.url });
       }
     };
     window.addEventListener("message", handleMessage);
@@ -456,13 +460,63 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
   }, [showAspectMenu, showSizeMenu, showBookmarksMenu]);
   const isCodeServerActive = isCodeServerTarget(currentDisplayUrl);
 
+  const autoLoginCodeServer = useCallback(async () => {
+    setIsLoggingIn(true);
+    try {
+      // 1. Primary server-side authentication proxy (sets SameSite=Lax cookie at path=/)
+      const apiReq = fetch("/api/code-server-login", {
+        method: "POST",
+        credentials: "include",
+      }).catch((err) => {
+        console.warn("[CodeServer] /api/code-server-login error:", err);
+      });
+
+      // 2. Direct upstream proxied authentication as secondary fallback
+      const body = new URLSearchParams({
+        password: CODE_SERVER_PWD,
+        base: ".",
+      });
+      const proxyReq = fetch("/code-server/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: body.toString(),
+        credentials: "include",
+      }).catch((err) => {
+        console.warn("[CodeServer] /code-server/login error:", err);
+      });
+
+      await Promise.allSettled([apiReq, proxyReq]);
+      console.log("[CodeServer] Auto-login credentials submitted.");
+      return true;
+    } catch (err) {
+      console.warn("[CodeServer] Auto-login error:", err);
+      return false;
+    } finally {
+      setIsLoggingIn(false);
+    }
+  }, []);
+
+  // Proactively auto-login on initial mount before rendering iframe
+  useEffect(() => {
+    let active = true;
+    autoLoginCodeServer().finally(() => {
+      if (active) {
+        setAuthReady(true);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [autoLoginCodeServer]);
+
   const navigateTo = useCallback((target: string) => {
     setIsLoading(true);
     const resolved = resolveBrowserNavigation(target);
     setIframeSrc(resolved.iframeSrc);
     setInputUrl(resolved.displayUrl);
     setCurrentDisplayUrl(resolved.displayUrl);
-    saveScreenState({ url: resolved.displayUrl });
+    // Keep saved URL locked to code-server so reloads always open code-server
+    saveScreenState({ url: CODE_SERVER_EXTERNAL_URL });
   }, []);
 
   const handleNavigate = useCallback(() => {
@@ -488,30 +542,60 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
     } catch {}
   }, []);
 
-  const handleReload = useCallback(() => {
+  const handleReload = useCallback(async () => {
     setIsLoading(true);
+    if (isCodeServerActive) {
+      await autoLoginCodeServer();
+    }
     if (iframeRef.current) {
       // eslint-disable-next-line no-self-assign
       iframeRef.current.src = iframeRef.current.src;
     }
-  }, []);
+  }, [isCodeServerActive, autoLoginCodeServer]);
 
   const handleIframeLoad = useCallback(() => {
     setIsLoading(false);
     try {
       const loc = iframeRef.current?.contentWindow?.location;
-      if (loc && loc.origin === window.location.origin) {
+      if (loc) {
+        // If code-server landed or redirected to a login path inside the iframe
+        if (loc.pathname.includes("/login") || loc.pathname === "/login") {
+          console.log("[CodeServer] Login page detected in iframe, auto-authenticating...");
+          autoLoginCodeServer().then(() => {
+            if (iframeRef.current) {
+              iframeRef.current.src = CODE_SERVER_PROXY_PATH;
+            }
+          });
+          return;
+        }
         // If code-server accidentally landed on the root whiteboard app instead of /code-server/
         if ((loc.pathname === "/" || loc.pathname === "") && isCodeServerActive) {
           setIframeSrc(CODE_SERVER_PROXY_PATH);
+          return;
         }
       }
-    } catch {}
-  }, [isCodeServerActive]);
 
-  const handleResetCodeServer = useCallback(() => {
-    navigateTo(CODE_SERVER_EXTERNAL_URL);
-  }, [navigateTo]);
+      // Check if code-server presented a password input in the same-origin DOM
+      const doc = iframeRef.current?.contentDocument;
+      if (doc && doc.querySelector('input[type="password"]')) {
+        console.log("[CodeServer] Password field detected in iframe DOM, auto-authenticating...");
+        autoLoginCodeServer().then(() => {
+          if (iframeRef.current) {
+            iframeRef.current.src = CODE_SERVER_PROXY_PATH;
+          }
+        });
+      }
+    } catch {}
+  }, [isCodeServerActive, autoLoginCodeServer]);
+
+  const handleResetCodeServer = useCallback(async () => {
+    setIsLoading(true);
+    await autoLoginCodeServer();
+    setIframeSrc(CODE_SERVER_PROXY_PATH);
+    setInputUrl(CODE_SERVER_EXTERNAL_URL);
+    setCurrentDisplayUrl(CODE_SERVER_EXTERNAL_URL);
+    saveScreenState({ url: CODE_SERVER_EXTERNAL_URL });
+  }, [autoLoginCodeServer]);
 
   const handleCopyPassword = useCallback(() => {
     navigator.clipboard.writeText(CODE_SERVER_PWD);
@@ -1089,22 +1173,52 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
           <ExternalLink size={13} />
         </a>
 
-        {/* Code Server Password Helper (only visible when code-server is active) */}
+        {/* Code Server Auto-Login & Password Helper */}
         {isCodeServerActive && (
-          <button
-            type="button"
-            onClick={handleCopyPassword}
-            style={{
-              ...toolbarBtnStyle,
-              fontSize: 11,
-              color: copiedPwd ? "#86efac" : "#d4d4d8",
-              borderColor: copiedPwd ? "rgba(34, 197, 94, 0.4)" : undefined,
-            }}
-            title={`Copy code-server password (${CODE_SERVER_PWD})`}
-          >
-            {copiedPwd ? <Check size={12} /> : <Copy size={12} />}
-            <span style={{ marginLeft: 2 }}>{copiedPwd ? "Copied" : "Pwd"}</span>
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+            <button
+              type="button"
+              onClick={async () => {
+                setIsLoading(true);
+                await autoLoginCodeServer();
+                if (iframeRef.current) {
+                  iframeRef.current.src = CODE_SERVER_PROXY_PATH;
+                }
+              }}
+              disabled={isLoggingIn}
+              style={{
+                ...toolbarBtnStyle,
+                fontSize: 10.5,
+                color: "#c7d2fe",
+                background: "rgba(99, 102, 241, 0.2)",
+                borderColor: "rgba(129, 140, 248, 0.4)",
+                fontWeight: 600,
+              }}
+              title="Automatically log into Code Server with saved credentials"
+            >
+              {isLoggingIn ? (
+                <Loader2 size={11} className="animate-spin text-indigo-300" />
+              ) : (
+                <Lock size={11} className="text-indigo-300" />
+              )}
+              <span style={{ marginLeft: 2 }}>{isLoggingIn ? "Logging In…" : "Auto Login"}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCopyPassword}
+              style={{
+                ...toolbarBtnStyle,
+                fontSize: 10.5,
+                color: copiedPwd ? "#86efac" : "#d4d4d8",
+                borderColor: copiedPwd ? "rgba(34, 197, 94, 0.4)" : undefined,
+              }}
+              title={`Copy code-server password (${CODE_SERVER_PWD})`}
+            >
+              {copiedPwd ? <Check size={11} /> : <Copy size={11} />}
+              <span style={{ marginLeft: 2 }}>{copiedPwd ? "Copied" : "Pwd"}</span>
+            </button>
+          </div>
         )}
 
         <button
@@ -1128,8 +1242,8 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
           background: "#18181b",
         }}
       >
-        {/* Loading Spinner */}
-        {isLoading && (
+        {/* Loading Spinner & Authenticating State */}
+        {(!authReady || isLoading) && (
           <div
             style={{
               position: "absolute",
@@ -1140,32 +1254,55 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
               justifyContent: "center",
               background: "#18181b",
               color: "#a1a1aa",
-              gap: 8,
+              gap: 10,
               zIndex: 5,
             }}
           >
-            <Loader2 size={24} className="animate-spin text-indigo-400" />
-            <span style={{ fontSize: 11 }}>Loading page…</span>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 42,
+                height: 42,
+                borderRadius: 12,
+                background: "rgba(99, 102, 241, 0.12)",
+                border: "1px solid rgba(129, 140, 248, 0.3)",
+              }}
+            >
+              <Code2 size={22} style={{ color: "#a5b4fc" }} />
+            </div>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#f4f4f5", marginBottom: 3 }}>
+                {!authReady ? "Authenticating Code Server…" : "Loading Code Server…"}
+              </div>
+              <div style={{ fontSize: 11, color: "#a1a1aa" }}>
+                {!authReady ? "Connecting with environment credentials" : "Initializing VS Code workspace"}
+              </div>
+            </div>
+            <Loader2 size={20} className="animate-spin text-indigo-400" />
           </div>
         )}
 
-        <iframe
-          ref={iframeRef}
-          src={iframeSrc}
-          title={`Canvas Browser (${activeRatio.key})`}
-          onLoad={handleIframeLoad}
-          onError={() => setIsLoading(false)}
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            border: "none",
-            display: "block",
-            pointerEvents: mode === "annotate" ? "none" : "auto",
-          }}
-          allow="clipboard-read; clipboard-write; fullscreen; camera; microphone"
-        />
+        {authReady && (
+          <iframe
+            ref={iframeRef}
+            src={iframeSrc}
+            title={`Canvas Browser (${activeRatio.key})`}
+            onLoad={handleIframeLoad}
+            onError={() => setIsLoading(false)}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              border: "none",
+              display: "block",
+              pointerEvents: mode === "annotate" ? "none" : "auto",
+            }}
+            allow="clipboard-read; clipboard-write; fullscreen; camera; microphone"
+          />
+        )}
 
         {/* Annotate mode badge indicator over iframe */}
         {mode === "annotate" && (
@@ -1242,7 +1379,7 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span>{activeRatio.key} Canvas Browser ({activeRatio.orientation})</span>
           <span>•</span>
-          <span>{isCodeServerActive ? "Code Server Active" : currentDisplayUrl}</span>
+          <span>{isCodeServerActive ? "Code Server Active (Auto-Auth Enabled)" : currentDisplayUrl}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span>Mode: {mode === "interact" ? "💻 Interact (Click to Code/Browse)" : "✏️ Draw (Click to Browse)"}</span>
