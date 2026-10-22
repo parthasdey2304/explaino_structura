@@ -8,6 +8,7 @@ import {
 } from "@excalidraw/excalidraw";
 import type { Zoom } from "@excalidraw/excalidraw/types";
 import { getHealthCheckIntervalMs } from "@/lib/deviceOptimization";
+import VSCodeScreenView from "./VSCodeScreenView";
 
 export type CanvasScreenMode = "interact" | "annotate";
 export type IframePanelLayout = "center" | "left" | "right" | "top" | "bottom";
@@ -856,31 +857,18 @@ export default function IframePanel({
           background: "#18181b",
         }}
       >
-        {/* Loading Spinner */}
+        {/* VS Code Workspace (Always shows active IDE with 60+ line algorithm code, no blank spinner) */}
         {(isLoading || serverHealth === "loading") && serverHealth !== "offline" && (
           <div
             style={{
               position: "absolute",
               inset: 0,
+              zIndex: 5,
               display: "flex",
               flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "#18181b",
-              color: "#a1a1aa",
-              gap: 12,
-              zIndex: 5,
             }}
           >
-            <Loader2 size={24} className="animate-spin text-indigo-400" />
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#f4f4f5", marginBottom: 2 }}>
-                Loading Code Server…
-              </div>
-              <div style={{ fontSize: 11, color: "#71717a" }}>
-                Connecting to VS Code workspace
-              </div>
-            </div>
+            <VSCodeScreenView />
           </div>
         )}
 
