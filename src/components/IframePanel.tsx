@@ -209,6 +209,8 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
     startWidth: number;
     startHeight: number;
   } | null>(null);
+  const latestScenePosRef = useRef(scenePos);
+  latestScenePosRef.current = scenePos;
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -256,6 +258,7 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
   }, [viewport, scenePos]);
 
   const currentSize = SIZE_PRESETS.find((s) => s.value === sizeKey) ?? SIZE_PRESETS[1];
+  const isCodeServerActive = isCodeServerTarget(currentDisplayUrl);
 
   const navigateTo = useCallback((target: string) => {
     setIsLoading(true);
@@ -300,12 +303,15 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
   const handleIframeLoad = useCallback(() => {
     setIsLoading(false);
     try {
-      const pathname = iframeRef.current?.contentWindow?.location?.pathname;
-      if (pathname === "/" || pathname === "") {
-        setIframeSrc(CODE_SERVER_PROXY_PATH);
+      const loc = iframeRef.current?.contentWindow?.location;
+      if (loc && loc.origin === window.location.origin) {
+        // If code-server accidentally landed on the root whiteboard app instead of /code-server/
+        if ((loc.pathname === "/" || loc.pathname === "") && isCodeServerActive) {
+          setIframeSrc(CODE_SERVER_PROXY_PATH);
+        }
       }
     } catch {}
-  }, []);
+  }, [isCodeServerActive]);
 
   const handleResetCodeServer = useCallback(() => {
     navigateTo(CODE_SERVER_EXTERNAL_URL);
@@ -353,34 +359,32 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!scenePos || !dragStartRef.current) return;
+    if (!dragStartRef.current) return;
     const zoom = viewport?.zoom.value ?? 1;
 
     if (isDragging) {
       const dx = (e.clientX - dragStartRef.current.mouseX) / zoom;
       const dy = (e.clientY - dragStartRef.current.mouseY) / zoom;
-      setScenePos((prev) =>
-        prev
-          ? {
-              ...prev,
-              sceneX: dragStartRef.current!.startSceneX + dx,
-              sceneY: dragStartRef.current!.startSceneY + dy,
-            }
-          : null
-      );
+      const next = {
+        sceneX: dragStartRef.current.startSceneX + dx,
+        sceneY: dragStartRef.current.startSceneY + dy,
+        sceneWidth: dragStartRef.current.startWidth,
+        sceneHeight: dragStartRef.current.startHeight,
+      };
+      latestScenePosRef.current = next;
+      setScenePos(next);
     } else if (isResizing) {
       const dx = (e.clientX - dragStartRef.current.mouseX) / zoom;
       const newWidth = Math.max(480, dragStartRef.current.startWidth + dx);
       const newHeight = (newWidth * 10) / 16; // Maintain strict 16:10
-      setScenePos((prev) =>
-        prev
-          ? {
-              ...prev,
-              sceneWidth: newWidth,
-              sceneHeight: newHeight,
-            }
-          : null
-      );
+      const next = {
+        sceneX: dragStartRef.current.startSceneX,
+        sceneY: dragStartRef.current.startSceneY,
+        sceneWidth: newWidth,
+        sceneHeight: newHeight,
+      };
+      latestScenePosRef.current = next;
+      setScenePos(next);
     }
   };
 
@@ -392,12 +396,13 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
       try {
         (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
       } catch {}
-      if (scenePos) {
+      const finalPos = latestScenePosRef.current || scenePos;
+      if (finalPos) {
         saveScreenState({
-          sceneX: scenePos.sceneX,
-          sceneY: scenePos.sceneY,
-          sceneWidth: scenePos.sceneWidth,
-          sceneHeight: scenePos.sceneHeight,
+          sceneX: finalPos.sceneX,
+          sceneY: finalPos.sceneY,
+          sceneWidth: finalPos.sceneWidth,
+          sceneHeight: finalPos.sceneHeight,
         });
       }
     }
@@ -465,8 +470,6 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
     overflow: "hidden",
     userSelect: isDragging || isResizing ? "none" : "auto",
   };
-
-  const isCodeServerActive = isCodeServerTarget(currentDisplayUrl);
 
   return (
     <div ref={panelRef} style={panelStyle}>

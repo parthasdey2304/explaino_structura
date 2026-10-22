@@ -275,10 +275,12 @@ function sanitizeElements(elements: unknown[]): ExcalidrawElement[] {
   const out: ExcalidrawElement[] = [];
   for (const raw of elements) {
     if (!raw || typeof raw !== "object") continue;
-    const el = raw as Record<string, unknown>;
-    if (typeof el.type !== "string" || typeof el.id !== "string") continue;
+    const item = raw as Record<string, unknown>;
+    if (typeof item.type !== "string" || typeof item.id !== "string") continue;
 
-    if (LINEAR_TYPES.has(el.type)) {
+    const el = { ...item };
+
+    if (LINEAR_TYPES.has(el.type as string)) {
       const points = el.points;
       if (!Array.isArray(points)) continue;
       const clean: [number, number][] = points.filter((p) => isPointPair(p));
@@ -293,7 +295,7 @@ function sanitizeElements(elements: unknown[]): ExcalidrawElement[] {
       }
     }
 
-    out.push(el as ExcalidrawElement);
+    out.push(el as unknown as ExcalidrawElement);
   }
   return out;
 }
@@ -301,28 +303,32 @@ function sanitizeElements(elements: unknown[]): ExcalidrawElement[] {
 /**
  * Normalize any line/arrow/freedraw element whose first point is not [0, 0]
  * so selecting it never trips Excalidraw's LinearElementEditor guard.
+ * Returns newly constructed objects to avoid mutating frozen element states.
  */
 function normalizeLinearElements(elements: readonly ExcalidrawElement[]): ExcalidrawElement[] {
-  for (const raw of elements) {
-    if (!LINEAR_TYPES.has(raw.type)) continue;
+  return elements.map((raw) => {
+    if (!LINEAR_TYPES.has(raw.type)) return raw;
     const el = raw as unknown as {
       x: number;
       y: number;
       points?: readonly (readonly [number, number])[] | null;
     };
     const points = el.points;
-    if (!points || points.length < 2) continue;
+    if (!points || points.length < 2) return raw;
     const p0 = points[0];
-    if (!isPointPair(p0)) continue;
+    if (!isPointPair(p0)) return raw;
     if (Math.abs(p0[0]) > 1e-9 || Math.abs(p0[1]) > 1e-9) {
       const dx = p0[0];
       const dy = p0[1];
-      el.x += dx;
-      el.y += dy;
-      el.points = points.map((p) => [p[0] - dx, p[1] - dy]);
+      return {
+        ...raw,
+        x: (typeof el.x === "number" ? el.x : 0) + dx,
+        y: (typeof el.y === "number" ? el.y : 0) + dy,
+        points: points.map((p) => [p[0] - dx, p[1] - dy]),
+      } as ExcalidrawElement;
     }
-  }
-  return elements as ExcalidrawElement[];
+    return raw;
+  });
 }
 
 /**
@@ -1027,11 +1033,13 @@ export default function ExcalidrawWrapper() {
     const dx = Math.round(targetCenterX - diagCenterX);
     const dy = Math.round(targetCenterY - diagCenterY);
 
-    const centeredElements = elements.map((el) => ({
-      ...el,
-      x: el.x + dx,
-      y: el.y + dy,
-    }));
+    const centeredElements = normalizeLinearElements(
+      elements.map((el) => ({
+        ...el,
+        x: el.x + dx,
+        y: el.y + dy,
+      }))
+    );
 
     const selectedElementIds: Record<string, true> = {};
     for (const el of centeredElements) {
