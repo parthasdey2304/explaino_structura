@@ -7,27 +7,27 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/code-server",
-        destination: "http://13.49.76.201/",
+        destination: "https://13.49.76.201.sslip.io/",
       },
       {
         source: "/code-server/:path*",
-        destination: "http://13.49.76.201/:path*",
+        destination: "https://13.49.76.201.sslip.io/:path*",
       },
       {
         source: "/_static/:path*",
-        destination: "http://13.49.76.201/_static/:path*",
+        destination: "https://13.49.76.201.sslip.io/_static/:path*",
       },
       {
         source: "/stable-:hash/:path*",
-        destination: "http://13.49.76.201/stable-:hash/:path*",
+        destination: "https://13.49.76.201.sslip.io/stable-:hash/:path*",
       },
       {
         source: "/login",
-        destination: "http://13.49.76.201/login",
+        destination: "https://13.49.76.201.sslip.io/login",
       },
       {
         source: "/manifest.json",
-        destination: "http://13.49.76.201/manifest.json",
+        destination: "https://13.49.76.201.sslip.io/manifest.json",
       },
     ];
   },

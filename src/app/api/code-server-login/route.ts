@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const CODE_SERVER_ORIGIN = "http://13.49.76.201";
+const CODE_SERVER_ORIGIN = "https://13.49.76.201.sslip.io";
 const CODE_SERVER_PWD = "14d26b731d1571af7802cfe5";
 
 async function performLogin(req: NextRequest) {
@@ -31,8 +31,8 @@ async function performLogin(req: NextRequest) {
         const sessionValue = decodeURIComponent(match[1]);
         response.cookies.set("code-server-session", sessionValue, {
           path: "/",
-          sameSite: "lax",
-          secure: process.env.NODE_ENV === "production",
+          sameSite: "none",
+          secure: true,
           maxAge: 60 * 60 * 24 * 7, // 7 days session
         });
       }
