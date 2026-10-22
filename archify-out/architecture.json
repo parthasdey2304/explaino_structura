@@ -3,20 +3,21 @@
   "diagram_type": "architecture",
   "meta": { "title": "Explaino Structura", "output": "archify-out/architecture.html", "quality_profile": "showcase" },
   "components": [
-    { "id": "user", "type": "external", "label": "User", "sublabel": "Browser", "pos": [40, 300], "size": [120, 60] },
-    { "id": "next", "type": "frontend", "label": "Next.js App", "sublabel": "src/app", "pos": [250, 300], "size": [140, 64] },
-    { "id": "components", "type": "frontend", "label": "Components", "sublabel": "canvas, chat, editor, iframe", "pos": [250, 150], "size": [140, 64] },
+    { "id": "user", "type": "external", "label": "User", "sublabel": "Browser / PWA", "pos": [40, 300], "size": [120, 60] },
+    { "id": "next", "type": "frontend", "label": "Next.js App", "sublabel": "src/app (Turbopack)", "pos": [250, 300], "size": [140, 64] },
+    { "id": "components", "type": "frontend", "label": "Components", "sublabel": "canvas, chat, editor, screen, vscode", "pos": [250, 150], "size": [140, 64] },
     { "id": "hooks", "type": "frontend", "label": "Custom Hooks", "sublabel": "src/hooks (canvas, shortcuts, persistence)", "pos": [250, 460], "size": [140, 64] },
-    { "id": "api-ai", "type": "backend", "label": "AI Chat API", "sublabel": "/api/ai/chat", "pos": [500, 140], "size": [140, 64] },
+    { "id": "api-ai", "type": "backend", "label": "AI Chat & Mermaid", "sublabel": "/api/ai/chat & /mermaid", "pos": [500, 140], "size": [140, 64] },
     { "id": "api-exec", "type": "backend", "label": "Execute API", "sublabel": "/api/execute", "pos": [500, 300], "size": [140, 64] },
     { "id": "api-term", "type": "backend", "label": "Terminal API", "sublabel": "/api/terminal/*", "pos": [500, 460], "size": [140, 64] },
     { "id": "lib-ai", "type": "backend", "label": "AI Models", "sublabel": "src/lib/ai", "pos": [720, 140], "size": [140, 64] },
-    { "id": "lib-exec", "type": "backend", "label": "Executors", "sublabel": "src/lib/executors", "pos": [720, 300], "size": [140, 64] },
+    { "id": "lib-exec", "type": "backend", "label": "Executors", "sublabel": "src/lib/executors (WASM/Pyodide)", "pos": [720, 300], "size": [140, 64] },
     { "id": "terminal", "type": "backend", "label": "Terminal Svc", "sublabel": "src/lib/terminal", "pos": [720, 460], "size": [140, 64] },
-    { "id": "firestore", "type": "database", "label": "Firestore", "sublabel": "persistence", "pos": [900, 300], "size": [130, 64] }
+    { "id": "firestore", "type": "database", "label": "Firestore", "sublabel": "persistence", "pos": [900, 300], "size": [130, 64] },
+    { "id": "codeserver", "type": "external", "label": "Code-Server", "sublabel": "Remote VS Code container", "pos": [900, 140], "size": [130, 64] }
   ],
   "boundaries": [
-    { "kind": "region", "label": "explaino_structura", "wraps": ["next", "components", "hooks", "api-ai", "api-exec", "api-term", "lib-ai", "lib-exec", "terminal", "firestore"] }
+    { "kind": "region", "label": "explaino_structura", "wraps": ["next", "components", "hooks", "api-ai", "api-exec", "api-term", "lib-ai", "lib-exec", "terminal", "firestore", "codeserver"] }
   ],
   "connections": [
     { "id": "user-next", "from": "user", "to": "next", "label": "HTTPS" },
@@ -28,11 +29,12 @@
     { "id": "api-ai-lib", "from": "api-ai", "to": "lib-ai" },
     { "id": "api-exec-lib", "from": "api-exec", "to": "lib-exec" },
     { "id": "api-term-lib", "from": "api-term", "to": "terminal" },
-    { "id": "next-firestore", "from": "next", "to": "firestore", "label": "SDK", "variant": "dashed" }
+    { "id": "next-firestore", "from": "next", "to": "firestore", "label": "SDK", "variant": "dashed" },
+    { "id": "components-codeserver", "from": "components", "to": "codeserver", "label": "WebSocket/HTTPS", "variant": "dashed" }
   ],
   "cards": [
-    { "dot": "cyan", "title": "Frontend", "items": ["Next.js App router", "canvas + chat + editor + iframe embed components", "custom hooks: persistence, quickshape, shortcuts, list-mode"] },
-    { "dot": "emerald", "title": "Backend", "items": ["AI chat, code execute, terminal APIs", "lib executors and terminal services"] },
-    { "dot": "rose", "title": "Data", "items": ["Firestore persistence", "Browser localStorage workspace and drawing cache"] }
+    { "dot": "cyan", "title": "Frontend", "items": ["Next.js 16 App Router (Turbopack)", "Excalidraw canvas + sequence lifeline segmentation", "macOS window code-server & VSCodeScreenView", "custom hooks: persistence, quickshape, shortcuts, list-mode"] },
+    { "dot": "emerald", "title": "Backend", "items": ["AI chat (Mistral BYOK) & Mermaid conversion APIs", "WebAssembly executors (Pyodide, Clang WASM) & terminal", "Code-server health check heartbeat & auth proxy"] },
+    { "dot": "rose", "title": "Data", "items": ["Google Cloud Firestore cloud persistence", "Browser localStorage workspace and drawing cache"] }
   ]
 }
