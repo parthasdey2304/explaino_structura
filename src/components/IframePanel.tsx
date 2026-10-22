@@ -30,10 +30,7 @@ export interface IframePanelProps {
   onLayoutChange?: (layout: IframePanelLayout) => void;
 }
 
-const CODE_SERVER_EXTERNAL_URL = "http://13.49.76.201";
-const CODE_SERVER_PROXY_PATH = "/code-server/";
-const CODE_SERVER_PWD = "14d26b731d1571af7802cfe5";
-
+export const CODE_SERVER_SECURE_URL = "https://13.49.76.201.sslip.io/";
 export const CANVAS_SCREEN_STORAGE_KEY = "explaino-canvas-screen-state";
 
 export interface CanvasScreenSavedState {
@@ -66,8 +63,8 @@ export function saveScreenState(partial: Partial<CanvasScreenSavedState>): void 
       sceneWidth: existing?.sceneWidth ?? 920,
       sceneHeight: existing?.sceneHeight ?? 580,
       ...partial,
-      // Always guarantee persistent URL is locked to code server
-      url: CODE_SERVER_EXTERNAL_URL,
+      // Always guarantee persistent URL is locked to secure code server
+      url: CODE_SERVER_SECURE_URL,
     };
     localStorage.setItem(CANVAS_SCREEN_STORAGE_KEY, JSON.stringify(next));
   } catch {}
@@ -77,7 +74,6 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
   const [saved] = useState(() => loadSavedScreenState());
 
   const [isLoading, setIsLoading] = useState(true);
-  const [authReady, setAuthReady] = useState(false);
   const [isHoveredTraffic, setIsHoveredTraffic] = useState(false);
 
   // Scene-space coordinates: anchored inside the whiteboard canvas so it pans & zooms
@@ -126,50 +122,6 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-
-  // Proactive background auto-login with dual layer (API route + upstream)
-  const autoLoginCodeServer = useCallback(async () => {
-    try {
-      const apiReq = fetch("/api/code-server-login", {
-        method: "POST",
-        credentials: "include",
-      }).catch((err) => {
-        console.warn("[CodeServer] /api/code-server-login error:", err);
-      });
-
-      const body = new URLSearchParams({
-        password: CODE_SERVER_PWD,
-        base: ".",
-      });
-      const proxyReq = fetch("/code-server/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: body.toString(),
-        credentials: "include",
-      }).catch((err) => {
-        console.warn("[CodeServer] /code-server/login error:", err);
-      });
-
-      await Promise.allSettled([apiReq, proxyReq]);
-      return true;
-    } catch (err) {
-      console.warn("[CodeServer] Auto-login error:", err);
-      return false;
-    }
-  }, []);
-
-  // Execute auto-login immediately on mount before mounting iframe
-  useEffect(() => {
-    let active = true;
-    autoLoginCodeServer().finally(() => {
-      if (active) {
-        setAuthReady(true);
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, [autoLoginCodeServer]);
 
   // Center code server window in current canvas view on initial load if not restored
   useEffect(() => {
@@ -358,34 +310,7 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
 
   const handleIframeLoad = useCallback(() => {
     setIsLoading(false);
-    try {
-      const loc = iframeRef.current?.contentWindow?.location;
-      if (loc) {
-        if (loc.pathname.includes("/login") || loc.pathname === "/login") {
-          autoLoginCodeServer().then(() => {
-            if (iframeRef.current) {
-              iframeRef.current.src = CODE_SERVER_PROXY_PATH;
-            }
-          });
-          return;
-        }
-        if (loc.pathname === "/" || loc.pathname === "") {
-          if (iframeRef.current) {
-            iframeRef.current.src = CODE_SERVER_PROXY_PATH;
-          }
-          return;
-        }
-      }
-      const doc = iframeRef.current?.contentDocument;
-      if (doc && doc.querySelector('input[type="password"]')) {
-        autoLoginCodeServer().then(() => {
-          if (iframeRef.current) {
-            iframeRef.current.src = CODE_SERVER_PROXY_PATH;
-          }
-        });
-      }
-    } catch {}
-  }, [autoLoginCodeServer]);
+  }, []);
 
   return (
     <div
@@ -566,7 +491,7 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
           </button>
         </div>
 
-        {/* Right Label (matching Image 2 typography: PYTHON / CODE SERVER) */}
+        {/* Right Label (macOS code server window) */}
         <div
           style={{
             fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
@@ -585,7 +510,7 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
               width: 6,
               height: 6,
               borderRadius: "50%",
-              background: authReady ? "#22c55e" : "#eab308",
+              background: "#22c55e",
               display: "inline-block",
             }}
           />
@@ -604,8 +529,8 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
           background: "#18181b",
         }}
       >
-        {/* Loading Spinner & Authenticating State */}
-        {(!authReady || isLoading) && (
+        {/* Loading Spinner */}
+        {isLoading && (
           <div
             style={{
               position: "absolute",
@@ -623,7 +548,7 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
             <Loader2 size={24} className="animate-spin text-indigo-400" />
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: "#f4f4f5", marginBottom: 2 }}>
-                {!authReady ? "Authenticating Code Server…" : "Loading Editor…"}
+                Loading Code Server…
               </div>
               <div style={{ fontSize: 11, color: "#71717a" }}>
                 Connecting to VS Code workspace
@@ -632,25 +557,23 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
           </div>
         )}
 
-        {authReady && (
-          <iframe
-            ref={iframeRef}
-            src={CODE_SERVER_PROXY_PATH}
-            title="Code Server"
-            onLoad={handleIframeLoad}
-            onError={() => setIsLoading(false)}
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              border: "none",
-              display: "block",
-              pointerEvents: isDragging || isResizing ? "none" : "auto",
-            }}
-            allow="clipboard-read; clipboard-write; fullscreen; camera; microphone"
-          />
-        )}
+        <iframe
+          ref={iframeRef}
+          src={CODE_SERVER_SECURE_URL}
+          title="Code Server"
+          onLoad={handleIframeLoad}
+          onError={() => setIsLoading(false)}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            border: "none",
+            display: "block",
+            pointerEvents: isDragging || isResizing ? "none" : "auto",
+          }}
+          allow="clipboard-read; clipboard-write; fullscreen; camera; microphone"
+        />
 
         {/* Bottom-Right Touch-Friendly Resize Handle (for tablet finger/stylus and desktop mouse) */}
         <div
