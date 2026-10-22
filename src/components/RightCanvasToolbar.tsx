@@ -63,7 +63,7 @@ export default function RightCanvasToolbar({
       id: "screen",
       label: "Canvas Screen",
       shortcut: "Browser",
-      description: "Interactive 16:10 browser & code-server workspace embedded directly on canvas.",
+      description: "Interactive browser & code-server workspace embedded directly on canvas with multiple aspect ratios.",
       icon: Monitor,
       active: showScreen,
       onClick: onToggleScreen,
@@ -147,45 +147,77 @@ export default function RightCanvasToolbar({
                 <Icon size={18} strokeWidth={isActive ? 2.5 : 2.1} />
               </button>
 
-              {/* Rich Tooltip (Floats to the left of the button) */}
+              {/* Rich Tooltip with robust padding & typography (Floats to the left of the button) */}
               <div
                 role="tooltip"
-                className="pointer-events-none absolute right-[calc(100%+10px)] top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-150 z-50 whitespace-nowrap translate-x-1 group-hover:translate-x-0 group-focus-within:translate-x-0"
+                className="pointer-events-none absolute right-[calc(100%+12px)] top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-150 z-50 whitespace-nowrap translate-x-1 group-hover:translate-x-0 group-focus-within:translate-x-0"
               >
                 <div
-                  className={`flex flex-col gap-1 p-2.5 rounded-xl border shadow-xl ${
-                    isDark
-                      ? "bg-[#18181c] border-zinc-700 text-zinc-100 shadow-black/80"
-                      : "bg-zinc-900 border-zinc-800 text-white shadow-black/40"
-                  }`}
-                  style={{ minWidth: "160px", maxWidth: "230px" }}
+                  style={{
+                    minWidth: "180px",
+                    maxWidth: "240px",
+                    padding: "12px 14px",
+                    boxSizing: "border-box",
+                    borderRadius: "12px",
+                    background: isDark ? "#18181c" : "#1f1f23",
+                    border: isDark ? "1px solid rgba(255, 255, 255, 0.12)" : "1px solid rgba(255, 255, 255, 0.16)",
+                    boxShadow: "0 12px 32px rgba(0, 0, 0, 0.75), 0 2px 8px rgba(0, 0, 0, 0.5)",
+                    color: "#f4f4f5",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
+                  }}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs font-semibold tracking-tight">{tool.label}</span>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "-0.01em", color: "#ffffff" }}>
+                      {tool.label}
+                    </span>
                     {tool.shortcut && (
                       <kbd
-                        className={`px-1.5 py-0.5 text-[10px] font-mono rounded border uppercase ${
-                          isDark
-                            ? "bg-zinc-800 border-zinc-700 text-zinc-300"
-                            : "bg-zinc-800 border-zinc-700 text-zinc-300"
-                        }`}
+                        style={{
+                          padding: "2px 6px",
+                          fontSize: 10,
+                          fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                          fontWeight: 600,
+                          textTransform: "uppercase",
+                          borderRadius: 4,
+                          background: "rgba(255, 255, 255, 0.12)",
+                          color: "#e4e4e7",
+                          border: "1px solid rgba(255, 255, 255, 0.18)",
+                          lineHeight: 1.2,
+                        }}
                       >
                         {tool.shortcut}
                       </kbd>
                     )}
                   </div>
-                  <p className="text-[11px] text-zinc-400 font-normal leading-snug whitespace-normal">
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 11,
+                      lineHeight: "1.45",
+                      color: "#a1a1aa",
+                      whiteSpace: "normal",
+                      wordBreak: "break-word",
+                    }}
+                  >
                     {tool.description}
                   </p>
                 </div>
 
                 {/* Triangle pointer */}
                 <div
-                  className={`absolute top-1/2 -right-1 -translate-y-1/2 w-2 h-2 rotate-45 border-t border-r ${
-                    isDark
-                      ? "bg-[#18181c] border-zinc-700"
-                      : "bg-zinc-900 border-zinc-800"
-                  }`}
+                  style={{
+                    position: "absolute",
+                    top: "50%",
+                    right: -4,
+                    transform: "translateY(-50%) rotate(45deg)",
+                    width: 8,
+                    height: 8,
+                    background: isDark ? "#18181c" : "#1f1f23",
+                    borderTop: isDark ? "1px solid rgba(255, 255, 255, 0.12)" : "1px solid rgba(255, 255, 255, 0.16)",
+                    borderRight: isDark ? "1px solid rgba(255, 255, 255, 0.12)" : "1px solid rgba(255, 255, 255, 0.16)",
+                  }}
                 />
               </div>
             </div>
