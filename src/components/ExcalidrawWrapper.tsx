@@ -32,6 +32,10 @@ import { chatStreamAuto, MistralError, type ChatMessage } from "@/lib/ai/mistral
 import { createCodeCardSvg } from "@/lib/ai/highlight";
 import TodoPanel from "./TodoOverlay";
 import LaserOverlay from "./LaserOverlay";
+
+const TextToDiagramModal = dynamic(() => import("./TextToDiagramModal"), {
+  ssr: false,
+});
 import { useQuickShape, useListMode, useCanvasShortcuts } from "@/hooks";
 import {
   DATA_STRUCTURES,
@@ -361,6 +365,7 @@ export default function ExcalidrawWrapper() {
   const [showAiTextPanel, setShowAiTextPanel] = useState(false);
   const [showExplaino, setShowExplaino] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
+  const [showTextToDiagramModal, setShowTextToDiagramModal] = useState(false);
   const editingTextIdRef = useRef<string | null>(null);
   const [textAnchor, setTextAnchor] = useState<{
     id: string;
@@ -974,6 +979,63 @@ export default function ExcalidrawWrapper() {
     if (def) handleInsertDataStructure(def, def.defaultData());
   }, [handleInsertDataStructure]);
 
+  // --- Insert native diagram elements (from Text-to-Diagram / Mermaid) onto canvas
+  const handleInsertDiagramElements = useCallback((elements: readonly ExcalidrawElement[]) => {
+    const api = excalidrawAPI.current;
+    if (!api || elements.length === 0) return;
+
+    const appState = api.getAppState();
+    const { x: targetCenterX, y: targetCenterY } = viewportCoordsToSceneCoords(
+      { clientX: appState.width / 2, clientY: appState.height / 2 },
+      {
+        zoom: appState.zoom,
+        offsetLeft: appState.offsetLeft,
+        offsetTop: appState.offsetTop,
+        scrollX: appState.scrollX,
+        scrollY: appState.scrollY,
+      }
+    );
+
+    // Calculate bounding box of diagram elements
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const el of elements) {
+      const w = el.width ?? 0;
+      const h = el.height ?? 0;
+      if (el.x < minX) minX = el.x;
+      if (el.y < minY) minY = el.y;
+      if (el.x + w > maxX) maxX = el.x + w;
+      if (el.y + h > maxY) maxY = el.y + h;
+    }
+
+    const diagCenterX = minX + (maxX - minX) / 2;
+    const diagCenterY = minY + (maxY - minY) / 2;
+
+    const dx = Math.round(targetCenterX - diagCenterX);
+    const dy = Math.round(targetCenterY - diagCenterY);
+
+    const centeredElements = elements.map((el) => ({
+      ...el,
+      x: el.x + dx,
+      y: el.y + dy,
+    }));
+
+    const selectedElementIds: Record<string, true> = {};
+    for (const el of centeredElements) {
+      selectedElementIds[el.id] = true;
+    }
+
+    api.updateScene({
+      elements: [...api.getSceneElements(), ...centeredElements],
+      appState: {
+        selectedElementIds,
+      } as unknown as AppState,
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+  }, []);
+
   // --- Insert syntax-highlighted code card from AI Text panel onto canvas
   const handleInsertCodeToCanvas = useCallback(
     (code: string, lang: string) => {
@@ -1420,6 +1482,12 @@ export default function ExcalidrawWrapper() {
           run: () => handleInsertTable(),
         },
         {
+          id: "text-to-diagram",
+          label: "Text to Diagram / Mermaid",
+          hint: "diagram",
+          run: () => setShowTextToDiagramModal(true),
+        },
+        {
           id: "save-cloud",
           label: "Save drawing to cloud",
           hint: "file",
@@ -1518,6 +1586,17 @@ export default function ExcalidrawWrapper() {
             >
               <Monitor size={16} strokeWidth={2.2} />
               <span style={{ marginLeft: 4 }}>Screen</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowTextToDiagramModal(true)}
+              className="excalidraw-button"
+              style={PANEL_BUTTON_STYLE}
+              title="Text to Diagram / Mermaid — generate editable diagrams from prompts or Mermaid code"
+              aria-label="Text to Diagram"
+            >
+              <Sparkles size={16} strokeWidth={2.2} />
+              <span style={{ marginLeft: 4 }}>Diagram</span>
             </button>
             <button
               type="button"
@@ -1651,6 +1730,14 @@ export default function ExcalidrawWrapper() {
             title="Todo list"
           >
             Todos
+          </MainMenu.Item>
+          <MainMenu.Item
+            onSelect={() => setShowTextToDiagramModal(true)}
+            icon={<Sparkles size={16} strokeWidth={2.2} />}
+            className="explaino-menu-item"
+            title="Text to Diagram / Mermaid"
+          >
+            Text to Diagram
           </MainMenu.Item>
         </MainMenu>
         </ExcalidrawComponent>
@@ -1860,6 +1947,16 @@ export default function ExcalidrawWrapper() {
         >
           {saveStatus}
         </div>
+      )}
+
+      {/* Text to Diagram / Mermaid Modal */}
+      {showTextToDiagramModal && (
+        <TextToDiagramModal
+          isOpen={showTextToDiagramModal}
+          onClose={() => setShowTextToDiagramModal(false)}
+          onInsert={handleInsertDiagramElements}
+          theme={theme}
+        />
       )}
     </div>
   );
