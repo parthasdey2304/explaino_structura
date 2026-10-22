@@ -36,6 +36,7 @@ import { chatStreamAuto, MistralError, type ChatMessage } from "@/lib/ai/mistral
 import { createCodeCardSvg } from "@/lib/ai/highlight";
 import TodoPanel from "./TodoOverlay";
 import LaserOverlay from "./LaserOverlay";
+import RightCanvasToolbar from "./RightCanvasToolbar";
 
 const TextToDiagramModal = dynamic(() => import("./TextToDiagramModal"), {
   ssr: false,
@@ -415,7 +416,17 @@ export default function ExcalidrawWrapper() {
     return "light";
   });
 
-  // Removed unused mobile state
+  // Responsive breakpoint for mobile/tablet/narrow screens
+  const [isSmallScreen, setIsSmallScreen] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsSmallScreen(window.innerWidth < 1024);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const drawingIdRef = useRef<string | null>(null);
   const nameRef = useRef<string>("Untitled");
@@ -1580,8 +1591,10 @@ export default function ExcalidrawWrapper() {
         initialData={initialData}
         name={drawingName}
         theme={theme}
-        renderTopRightUI={() => (
-          <div className="flex items-center gap-2" style={{ marginLeft: 8 }}>
+        renderTopRightUI={() => {
+          if (isSmallScreen) return null;
+          return (
+          <div className="hidden lg:flex items-center gap-1.5" style={{ marginLeft: 8 }}>
             <button
               type="button"
               onClick={() => setLaserActive((v) => !v)}
@@ -1605,7 +1618,7 @@ export default function ExcalidrawWrapper() {
               aria-pressed={laserActive}
             >
               <Zap size={16} strokeWidth={2.2} />
-              <span style={{ marginLeft: 4 }}>Laser</span>
+              <span className="hidden xl:inline" style={{ marginLeft: 4 }}>Laser</span>
             </button>
             <button
               type="button"
@@ -1622,7 +1635,7 @@ export default function ExcalidrawWrapper() {
               aria-pressed={showIframePanel}
             >
               <Monitor size={16} strokeWidth={2.2} />
-              <span style={{ marginLeft: 4 }}>Screen</span>
+              <span className="hidden xl:inline" style={{ marginLeft: 4 }}>Screen</span>
             </button>
             <button
               type="button"
@@ -1633,7 +1646,7 @@ export default function ExcalidrawWrapper() {
               aria-label="Text to Diagram"
             >
               <Sparkles size={16} strokeWidth={2.2} />
-              <span style={{ marginLeft: 4 }}>Diagram</span>
+              <span className="hidden xl:inline" style={{ marginLeft: 4 }}>Diagram</span>
             </button>
             <button
               type="button"
@@ -1717,7 +1730,8 @@ export default function ExcalidrawWrapper() {
               <Grid3x3 size={16} strokeWidth={2.2} />
             </button>
           </div>
-        )}
+          );
+        }}
       >
         {/* Custom hamburger menu. Supplying our own children replaces
             Excalidraw's default menu, which is how the "Excalidraw links",
@@ -1782,6 +1796,37 @@ export default function ExcalidrawWrapper() {
           scene or the undo/redo history. */}
       <LaserOverlay active={laserActive} />
       </div>
+      )}
+
+      {/* Floating right canvas toolbar for small screens (<1024px) */}
+      {isSmallScreen && (
+        <div className="lg:hidden">
+          <RightCanvasToolbar
+            laserActive={laserActive}
+            onToggleLaser={() => setLaserActive((v) => !v)}
+            showScreen={showIframePanel}
+            onToggleScreen={() => {
+              setShowIframePanel((v) => {
+                const next = !v;
+                saveScreenState({ isOpen: next });
+                return next;
+              });
+            }}
+            onOpenDiagram={() => setShowTextToDiagramModal(true)}
+            showDataStructures={showDataStructuresPanel}
+            onToggleDataStructures={() => {
+              const api = excalidrawAPI.current;
+              if (!showDataStructuresPanel && api) {
+                api.updateScene({ appState: { showLibrary: false } as unknown as AppState });
+                if (showCodePanel) setShowCodePanel(false);
+              }
+              setShowDataStructuresPanel(!showDataStructuresPanel);
+            }}
+            onInsertTable={handleInsertTable}
+            theme={theme}
+            onToggleTheme={() => setTheme(theme === "dark" ? "light" : "dark")}
+          />
+        </div>
       )}
 
       {/* Todo overlay — toggled by the top-left corner button */}
