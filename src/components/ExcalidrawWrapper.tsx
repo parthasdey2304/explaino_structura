@@ -53,7 +53,8 @@ import {
   type DataStructureDef,
   type StructureId,
 } from "@/lib/dataStructures";
-import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic, ListTodo, Monitor } from "lucide-react";
+import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic, ListTodo, Monitor, LogOut } from "lucide-react";
+import { performClientLogout } from "./AuthGate";
 
 /**
  * Metadata attached to every element of an inserted diagram via Excalidraw's
@@ -1637,6 +1638,15 @@ export default function ExcalidrawWrapper() {
           title="Text to Diagram / Mermaid"
         >
           Text to Diagram
+        </MainMenu.Item>
+        <MainMenu.Separator />
+        <MainMenu.Item
+          onSelect={() => performClientLogout()}
+          icon={<LogOut size={16} strokeWidth={2.2} />}
+          className="explaino-menu-item text-red-400 hover:text-red-500"
+          title="Sign out of workspace"
+        >
+          Sign Out
         </MainMenu.Item>
       </MainMenu>
     ),
