@@ -22,7 +22,11 @@ import type {
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { saveDrawing, loadDrawing } from "@/lib/firestore";
 import CodeEditorPanel from "./CodeEditorPanel";
-import IframePanel, { type IframePanelLayout } from "./IframePanel";
+import IframePanel, {
+  type IframePanelLayout,
+  loadSavedScreenState,
+  saveScreenState,
+} from "./IframePanel";
 import DataStructuresPanel from "./DataStructuresPanel";
 import CanvasStructureControls, { type ViewportBox } from "./CanvasStructureControls";
 import AITextSidebar from "./AITextSidebar";
@@ -358,7 +362,14 @@ export default function ExcalidrawWrapper() {
   const [apiReady, setApiReady] = useState(false);
   const [showCodePanel, setShowCodePanel] = useState(false);
   const showCodePanelRef = useRef(false);
-  const [showIframePanel, setShowIframePanel] = useState(false);
+  const [showIframePanel, setShowIframePanel] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return Boolean(loadSavedScreenState()?.isOpen);
+    } catch {
+      return false;
+    }
+  });
   const [iframePanelLayout, setIframePanelLayout] = useState<IframePanelLayout>("center");
   const [showDataStructuresPanel, setShowDataStructuresPanel] = useState(false);
   const [showTodos, setShowTodos] = useState(false);
@@ -1455,6 +1466,18 @@ export default function ExcalidrawWrapper() {
           run: () => setShowTodos((v) => !v),
         },
         {
+          id: "toggle-screen",
+          label: "Toggle Screen / Browser panel",
+          hint: "panel",
+          run: () => {
+            setShowIframePanel((v) => {
+              const next = !v;
+              saveScreenState({ isOpen: next });
+              return next;
+            });
+          },
+        },
+        {
           id: "toggle-explaino",
           label: "Toggle Explaino voice notes",
           hint: "panel",
@@ -1578,7 +1601,13 @@ export default function ExcalidrawWrapper() {
             </button>
             <button
               type="button"
-              onClick={() => setShowIframePanel((v) => !v)}
+              onClick={() => {
+                setShowIframePanel((v) => {
+                  const next = !v;
+                  saveScreenState({ isOpen: next });
+                  return next;
+                });
+              }}
               className="excalidraw-button"
               style={PANEL_BUTTON_STYLE}
               title="Open screen / browser panel"
@@ -1855,7 +1884,10 @@ export default function ExcalidrawWrapper() {
       {/* Iframe / Screen Panel */}
       {showIframePanel && (
         <IframePanel
-          onClose={() => setShowIframePanel(false)}
+          onClose={() => {
+            setShowIframePanel(false);
+            saveScreenState({ isOpen: false });
+          }}
           viewport={viewport}
           layout={iframePanelLayout}
           onLayoutChange={setIframePanelLayout}

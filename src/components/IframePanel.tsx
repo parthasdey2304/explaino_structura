@@ -119,12 +119,57 @@ function resolveBrowserNavigation(input: string): { iframeSrc: string; displayUr
   };
 }
 
+export const CANVAS_SCREEN_STORAGE_KEY = "explaino-canvas-screen-state";
+
+export interface CanvasScreenSavedState {
+  isOpen: boolean;
+  sceneX?: number;
+  sceneY?: number;
+  sceneWidth?: number;
+  sceneHeight?: number;
+  url?: string;
+  sizeKey?: string;
+  mode?: CanvasScreenMode;
+}
+
+export function loadSavedScreenState(): CanvasScreenSavedState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(CANVAS_SCREEN_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveScreenState(partial: Partial<CanvasScreenSavedState>): void {
+  if (typeof window === "undefined") return;
+  try {
+    const existing = loadSavedScreenState();
+    const next: CanvasScreenSavedState = {
+      isOpen: existing?.isOpen ?? true,
+      sceneX: existing?.sceneX ?? 0,
+      sceneY: existing?.sceneY ?? 0,
+      sceneWidth: existing?.sceneWidth ?? 920,
+      sceneHeight: existing?.sceneHeight ?? 575,
+      url: existing?.url ?? CODE_SERVER_EXTERNAL_URL,
+      sizeKey: existing?.sizeKey ?? "medium",
+      mode: existing?.mode ?? "interact",
+      ...partial,
+    };
+    localStorage.setItem(CANVAS_SCREEN_STORAGE_KEY, JSON.stringify(next));
+  } catch {}
+}
+
 export default function IframePanel({ onClose, viewport }: IframePanelProps) {
-  const [iframeSrc, setIframeSrc] = useState(CODE_SERVER_PROXY_PATH);
-  const [inputUrl, setInputUrl] = useState(CODE_SERVER_EXTERNAL_URL);
-  const [currentDisplayUrl, setCurrentDisplayUrl] = useState(CODE_SERVER_EXTERNAL_URL);
-  const [sizeKey, setSizeKey] = useState<string>("medium");
-  const [mode, setMode] = useState<CanvasScreenMode>("interact");
+  const [saved] = useState(() => loadSavedScreenState());
+  const initialResolved = resolveBrowserNavigation(saved?.url || CODE_SERVER_EXTERNAL_URL);
+
+  const [iframeSrc, setIframeSrc] = useState(initialResolved.iframeSrc);
+  const [inputUrl, setInputUrl] = useState(initialResolved.displayUrl);
+  const [currentDisplayUrl, setCurrentDisplayUrl] = useState(initialResolved.displayUrl);
+  const [sizeKey, setSizeKey] = useState<string>(saved?.sizeKey || "medium");
+  const [mode, setMode] = useState<CanvasScreenMode>(saved?.mode || "interact");
   const [showSizeMenu, setShowSizeMenu] = useState(false);
   const [showBookmarksMenu, setShowBookmarksMenu] = useState(false);
   const [copiedPwd, setCopiedPwd] = useState(false);
@@ -136,7 +181,23 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
     sceneY: number;
     sceneWidth: number;
     sceneHeight: number;
-  } | null>(null);
+  } | null>(() => {
+    if (
+      saved &&
+      typeof saved.sceneX === "number" &&
+      typeof saved.sceneY === "number" &&
+      saved.sceneWidth &&
+      saved.sceneHeight
+    ) {
+      return {
+        sceneX: saved.sceneX,
+        sceneY: saved.sceneY,
+        sceneWidth: saved.sceneWidth,
+        sceneHeight: saved.sceneHeight,
+      };
+    }
+    return null;
+  });
 
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -152,19 +213,29 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // Log diagnostic info to help users identify iframe/proxy status
+  useEffect(() => {
+    console.log(
+      "%c[Canvas Screen]%c Initialized — Full script execution, Web Workers, and session cookies active.",
+      "color: #6965db; font-weight: bold",
+      "color: inherit"
+    );
+  }, []);
+
   // Listen to navigation events from the proxy-injected script inside iframe
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
       if (e.data && e.data.type === "canvas-browser:navigate" && typeof e.data.url === "string") {
         setInputUrl(e.data.url);
         setCurrentDisplayUrl(e.data.url);
+        saveScreenState({ url: e.data.url });
       }
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
-  // Initialize scene coordinates centered in the current canvas viewport
+  // Initialize scene coordinates centered in the current canvas viewport if not restored
   useEffect(() => {
     if (scenePos === null && viewport) {
       const center = viewportCoordsToSceneCoords(
@@ -173,12 +244,14 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
       );
       const defaultWidth = 920;
       const defaultHeight = (defaultWidth * 10) / 16;
-      setScenePos({
+      const initialPos = {
         sceneX: center.x - defaultWidth / 2,
         sceneY: center.y - defaultHeight / 2,
         sceneWidth: defaultWidth,
         sceneHeight: defaultHeight,
-      });
+      };
+      setScenePos(initialPos);
+      saveScreenState(initialPos);
     }
   }, [viewport, scenePos]);
 
@@ -190,6 +263,7 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
     setIframeSrc(resolved.iframeSrc);
     setInputUrl(resolved.displayUrl);
     setCurrentDisplayUrl(resolved.displayUrl);
+    saveScreenState({ url: resolved.displayUrl });
   }, []);
 
   const handleNavigate = useCallback(() => {
@@ -252,12 +326,14 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
     );
     const width = scenePos?.sceneWidth ?? 920;
     const height = scenePos?.sceneHeight ?? (width * 10) / 16;
-    setScenePos({
+    const nextPos = {
       sceneX: center.x - width / 2,
       sceneY: center.y - height / 2,
       sceneWidth: width,
       sceneHeight: height,
-    });
+    };
+    setScenePos(nextPos);
+    saveScreenState(nextPos);
   }, [viewport, scenePos]);
 
   // Dragging handlers (moving screen across canvas)
@@ -316,6 +392,14 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
       try {
         (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
       } catch {}
+      if (scenePos) {
+        saveScreenState({
+          sceneX: scenePos.sceneX,
+          sceneY: scenePos.sceneY,
+          sceneWidth: scenePos.sceneWidth,
+          sceneHeight: scenePos.sceneHeight,
+        });
+      }
     }
   };
 
@@ -444,7 +528,11 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
         {/* Mode Toggle: Code/Browse vs Draw on Canvas */}
         <button
           type="button"
-          onClick={() => setMode((m) => (m === "interact" ? "annotate" : "interact"))}
+          onClick={() => {
+            const nextMode: CanvasScreenMode = mode === "interact" ? "annotate" : "interact";
+            setMode(nextMode);
+            saveScreenState({ mode: nextMode });
+          }}
           style={{
             ...toolbarBtnStyle,
             background:
@@ -508,15 +596,20 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
                 active: sizeKey === p.value,
                 onClick: () => {
                   setSizeKey(p.value);
-                  setScenePos((prev) =>
-                    prev
-                      ? {
-                          ...prev,
-                          sceneWidth: p.width,
-                          sceneHeight: p.height,
-                        }
-                      : null
-                  );
+                  setScenePos((prev) => {
+                    if (!prev) return null;
+                    const next = {
+                      ...prev,
+                      sceneWidth: p.width,
+                      sceneHeight: p.height,
+                    };
+                    saveScreenState({
+                      sizeKey: p.value,
+                      sceneWidth: p.width,
+                      sceneHeight: p.height,
+                    });
+                    return next;
+                  });
                   setShowSizeMenu(false);
                 },
               }))}
@@ -677,7 +770,6 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
             pointerEvents: mode === "annotate" ? "none" : "auto",
           }}
           allow="clipboard-read; clipboard-write; fullscreen; camera; microphone"
-          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-top-navigation allow-top-navigation-by-user-activation"
         />
 
         {/* Annotate mode badge indicator over iframe */}

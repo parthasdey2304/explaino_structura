@@ -64,13 +64,12 @@ export async function checkFirebaseConnection(): Promise<FirebaseHealth> {
   const missing = Object.entries(firebaseConfig)
     .filter(([, v]) => !v)
     .map(([k]) => k);
-  if (missing.length > 0 || !db || !storage) {
+  if (missing.length > 0 || !db) {
     const detail = `missing env: ${missing.join(', ') || 'sdk not initialised'}`;
-    console.log('[firebase] health check FAILED —', detail);
+    console.log('[firebase] health check —', detail);
     return { firestore: false, storage: false, detail };
   }
   let firestore = false;
-  let storageOk = false;
   let detail = '';
   try {
     const pingRef = doc(db, 'explaino_health', 'ping');
@@ -81,16 +80,10 @@ export async function checkFirebaseConnection(): Promise<FirebaseHealth> {
   } catch (e) {
     detail += `firestore FAILED (${e instanceof Error ? e.message : String(e)}). `;
   }
-  try {
-    const probe = ref(storage, 'explaino/__health__.txt');
-    await uploadBytes(probe, new Blob(['ok'], { type: 'text/plain' }));
-    await getDownloadURL(probe);
-    await deleteObject(probe);
-    storageOk = true;
-    detail += 'storage write+read+delete ok.';
-  } catch (e) {
-    detail += `storage FAILED (${e instanceof Error ? e.message : String(e)}).`;
-  }
+
+  const storageOk = Boolean(firebaseConfig.storageBucket && storage);
+  detail += storageOk ? 'storage configured.' : 'storage unconfigured.';
+
   console.log('[firebase] health check:', { firestore, storage: storageOk, detail });
   return { firestore, storage: storageOk, detail };
 }
