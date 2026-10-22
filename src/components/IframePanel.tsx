@@ -28,6 +28,14 @@ export interface IframePanelProps {
   layout?: IframePanelLayout;
   /** Optional layout change callback */
   onLayoutChange?: (layout: IframePanelLayout) => void;
+  /** Direct canvas scroll callback for trackpad panning/zooming over the screen */
+  onCanvasScroll?: (deltaX: number, deltaY: number, isZoom: boolean, isShift: boolean) => void;
+  /** Controlled active state: when true, keyboard and pointer route to code server */
+  isActive?: boolean;
+  /** Callback when active/focus state changes */
+  onActiveChange?: (active: boolean) => void;
+  /** Currently active tool in Excalidraw (e.g. 'selection', 'rectangle', 'line', etc.) */
+  activeToolType?: string;
 }
 
 export const CODE_SERVER_SECURE_URL = "https://13.49.76.201.sslip.io/?folder=/home/ubuntu/workspace";
@@ -70,11 +78,38 @@ export function saveScreenState(partial: Partial<CanvasScreenSavedState>): void 
   } catch {}
 }
 
-export default function IframePanel({ onClose, viewport }: IframePanelProps) {
+export default function IframePanel({
+  onClose,
+  viewport,
+  onCanvasScroll,
+  isActive: controlledIsActive,
+  onActiveChange,
+  activeToolType,
+}: IframePanelProps) {
   const [saved] = useState(() => loadSavedScreenState());
 
   const [isLoading, setIsLoading] = useState(true);
   const [isHoveredTraffic, setIsHoveredTraffic] = useState(false);
+  const [isHoveredOverlay, setIsHoveredOverlay] = useState(false);
+
+  // Local active state with prop synchronization
+  const [localIsActive, setLocalIsActive] = useState(false);
+  const isActive = controlledIsActive !== undefined ? controlledIsActive : localIsActive;
+
+  const setActiveState = useCallback(
+    (next: boolean) => {
+      setLocalIsActive(next);
+      onActiveChange?.(next);
+    },
+    [onActiveChange]
+  );
+
+  // If a drawing tool is selected (line, arrow, circle, rectangle, draw, text), release active mode
+  useEffect(() => {
+    if (activeToolType && activeToolType !== "selection" && activeToolType !== "hand" && isActive) {
+      setActiveState(false);
+    }
+  }, [activeToolType, isActive, setActiveState]);
 
   // Scene-space coordinates: anchored inside the whiteboard canvas so it pans & zooms
   const [scenePos, setScenePos] = useState<{
@@ -193,13 +228,82 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
 
   // Close window (Red traffic light)
   const handleClose = useCallback(() => {
+    setActiveState(false);
     saveScreenState({ isOpen: false });
     onClose();
-  }, [onClose]);
+  }, [onClose, setActiveState]);
+
+  // Forward wheel/trackpad events to canvas so panning and zooming work smoothly over the screen
+  const forwardWheelToCanvas = useCallback(
+    (e: React.WheelEvent) => {
+      // Prevent parent browser window from scrolling
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Dispatch directly to Excalidraw's canvas element so it uses native momentum & zoom
+      const excalidrawCanvas =
+        document.querySelector<HTMLCanvasElement>(".excalidraw canvas.interactive-canvas") ||
+        document.querySelector<HTMLCanvasElement>(".excalidraw canvas");
+
+      if (excalidrawCanvas) {
+        try {
+          const syntheticEvent = new WheelEvent("wheel", {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            deltaX: e.deltaX,
+            deltaY: e.deltaY,
+            deltaZ: e.deltaZ,
+            deltaMode: e.deltaMode,
+            clientX: e.clientX,
+            clientY: e.clientY,
+            screenX: e.screenX,
+            screenY: e.screenY,
+            ctrlKey: e.ctrlKey,
+            metaKey: e.metaKey,
+            shiftKey: e.shiftKey,
+            altKey: e.altKey,
+          });
+          excalidrawCanvas.dispatchEvent(syntheticEvent);
+          return;
+        } catch {}
+      }
+
+      // Direct fallback
+      onCanvasScroll?.(e.deltaX, e.deltaY, e.ctrlKey || e.metaKey, e.shiftKey);
+    },
+    [onCanvasScroll]
+  );
+
+  // Activate screen: gives keyboard and mouse focus to Code Server
+  const handleActivateScreen = useCallback(
+    (e?: React.PointerEvent | React.MouseEvent) => {
+      e?.stopPropagation();
+      setActiveState(true);
+      setTimeout(() => {
+        iframeRef.current?.focus();
+        try {
+          iframeRef.current?.contentWindow?.focus();
+        } catch {}
+      }, 20);
+    },
+    [setActiveState]
+  );
+
+  // Deactivate screen: returns focus and keyboard commands to whiteboard canvas
+  const handleDeactivateScreen = useCallback(
+    (e?: React.PointerEvent | React.MouseEvent) => {
+      e?.stopPropagation();
+      setActiveState(false);
+      const container = document.querySelector<HTMLElement>(".excalidraw");
+      container?.focus();
+    },
+    [setActiveState]
+  );
 
   // Dragging handlers: supports mouse, tablet touch, and stylus with pointer capture
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest("button, .traffic-light-btn")) return;
+    if ((e.target as HTMLElement).closest("button, .traffic-light-btn, .screen-badge-btn")) return;
     if (!scenePos) return;
     dragStartRef.current = {
       mouseX: e.clientX,
@@ -315,6 +419,8 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
   return (
     <div
       ref={panelRef}
+      className="canvas-screen-panel"
+      onWheel={forwardWheelToCanvas}
       style={{
         position: "fixed",
         left: `${viewportCoords.x}px`,
@@ -326,12 +432,16 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
         flexDirection: "column",
         background: "#16161a",
         borderRadius: 16,
-        border: "1.5px solid rgba(255, 255, 255, 0.14)",
-        boxShadow:
-          "0 24px 60px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08)",
+        border: isActive
+          ? "1.5px solid rgba(99, 102, 241, 0.75)"
+          : "1.5px solid rgba(255, 255, 255, 0.14)",
+        boxShadow: isActive
+          ? "0 0 0 2px rgba(99, 102, 241, 0.25), 0 24px 60px -12px rgba(0, 0, 0, 0.85)"
+          : "0 24px 60px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08)",
         overflow: "hidden",
         userSelect: isDragging || isResizing ? "none" : "auto",
         touchAction: isDragging || isResizing ? "none" : "auto",
+        transition: "border 0.18s ease, box-shadow 0.18s ease",
       }}
     >
       {/* macOS Window Header (Drag Handle for desktop mouse & tablet touch/stylus) */}
@@ -340,22 +450,26 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        onWheel={forwardWheelToCanvas}
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           height: 38,
           padding: "0 14px",
-          background: "#1c1c21",
-          borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+          background: isActive ? "#1e1e26" : "#1c1c21",
+          borderBottom: isActive
+            ? "1px solid rgba(99, 102, 241, 0.28)"
+            : "1px solid rgba(255, 255, 255, 0.08)",
           flexShrink: 0,
           userSelect: "none",
           touchAction: "none",
           cursor: isDragging ? "grabbing" : "grab",
+          transition: "background 0.18s ease",
         }}
-        title="Drag window anywhere on whiteboard canvas"
+        title="Drag window anywhere on whiteboard canvas • Trackpad scrolls canvas"
       >
-        {/* macOS Traffic Light Buttons */}
+        {/* Left: macOS Traffic Light Buttons */}
         <div
           style={{ display: "flex", alignItems: "center", gap: 8 }}
           onMouseEnter={() => setIsHoveredTraffic(true)}
@@ -491,30 +605,99 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
           </button>
         </div>
 
-        {/* Right Label (macOS code server window) */}
-        <div
-          style={{
-            fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-            fontSize: 11,
-            fontWeight: 600,
-            letterSpacing: "0.12em",
-            color: "#71717a",
-            textTransform: "uppercase",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-        >
-          <span
+        {/* Center / Right: Interactive Mode Status & Code Server Label */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* Active Status Badge */}
+          {isActive ? (
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "2px 8px",
+                borderRadius: 12,
+                background: "rgba(34, 197, 94, 0.14)",
+                border: "1px solid rgba(34, 197, 94, 0.35)",
+                color: "#4ade80",
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.05em",
+                textTransform: "uppercase",
+              }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: "#22c55e",
+                  boxShadow: "0 0 6px #22c55e",
+                }}
+              />
+              <span>Type in Screen</span>
+              <button
+                type="button"
+                className="screen-badge-btn"
+                onClick={handleDeactivateScreen}
+                style={{
+                  marginLeft: 3,
+                  padding: "1px 5px",
+                  borderRadius: 4,
+                  background: "rgba(255, 255, 255, 0.12)",
+                  border: "none",
+                  color: "#e4e4e7",
+                  fontSize: 9,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+                title="Release keyboard to canvas (Esc)"
+              >
+                Esc to Canvas
+              </button>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "2px 8px",
+                borderRadius: 12,
+                background: "rgba(255, 255, 255, 0.05)",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                color: "#a1a1aa",
+                fontSize: 10,
+                fontWeight: 600,
+                letterSpacing: "0.04em",
+              }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: "#71717a",
+                }}
+              />
+              <span>Canvas Mode (Trackpad Scrolls)</span>
+            </div>
+          )}
+
+          <div
             style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: "#22c55e",
-              display: "inline-block",
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: "0.12em",
+              color: isActive ? "#e4e4e7" : "#71717a",
+              textTransform: "uppercase",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
             }}
-          />
-          <span>CODE SERVER</span>
+          >
+            <span>CODE SERVER</span>
+          </div>
         </div>
       </div>
 
@@ -570,10 +753,60 @@ export default function IframePanel({ onClose, viewport }: IframePanelProps) {
             height: "100%",
             border: "none",
             display: "block",
-            pointerEvents: isDragging || isResizing ? "none" : "auto",
+            pointerEvents: isDragging || isResizing || !isActive ? "none" : "auto",
           }}
           allow="clipboard-read; clipboard-write; fullscreen; camera; microphone"
         />
+
+        {/* Canvas Mode Trackpad Scroll & Click-to-Focus Overlay */}
+        {!isActive && (
+          <div
+            className="screen-scroll-overlay"
+            onWheel={forwardWheelToCanvas}
+            onPointerDown={handleActivateScreen}
+            onMouseEnter={() => setIsHoveredOverlay(true)}
+            onMouseLeave={() => setIsHoveredOverlay(false)}
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 10,
+              cursor: "pointer",
+              background: isHoveredOverlay ? "rgba(0, 0, 0, 0.08)" : "transparent",
+              display: "flex",
+              alignItems: "flex-end",
+              justifyContent: "center",
+              paddingBottom: 24,
+              transition: "background 0.15s ease",
+            }}
+            title="Click to work & type in Code Server • Trackpad scrolls canvas normally"
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "6px 14px",
+                borderRadius: 20,
+                background: "rgba(18, 18, 24, 0.88)",
+                backdropFilter: "blur(8px)",
+                border: "1px solid rgba(255, 255, 255, 0.14)",
+                boxShadow: "0 8px 24px rgba(0, 0, 0, 0.4)",
+                color: "#e4e4e7",
+                fontSize: 12,
+                fontWeight: 500,
+                pointerEvents: "none",
+                opacity: isHoveredOverlay ? 0.95 : 0.75,
+                transform: isHoveredOverlay ? "translateY(0)" : "translateY(2px)",
+                transition: "opacity 0.15s ease, transform 0.15s ease",
+                userSelect: "none",
+              }}
+            >
+              <span>⌨️ Click to type in Code Server</span>
+              <span style={{ color: "#52525b" }}>•</span>
+              <span style={{ color: "#a1a1aa", fontSize: 11 }}>Trackpad scrolls canvas</span>
+            </div>
+          </div>
+        )}
 
         {/* Bottom-Right Touch-Friendly Resize Handle (for tablet finger/stylus and desktop mouse) */}
         <div

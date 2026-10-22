@@ -379,6 +379,8 @@ export default function ExcalidrawWrapper() {
     }
   });
   const [iframePanelLayout, setIframePanelLayout] = useState<IframePanelLayout>("center");
+  const [isScreenActive, setIsScreenActive] = useState<boolean>(false);
+  const [activeToolType, setActiveToolType] = useState<string>("selection");
   const [showDataStructuresPanel, setShowDataStructuresPanel] = useState(false);
   const [showTodos, setShowTodos] = useState(false);
   const [showAiTextPanel, setShowAiTextPanel] = useState(false);
@@ -448,6 +450,17 @@ export default function ExcalidrawWrapper() {
       files: BinaryFiles
     ) => {
       latestSceneRef.current = { elements, appState, files };
+
+      if (appState.activeTool?.type) {
+        setActiveToolType(appState.activeTool.type);
+        if (
+          appState.activeTool.type !== "selection" &&
+          appState.activeTool.type !== "hand" &&
+          isScreenActive
+        ) {
+          setIsScreenActive(false);
+        }
+      }
 
       // Track viewport for HTML widget positioning (handles pan + zoom)
       // Only update state when values actually change to avoid render loops
@@ -1423,6 +1436,77 @@ export default function ExcalidrawWrapper() {
     };
   }, [selectedInstance, viewport]);
 
+  // Stop Excalidraw from processing canvas tool shortcuts (v, r, t, l, a, Delete, Backspace, etc.)
+  // when the user is actively working inside the Screen (Code Server)
+  useEffect(() => {
+    if (!isScreenActive || !showIframePanel) return;
+
+    const blockCanvasShortcuts = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsScreenActive(false);
+        const container = document.querySelector<HTMLElement>(".excalidraw");
+        container?.focus();
+        return;
+      }
+      // When working in screen, stop keystrokes from bleeding into Excalidraw tool shortcuts
+      e.stopPropagation();
+    };
+
+    window.addEventListener("keydown", blockCanvasShortcuts, true);
+    return () => window.removeEventListener("keydown", blockCanvasShortcuts, true);
+  }, [isScreenActive, showIframePanel]);
+
+  // Click outside screen panel to deactivate and return to canvas mode
+  useEffect(() => {
+    if (!isScreenActive || !showIframePanel) return;
+
+    const handlePointerDownOutside = (e: PointerEvent) => {
+      const screenPanel = document.querySelector(".canvas-screen-panel");
+      if (screenPanel && screenPanel.contains(e.target as Node)) {
+        return;
+      }
+      setIsScreenActive(false);
+    };
+
+    window.addEventListener("pointerdown", handlePointerDownOutside);
+    return () => window.removeEventListener("pointerdown", handlePointerDownOutside);
+  }, [isScreenActive, showIframePanel]);
+
+  // Direct canvas scroll callback for trackpad panning and zooming over the Screen
+  const handleScreenCanvasScroll = useCallback(
+    (deltaX: number, deltaY: number, isZoom: boolean, isShift: boolean) => {
+      const api = excalidrawAPI.current;
+      if (!api) return;
+
+      const appState = api.getAppState();
+      const zoom = appState.zoom.value || 1;
+
+      if (isZoom) {
+        const sign = Math.sign(deltaY);
+        const absDelta = Math.abs(deltaY);
+        const factor = Math.min(1, absDelta / 20);
+        let nextZoom = zoom - deltaY / 100;
+        nextZoom += Math.log10(Math.max(1, zoom)) * -sign * factor;
+        const clampedZoom = Math.min(Math.max(nextZoom, 0.1), 5);
+        api.updateScene({
+          appState: {
+            zoom: { value: clampedZoom as unknown as Zoom["value"] },
+          },
+        });
+      } else {
+        const dx = (isShift ? deltaY : deltaX) / zoom;
+        const dy = (isShift ? 0 : deltaY) / zoom;
+        api.updateScene({
+          appState: {
+            scrollX: appState.scrollX - dx,
+            scrollY: appState.scrollY - dy,
+          },
+        });
+      }
+    },
+    []
+  );
+
   // Global shortcuts handled via useCanvasShortcuts hook
   useCanvasShortcuts({
     onTogglePalette: () => setShowPalette((v) => !v),
@@ -1443,6 +1527,7 @@ export default function ExcalidrawWrapper() {
     onExitLaser: () => setLaserActive(false),
     isCodePanelOpen: showCodePanel,
     isLaserActive: laserActive,
+    isScreenActive: isScreenActive && showIframePanel,
   });
 
   const paletteCommands = useMemo<PaletteCommand[]>(
@@ -1975,11 +2060,21 @@ export default function ExcalidrawWrapper() {
         <IframePanel
           onClose={() => {
             setShowIframePanel(false);
+            setIsScreenActive(false);
             saveScreenState({ isOpen: false });
           }}
           viewport={viewport}
           layout={iframePanelLayout}
           onLayoutChange={setIframePanelLayout}
+          onCanvasScroll={handleScreenCanvasScroll}
+          isActive={isScreenActive}
+          onActiveChange={(active) => {
+            setIsScreenActive(active);
+            if (active) {
+              excalidrawAPI.current?.setActiveTool({ type: "selection" });
+            }
+          }}
+          activeToolType={activeToolType}
         />
       )}
 

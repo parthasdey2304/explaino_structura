@@ -6,9 +6,12 @@
  * - Ctrl+C / Cmd+C: opens Code editor (when no text input is focused)
  * - Escape: exits Laser pointer mode
  *
+ * When `isScreenActive` is true (user is working inside Code Server), global canvas
+ * hotkeys are disabled so all keystrokes route directly to the embedded code-server.
+ *
  * Extracted from ExcalidrawWrapper (graphify issue #26).
  *
- * @version 1.1.0
+ * @version 1.2.0
  */
 
 import { useEffect } from "react";
@@ -20,6 +23,7 @@ export interface CanvasShortcutHandlers {
   onExitLaser: () => void;
   isCodePanelOpen: boolean;
   isLaserActive: boolean;
+  isScreenActive?: boolean;
 }
 
 /**
@@ -42,9 +46,12 @@ export function useCanvasShortcuts({
   onExitLaser,
   isCodePanelOpen,
   isLaserActive,
+  isScreenActive = false,
 }: CanvasShortcutHandlers): void {
   // Command palette toggle (Ctrl/Cmd+Shift+P or Ctrl/Cmd+K)
   useEffect(() => {
+    if (isScreenActive) return;
+
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
       const paletteKey =
@@ -64,10 +71,12 @@ export function useCanvasShortcuts({
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [onTogglePalette]);
+  }, [onTogglePalette, isScreenActive]);
 
   // Terminal & Code editor hotkeys (Ctrl+` and Ctrl+C)
   useEffect(() => {
+    if (isScreenActive) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!e.ctrlKey && !e.metaKey) return;
 
@@ -87,7 +96,7 @@ export function useCanvasShortcuts({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isCodePanelOpen, onOpenCodeEditor, onOpenTerminal]);
+  }, [isCodePanelOpen, onOpenCodeEditor, onOpenTerminal, isScreenActive]);
 
   // Escape to exit laser pointer
   useEffect(() => {
