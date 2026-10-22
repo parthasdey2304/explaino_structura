@@ -98,7 +98,7 @@ export default function SmartBoardDock({
     <div
       role="toolbar"
       aria-label="Smart Board & Mobile Controls"
-      className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-40 transition-all duration-200 select-none ${
+      className={`fixed bottom-5 left-1/2 -translate-x-1/2 z-40 transition-all duration-200 select-none ${
         collapsed ? "translate-y-1" : ""
       }`}
       style={{
@@ -106,31 +106,31 @@ export default function SmartBoardDock({
       }}
     >
       <div
-        className={`flex items-center gap-1.5 p-1.5 sm:p-2 rounded-2xl shadow-2xl backdrop-blur-md border ${
+        className={`flex items-center gap-2 p-2 sm:p-2.5 rounded-2xl shadow-2xl backdrop-blur-md border ${
           isDark
-            ? "bg-[#181820]/95 border-zinc-700/70 text-zinc-200 shadow-black/70"
+            ? "bg-[#181820]/95 border-zinc-700/80 text-zinc-200 shadow-black/80"
             : "bg-white/95 border-zinc-200 text-zinc-800 shadow-zinc-900/15"
         }`}
         style={{
           boxShadow: isDark
-            ? "0 14px 36px -4px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.1)"
-            : "0 14px 36px -4px rgba(0, 0, 0, 0.16), 0 0 0 1px rgba(0, 0, 0, 0.05)",
+            ? "0 16px 40px -4px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.12)"
+            : "0 16px 40px -4px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.06)",
         }}
       >
         {/* Smart Board Badge / Title */}
-        <div className="flex items-center gap-1 px-1.5 py-1">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl">
           <div
-            className={`w-2 h-2 rounded-full ${
+            className={`w-2.5 h-2.5 rounded-full ${
               isLowEnd ? "bg-amber-400" : "bg-emerald-400"
-            } animate-pulse`}
+            } animate-pulse shrink-0`}
             title={isLowEnd ? "Low-RAM Smart Board Mode Active" : "Smart Board Mode Ready"}
           />
-          <span className="hidden md:inline text-[11px] font-semibold tracking-wide uppercase opacity-75">
+          <span className="hidden md:inline text-[11px] font-bold tracking-wider uppercase opacity-80">
             Board
           </span>
         </div>
 
-        <div className={`w-[1px] h-5 ${isDark ? "bg-zinc-700/60" : "bg-zinc-200"}`} />
+        <div className={`w-[1px] h-6 mx-1 ${isDark ? "bg-zinc-700/70" : "bg-zinc-200"}`} />
 
         {!collapsed && (
           <>
@@ -138,13 +138,13 @@ export default function SmartBoardDock({
             <button
               type="button"
               onClick={() => onSelectTool("pen")}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all active:scale-95 cursor-pointer min-h-[38px] ${
+              className={`flex items-center gap-2 px-4 py-2 h-10 rounded-xl text-xs font-semibold transition-all active:scale-95 cursor-pointer shrink-0 ${
                 isPenActive
                   ? isDark
-                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/40"
-                    : "bg-[#6965db] text-white shadow-md shadow-indigo-500/30"
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/50 ring-1 ring-indigo-400/30"
+                    : "bg-[#6965db] text-white shadow-lg shadow-indigo-500/40 ring-1 ring-indigo-300"
                   : isDark
-                  ? "hover:bg-zinc-700/60 text-zinc-300"
+                  ? "hover:bg-zinc-800/80 text-zinc-300"
                   : "hover:bg-zinc-100 text-zinc-700"
               }`}
               title="Smart Board Pen — fine precision ink for writing and stylus input"
@@ -158,13 +158,9 @@ export default function SmartBoardDock({
             <button
               type="button"
               onClick={() => onSelectTool("handDraw")}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all active:scale-95 cursor-pointer min-h-[38px] ${
-                isPenActive
-                  ? isDark
-                    ? "hover:bg-zinc-700/60 text-zinc-300"
-                    : "hover:bg-zinc-100 text-zinc-700"
-                  : isDark
-                  ? "hover:bg-zinc-700/60 text-zinc-300"
+              className={`flex items-center gap-2 px-4 py-2 h-10 rounded-xl text-xs font-semibold transition-all active:scale-95 cursor-pointer shrink-0 ${
+                isDark
+                  ? "hover:bg-zinc-800/80 text-zinc-300"
                   : "hover:bg-zinc-100 text-zinc-700"
               }`}
               title="Hand Draw — draw smoothly with your fingers on touchscreen"
@@ -177,13 +173,13 @@ export default function SmartBoardDock({
             <button
               type="button"
               onClick={() => onSelectTool("pan")}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all active:scale-95 cursor-pointer min-h-[38px] ${
+              className={`flex items-center gap-2 px-4 py-2 h-10 rounded-xl text-xs font-semibold transition-all active:scale-95 cursor-pointer shrink-0 ${
                 isPanActive
                   ? isDark
-                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/40"
-                    : "bg-[#6965db] text-white shadow-md shadow-indigo-500/30"
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/50 ring-1 ring-indigo-400/30"
+                    : "bg-[#6965db] text-white shadow-lg shadow-indigo-500/40 ring-1 ring-indigo-300"
                   : isDark
-                  ? "hover:bg-zinc-700/60 text-zinc-300"
+                  ? "hover:bg-zinc-800/80 text-zinc-300"
                   : "hover:bg-zinc-100 text-zinc-700"
               }`}
               title="Hand Pan — scroll and navigate without drawing accidental marks"
@@ -197,13 +193,13 @@ export default function SmartBoardDock({
             <button
               type="button"
               onClick={() => onSelectTool("eraser")}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all active:scale-95 cursor-pointer min-h-[38px] ${
+              className={`flex items-center gap-2 px-4 py-2 h-10 rounded-xl text-xs font-semibold transition-all active:scale-95 cursor-pointer shrink-0 ${
                 isEraserActive
                   ? isDark
-                    ? "bg-rose-600 text-white shadow-md shadow-rose-600/40"
-                    : "bg-rose-500 text-white shadow-md shadow-rose-500/30"
+                    ? "bg-rose-600 text-white shadow-lg shadow-rose-600/50 ring-1 ring-rose-400/30"
+                    : "bg-rose-500 text-white shadow-lg shadow-rose-500/40 ring-1 ring-rose-300"
                   : isDark
-                  ? "hover:bg-zinc-700/60 text-zinc-300"
+                  ? "hover:bg-zinc-800/80 text-zinc-300"
                   : "hover:bg-zinc-100 text-zinc-700"
               }`}
               title="Eraser — wipe away ink strokes or whiteboard objects"
@@ -213,14 +209,14 @@ export default function SmartBoardDock({
               <span className="hidden sm:inline">Eraser</span>
             </button>
 
-            <div className={`w-[1px] h-5 ${isDark ? "bg-zinc-700/60" : "bg-zinc-200"}`} />
+            <div className={`w-[1px] h-6 mx-1 ${isDark ? "bg-zinc-700/70" : "bg-zinc-200"}`} />
 
             {/* Undo */}
             <button
               type="button"
               onClick={onUndo}
-              className={`p-2 rounded-xl text-xs transition-all active:scale-95 cursor-pointer min-w-[36px] min-h-[38px] flex items-center justify-center ${
-                isDark ? "hover:bg-zinc-700/60 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"
+              className={`w-10 h-10 rounded-xl text-xs transition-all active:scale-95 cursor-pointer flex items-center justify-center shrink-0 ${
+                isDark ? "hover:bg-zinc-800/80 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"
               }`}
               title="Undo last action"
               aria-label="Undo"
@@ -232,8 +228,8 @@ export default function SmartBoardDock({
             <button
               type="button"
               onClick={onRedo}
-              className={`p-2 rounded-xl text-xs transition-all active:scale-95 cursor-pointer min-w-[36px] min-h-[38px] flex items-center justify-center ${
-                isDark ? "hover:bg-zinc-700/60 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"
+              className={`w-10 h-10 rounded-xl text-xs transition-all active:scale-95 cursor-pointer flex items-center justify-center shrink-0 ${
+                isDark ? "hover:bg-zinc-800/80 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"
               }`}
               title="Redo action"
               aria-label="Redo"
@@ -244,14 +240,14 @@ export default function SmartBoardDock({
             {/* PWA Install Button (Prompt or Standalone Status) */}
             {!isInstalled && (
               <>
-                <div className={`w-[1px] h-5 ${isDark ? "bg-zinc-700/60" : "bg-zinc-200"}`} />
+                <div className={`w-[1px] h-6 mx-1 ${isDark ? "bg-zinc-700/70" : "bg-zinc-200"}`} />
                 <button
                   type="button"
                   onClick={handleInstallClick}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 cursor-pointer min-h-[38px] ${
+                  className={`flex items-center gap-2.5 px-4 sm:px-5 py-2 h-10 rounded-xl text-xs font-semibold transition-all active:scale-95 cursor-pointer shrink-0 ${
                     isDark
-                      ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-700/30 hover:brightness-110"
-                      : "bg-emerald-600 text-white shadow-md shadow-emerald-600/25 hover:bg-emerald-700"
+                      ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-700/40 hover:brightness-110 ring-1 ring-emerald-400/30"
+                      : "bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 hover:bg-emerald-700 ring-1 ring-emerald-400/40"
                   }`}
                   title="Download and install Explaino on this phone or school smart board"
                 >
@@ -262,7 +258,7 @@ export default function SmartBoardDock({
             )}
 
             {installSuccess && (
-              <span className="text-xs text-emerald-400 font-medium px-2 animate-bounce">
+              <span className="text-xs text-emerald-400 font-semibold px-3 animate-bounce">
                 Installed!
               </span>
             )}
@@ -273,8 +269,8 @@ export default function SmartBoardDock({
         <button
           type="button"
           onClick={() => setCollapsed(!collapsed)}
-          className={`p-2 rounded-xl text-xs transition-all active:scale-95 cursor-pointer min-w-[32px] min-h-[38px] flex items-center justify-center ${
-            isDark ? "hover:bg-zinc-700/60 text-zinc-400" : "hover:bg-zinc-100 text-zinc-500"
+          className={`w-9 h-9 rounded-xl text-xs transition-all active:scale-95 cursor-pointer flex items-center justify-center shrink-0 ${
+            isDark ? "hover:bg-zinc-800/80 text-zinc-400" : "hover:bg-zinc-100 text-zinc-500"
           }`}
           title={collapsed ? "Expand Smart Board dock" : "Minimize Smart Board dock"}
           aria-label={collapsed ? "Expand Dock" : "Minimize Dock"}
