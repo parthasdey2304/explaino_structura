@@ -473,10 +473,14 @@ export default function TextToDiagramModal({
                     type="button"
                     onClick={() => handleGenerate()}
                     disabled={isGenerating || !prompt.trim()}
-                    className="w-full inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl font-semibold text-sm text-white transition-all shadow-lg shadow-indigo-600/30 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.99]"
                     style={{
+                      padding: "13px 24px",
+                      minHeight: "46px",
+                      boxSizing: "border-box",
                       background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
                     }}
+                    className="text-to-diagram-generate-btn w-full inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl font-semibold text-sm text-white transition-all shadow-lg shadow-indigo-600/30 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.99]"
+                    
                   >
                     {isGenerating ? (
                       <>
@@ -605,7 +609,8 @@ export default function TextToDiagramModal({
                 <button
                   type="button"
                   onClick={() => setZoomScale((s) => Math.max(0.4, Number((s - 0.15).toFixed(2))))}
-                  className={`p-1.5 rounded-lg transition cursor-pointer ${
+                  style={{ padding: "6px 8px", boxSizing: "border-box" }}
+                  className={`text-to-diagram-zoom-btn p-1.5 rounded-lg transition cursor-pointer ${
                     isDark ? "text-zinc-400 hover:text-white hover:bg-zinc-800" : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
                   }`}
                   title="Zoom Out"
@@ -626,7 +631,8 @@ export default function TextToDiagramModal({
                 <button
                   type="button"
                   onClick={() => setZoomScale((s) => Math.min(2.5, Number((s + 0.15).toFixed(2))))}
-                  className={`p-1.5 rounded-lg transition cursor-pointer ${
+                  style={{ padding: "6px 8px", boxSizing: "border-box" }}
+                  className={`text-to-diagram-zoom-btn p-1.5 rounded-lg transition cursor-pointer ${
                     isDark ? "text-zinc-400 hover:text-white hover:bg-zinc-800" : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
                   }`}
                   title="Zoom In"
@@ -636,7 +642,8 @@ export default function TextToDiagramModal({
                 <button
                   type="button"
                   onClick={() => setZoomScale(1)}
-                  className={`p-1.5 rounded-lg transition cursor-pointer ${
+                  style={{ padding: "6px 8px", boxSizing: "border-box" }}
+                  className={`text-to-diagram-zoom-btn p-1.5 rounded-lg transition cursor-pointer ${
                     isDark ? "text-zinc-400 hover:text-white hover:bg-zinc-800" : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
                   }`}
                   title="Fit to Frame"
