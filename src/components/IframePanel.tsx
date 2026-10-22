@@ -30,7 +30,7 @@ export interface IframePanelProps {
   onLayoutChange?: (layout: IframePanelLayout) => void;
 }
 
-export const CODE_SERVER_SECURE_URL = "https://13.49.76.201.sslip.io/";
+export const CODE_SERVER_SECURE_URL = "https://13.49.76.201.sslip.io/?folder=/home/ubuntu/workspace";
 export const CANVAS_SCREEN_STORAGE_KEY = "explaino-canvas-screen-state";
 
 export interface CanvasScreenSavedState {

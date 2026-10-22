@@ -529,12 +529,16 @@ export default function ExcalidrawWrapper() {
           const target = api.getSceneElements().find((el) => el.id === editingId);
           const raw = target ? (target as unknown as { customData?: { markdownRaw?: string } }).customData?.markdownRaw : undefined;
           if (target && typeof raw === "string" && (target as unknown as { text?: string }).text !== raw) {
-            api.updateScene({
-              elements: api.getSceneElements().map((el) =>
-                el.id === editingId && !el.isDeleted && el.type === "text"
-                  ? ({ ...el, text: raw, originalText: raw } as typeof el)
-                  : el
-              ),
+            queueMicrotask(() => {
+              const currentApi = excalidrawAPI.current;
+              if (!currentApi) return;
+              currentApi.updateScene({
+                elements: currentApi.getSceneElements().map((el) =>
+                  el.id === editingId && !el.isDeleted && el.type === "text"
+                    ? ({ ...el, text: raw, originalText: raw } as typeof el)
+                    : el
+                ),
+              });
             });
           }
         }
@@ -546,13 +550,19 @@ export default function ExcalidrawWrapper() {
           if (target && !target.isDeleted && target.type === "text") {
             const raw = (target as unknown as { text?: string }).text ?? "";
             const rendered = stripMarkdown(raw);
-            api.updateScene({
-              elements: api.getSceneElements().map((el) =>
-                el.id === prevEditingId && !el.isDeleted && el.type === "text"
-                  ? ({ ...el, text: rendered, originalText: rendered, customData: { ...((el as any).customData ?? {}), markdownRaw: raw } } as typeof el)
-                  : el
-              ),
-            });
+            if (raw !== rendered) {
+              queueMicrotask(() => {
+                const currentApi = excalidrawAPI.current;
+                if (!currentApi) return;
+                currentApi.updateScene({
+                  elements: currentApi.getSceneElements().map((el) =>
+                    el.id === prevEditingId && !el.isDeleted && el.type === "text"
+                      ? ({ ...el, text: rendered, originalText: rendered, customData: { ...((el as any).customData ?? {}), markdownRaw: raw } } as typeof el)
+                      : el
+                  ),
+                });
+              });
+            }
           }
         }
         editingTextIdRef.current = null;
@@ -1567,6 +1577,222 @@ export default function ExcalidrawWrapper() {
     ]
   );
 
+  const handleExcalidrawAPI = useCallback((api: ExcalidrawImperativeAPI) => {
+    excalidrawAPI.current = api;
+    setApiReady(true);
+  }, []);
+
+  const handleToggleTodos = useCallback(() => setShowTodos((v) => !v), []);
+  const handleOpenDiagramModal = useCallback(() => setShowTextToDiagramModal(true), []);
+
+  const mainMenuContent = useMemo(
+    () => (
+      <MainMenu>
+        <MainMenu.DefaultItems.LoadScene />
+        <MainMenu.DefaultItems.SaveToActiveFile />
+        <MainMenu.Item
+          onSelect={handleSaveClick}
+          icon={<Save />}
+          className="explaino-menu-item"
+          title="Save drawing to cloud (Firebase)"
+        >
+          Save to Cloud
+        </MainMenu.Item>
+        <MainMenu.DefaultItems.Export />
+        <MainMenu.DefaultItems.SaveAsImage />
+        <MainMenu.DefaultItems.SearchMenu />
+        <MainMenu.DefaultItems.Help />
+        <MainMenu.DefaultItems.ClearCanvas />
+        <MainMenu.Separator />
+        <MainMenu.ItemLink
+          href={REPO_URL}
+          icon={<GithubIcon />}
+          rel="noreferrer noopener"
+          target="_blank"
+        >
+          explaino_structura
+        </MainMenu.ItemLink>
+        <MainMenu.ItemLink
+          href={CREATOR_GITHUB_URL}
+          icon={<CreatorAvatarIcon />}
+          rel="noreferrer noopener"
+          target="_blank"
+        >
+          Creator: Parth Vastavik
+        </MainMenu.ItemLink>
+        <MainMenu.Separator />
+        <MainMenu.DefaultItems.ChangeCanvasBackground />
+        <MainMenu.Item
+          onSelect={handleToggleTodos}
+          icon={<ListTodo size={16} strokeWidth={2.2} />}
+          className="explaino-menu-item"
+          title="Todo list"
+        >
+          Todos
+        </MainMenu.Item>
+        <MainMenu.Item
+          onSelect={handleOpenDiagramModal}
+          icon={<Sparkles size={16} strokeWidth={2.2} />}
+          className="explaino-menu-item"
+          title="Text to Diagram / Mermaid"
+        >
+          Text to Diagram
+        </MainMenu.Item>
+      </MainMenu>
+    ),
+    [handleSaveClick, handleToggleTodos, handleOpenDiagramModal]
+  );
+
+  const renderTopRightUI = useCallback(() => {
+    if (isSmallScreen) return null;
+    return (
+      <div className="hidden lg:flex items-center gap-1.5" style={{ marginLeft: 8 }}>
+        <button
+          type="button"
+          onClick={() => setLaserActive((v) => !v)}
+          className="excalidraw-button"
+          style={
+            laserActive
+              ? theme === "dark"
+                ? {
+                    ...PANEL_BUTTON_STYLE,
+                    background: "#e0dfff",
+                    color: "#030064",
+                  }
+                : {
+                    ...PANEL_BUTTON_STYLE,
+                    background: "var(--color-on-primary-container, #030064)",
+                    color: "#ffffff",
+                  }
+              : PANEL_BUTTON_STYLE
+          }
+          title="Laser pointer — transient red marks that fade away (never saved, never undoable). Esc to exit."
+          aria-pressed={laserActive}
+        >
+          <Zap size={16} strokeWidth={2.2} />
+          <span className="hidden xl:inline" style={{ marginLeft: 4 }}>Laser</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setShowIframePanel((v) => {
+              const next = !v;
+              saveScreenState({ isOpen: next });
+              return next;
+            });
+          }}
+          className="excalidraw-button"
+          style={PANEL_BUTTON_STYLE}
+          title="Open screen / browser panel"
+          aria-pressed={showIframePanel}
+        >
+          <Monitor size={16} strokeWidth={2.2} />
+          <span className="hidden xl:inline" style={{ marginLeft: 4 }}>Screen</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowTextToDiagramModal(true)}
+          className="excalidraw-button"
+          style={PANEL_BUTTON_STYLE}
+          title="Text to Diagram / Mermaid — generate editable diagrams from prompts or Mermaid code"
+          aria-label="Text to Diagram"
+        >
+          <Sparkles size={16} strokeWidth={2.2} />
+          <span className="hidden xl:inline" style={{ marginLeft: 4 }}>Diagram</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          className="excalidraw-button"
+          style={{
+            height: "2rem",
+            padding: "0 0.6rem",
+            minWidth: "2.6rem",
+            fontSize: "0.8rem",
+            borderRadius: "0.5rem",
+            background: "var(--color-surface-primary-container, #e0dfff)",
+            color: "var(--color-on-primary-container, #030064)",
+            border: "none",
+            cursor: "pointer",
+            fontWeight: 500,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          title="Toggle dark mode"
+        >
+          {theme === "dark" ? (
+            <Sun size={16} strokeWidth={2.2} />
+          ) : (
+            <Moon size={16} strokeWidth={2.2} />
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const api = excalidrawAPI.current;
+            if (!showDataStructuresPanel && api) {
+              api.updateScene({ appState: { showLibrary: false } as unknown as AppState });
+              if (showCodePanel) setShowCodePanel(false);
+            }
+            setShowDataStructuresPanel(!showDataStructuresPanel);
+          }}
+          className="excalidraw-button"
+          style={{
+            height: "2rem",
+            padding: "0 0.6rem",
+            minWidth: "2.6rem",
+            fontSize: "0.8rem",
+            borderRadius: "0.5rem",
+            background: "var(--color-surface-primary-container, #e0dfff)",
+            color: "var(--color-on-primary-container, #030064)",
+            border: "none",
+            cursor: "pointer",
+            fontWeight: 500,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          title="Data structure diagrams"
+        >
+          <Boxes size={16} strokeWidth={2.2} />
+        </button>
+        <button
+          type="button"
+          onClick={handleInsertTable}
+          className="excalidraw-button"
+          style={{
+            height: "2rem",
+            padding: "0 0.6rem",
+            minWidth: "2.6rem",
+            fontSize: "0.8rem",
+            borderRadius: "0.5rem",
+            background: "var(--color-surface-primary-container, #e0dfff)",
+            color: "var(--color-on-primary-container, #030064)",
+            border: "none",
+            cursor: "pointer",
+            fontWeight: 500,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          title="Insert editable table"
+          aria-label="Insert editable table"
+        >
+          <Grid3x3 size={16} strokeWidth={2.2} />
+        </button>
+      </div>
+    );
+  }, [
+    isSmallScreen,
+    laserActive,
+    theme,
+    showIframePanel,
+    showDataStructuresPanel,
+    showCodePanel,
+    handleInsertTable,
+  ]);
+
   // QuickShape hold-detection pipeline managed via useQuickShape hook
   useQuickShape(excalidrawAPI, apiReady);
 
@@ -1583,215 +1809,15 @@ export default function ExcalidrawWrapper() {
         onDrop={handleCanvasDrop}
       >
       <ExcalidrawComponent
-        excalidrawAPI={(api) => {
-          excalidrawAPI.current = api;
-          setApiReady(true);
-        }}
+        excalidrawAPI={handleExcalidrawAPI}
         onChange={handleOnChange}
         initialData={initialData}
         name={drawingName}
         theme={theme}
-        renderTopRightUI={() => {
-          if (isSmallScreen) return null;
-          return (
-          <div className="hidden lg:flex items-center gap-1.5" style={{ marginLeft: 8 }}>
-            <button
-              type="button"
-              onClick={() => setLaserActive((v) => !v)}
-              className="excalidraw-button"
-              style={
-                laserActive
-                  ? theme === "dark"
-                    ? {
-                        ...PANEL_BUTTON_STYLE,
-                        background: "#e0dfff",
-                        color: "#030064",
-                      }
-                    : {
-                        ...PANEL_BUTTON_STYLE,
-                        background: "var(--color-on-primary-container, #030064)",
-                        color: "#ffffff",
-                      }
-                  : PANEL_BUTTON_STYLE
-              }
-              title="Laser pointer — transient red marks that fade away (never saved, never undoable). Esc to exit."
-              aria-pressed={laserActive}
-            >
-              <Zap size={16} strokeWidth={2.2} />
-              <span className="hidden xl:inline" style={{ marginLeft: 4 }}>Laser</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setShowIframePanel((v) => {
-                  const next = !v;
-                  saveScreenState({ isOpen: next });
-                  return next;
-                });
-              }}
-              className="excalidraw-button"
-              style={PANEL_BUTTON_STYLE}
-              title="Open screen / browser panel"
-              aria-pressed={showIframePanel}
-            >
-              <Monitor size={16} strokeWidth={2.2} />
-              <span className="hidden xl:inline" style={{ marginLeft: 4 }}>Screen</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowTextToDiagramModal(true)}
-              className="excalidraw-button"
-              style={PANEL_BUTTON_STYLE}
-              title="Text to Diagram / Mermaid — generate editable diagrams from prompts or Mermaid code"
-              aria-label="Text to Diagram"
-            >
-              <Sparkles size={16} strokeWidth={2.2} />
-              <span className="hidden xl:inline" style={{ marginLeft: 4 }}>Diagram</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="excalidraw-button"
-              style={{
-                height: "2rem",
-                padding: "0 0.6rem",
-                minWidth: "2.6rem",
-                fontSize: "0.8rem",
-                borderRadius: "0.5rem",
-                background: "var(--color-surface-primary-container, #e0dfff)",
-                color: "var(--color-on-primary-container, #030064)",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 500,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-              title="Toggle dark mode"
-            >
-              {theme === "dark" ? (
-                <Sun size={16} strokeWidth={2.2} />
-              ) : (
-                <Moon size={16} strokeWidth={2.2} />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const api = excalidrawAPI.current;
-                if (!showDataStructuresPanel && api) {
-                  api.updateScene({ appState: { showLibrary: false } as unknown as AppState });
-                  if (showCodePanel) setShowCodePanel(false);
-                }
-                setShowDataStructuresPanel(!showDataStructuresPanel);
-              }}
-              className="excalidraw-button"
-              style={{
-                height: "2rem",
-                padding: "0 0.6rem",
-                minWidth: "2.6rem",
-                fontSize: "0.8rem",
-                borderRadius: "0.5rem",
-                background: "var(--color-surface-primary-container, #e0dfff)",
-                color: "var(--color-on-primary-container, #030064)",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 500,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-              title="Data structure diagrams"
-            >
-              <Boxes size={16} strokeWidth={2.2} />
-            </button>
-            <button
-              type="button"
-              onClick={handleInsertTable}
-              className="excalidraw-button"
-              style={{
-                height: "2rem",
-                padding: "0 0.6rem",
-                minWidth: "2.6rem",
-                fontSize: "0.8rem",
-                borderRadius: "0.5rem",
-                background: "var(--color-surface-primary-container, #e0dfff)",
-                color: "var(--color-on-primary-container, #030064)",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 500,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-              title="Insert editable table"
-              aria-label="Insert editable table"
-            >
-              <Grid3x3 size={16} strokeWidth={2.2} />
-            </button>
-          </div>
-          );
-        }}
+        renderTopRightUI={renderTopRightUI}
       >
-        {/* Custom hamburger menu. Supplying our own children replaces
-            Excalidraw's default menu, which is how the "Excalidraw links",
-            "Follow us" and "Discord chat" entries are dropped: they all come
-            from the single <DefaultItems.Socials /> group, which we omit.
-            The theme toggle is omitted too, since the toolbar already has a
-            sun/moon button and `theme` is a controlled prop here. */}
-        <MainMenu>
-          <MainMenu.DefaultItems.LoadScene />
-          <MainMenu.DefaultItems.SaveToActiveFile />
-          <MainMenu.Item
-            onSelect={handleSaveClick}
-            icon={<Save />}
-            className="explaino-menu-item"
-            title="Save drawing to cloud (Firebase)"
-          >
-            Save to Cloud
-          </MainMenu.Item>
-          <MainMenu.DefaultItems.Export />
-          <MainMenu.DefaultItems.SaveAsImage />
-          <MainMenu.DefaultItems.SearchMenu />
-          <MainMenu.DefaultItems.Help />
-          <MainMenu.DefaultItems.ClearCanvas />
-          <MainMenu.Separator />
-          <MainMenu.ItemLink
-            href={REPO_URL}
-            icon={<GithubIcon />}
-            rel="noreferrer noopener"
-            target="_blank"
-          >
-            explaino_structura
-          </MainMenu.ItemLink>
-          <MainMenu.ItemLink
-            href={CREATOR_GITHUB_URL}
-            icon={<CreatorAvatarIcon />}
-            rel="noreferrer noopener"
-            target="_blank"
-          >
-            Creator: Parth Vastavik
-          </MainMenu.ItemLink>
-          <MainMenu.Separator />
-          <MainMenu.DefaultItems.ChangeCanvasBackground />
-          <MainMenu.Item
-            onSelect={() => setShowTodos((v) => !v)}
-            icon={<ListTodo size={16} strokeWidth={2.2} />}
-            className="explaino-menu-item"
-            title="Todo list"
-          >
-            Todos
-          </MainMenu.Item>
-          <MainMenu.Item
-            onSelect={() => setShowTextToDiagramModal(true)}
-            icon={<Sparkles size={16} strokeWidth={2.2} />}
-            className="explaino-menu-item"
-            title="Text to Diagram / Mermaid"
-          >
-            Text to Diagram
-          </MainMenu.Item>
-        </MainMenu>
-        </ExcalidrawComponent>
+        {mainMenuContent}
+      </ExcalidrawComponent>
       {/* Transient laser-pointer layer: screen-space only, never touches the
           scene or the undo/redo history. */}
       <LaserOverlay active={laserActive} />
