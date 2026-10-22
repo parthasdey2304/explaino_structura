@@ -89,12 +89,14 @@
 }
 
 /* â”€â”€ Reset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-*,
-*::before,
-*::after {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+@layer base {
+  *,
+  *::before,
+  *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
 }
 
 html,
@@ -4886,5 +4888,76 @@ canvas,
 
 .text-to-diagram-tip {
   padding: 14px 18px !important;
+  box-sizing: border-box !important;
+}
+
+.text-to-diagram-ai-badge {
+  padding: 3px 10px !important;
+  line-height: 1.2 !important;
+  box-sizing: border-box !important;
+}
+
+.text-to-diagram-tab-container {
+  padding: 4px !important;
+  box-sizing: border-box !important;
+}
+
+.text-to-diagram-tab-btn {
+  padding: 7px 16px !important;
+  line-height: 1.2 !important;
+  box-sizing: border-box !important;
+}
+
+.text-to-diagram-shortcut-badge {
+  padding: 4px 9px !important;
+  line-height: 1.2 !important;
+  box-sizing: border-box !important;
+}
+
+.text-to-diagram-textarea {
+  padding: 14px 16px !important;
+  box-sizing: border-box !important;
+}
+
+.text-to-diagram-template-btn {
+  padding: 10px 14px !important;
+  box-sizing: border-box !important;
+}
+
+.text-to-diagram-generate-btn {
+  padding: 13px 24px !important;
+  min-height: 46px !important;
+  box-sizing: border-box !important;
+}
+
+.text-to-diagram-action-btn {
+  padding: 6px 14px !important;
+  line-height: 1.2 !important;
+  box-sizing: border-box !important;
+}
+
+.text-to-diagram-ready-badge {
+  padding: 3px 10px !important;
+  line-height: 1.2 !important;
+  box-sizing: border-box !important;
+}
+
+.text-to-diagram-zoom-hud {
+  padding: 4px 8px !important;
+  box-sizing: border-box !important;
+}
+
+.text-to-diagram-zoom-btn {
+  padding: 6px 8px !important;
+  box-sizing: border-box !important;
+}
+
+.text-to-diagram-zoom-label {
+  padding: 4px 8px !important;
+  box-sizing: border-box !important;
+}
+
+.text-to-diagram-preview-canvas {
+  padding: 28px !important;
   box-sizing: border-box !important;
 }
