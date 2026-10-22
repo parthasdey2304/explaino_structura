@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { ExcalidrawErrorBoundary } from "@/components/ExcalidrawErrorBoundary";
+import AuthGate from "@/components/AuthGate";
 
 const ExcalidrawWrapper = dynamic(
   () => import("@/components/ExcalidrawWrapper"),
@@ -15,10 +16,10 @@ const ExcalidrawWrapper = dynamic(
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#fff",
+          background: "#0c0c0e",
         }}
       >
-        <span style={{ color: "#999", fontSize: 14 }}>Loading canvas…</span>
+        <span style={{ color: "#a1a1aa", fontSize: 14 }}>Loading canvas…</span>
       </div>
     ),
   }
@@ -26,8 +27,10 @@ const ExcalidrawWrapper = dynamic(
 
 export default function Home() {
   return (
-    <ExcalidrawErrorBoundary>
-      <ExcalidrawWrapper />
-    </ExcalidrawErrorBoundary>
+    <AuthGate>
+      <ExcalidrawErrorBoundary>
+        <ExcalidrawWrapper />
+      </ExcalidrawErrorBoundary>
+    </AuthGate>
   );
 }
