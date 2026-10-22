@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 import {
   viewportCoordsToSceneCoords,
   sceneCoordsToViewportCoords,
@@ -40,6 +40,8 @@ export interface IframePanelProps {
 
 export const CODE_SERVER_SECURE_URL = "https://13.49.76.201.sslip.io/?folder=/home/ubuntu/workspace";
 export const CANVAS_SCREEN_STORAGE_KEY = "explaino-canvas-screen-state";
+
+export type ServerHealthStatus = "loading" | "online" | "offline";
 
 export interface CanvasScreenSavedState {
   isOpen: boolean;
@@ -92,6 +94,11 @@ export default function IframePanel({
   const [isHoveredTraffic, setIsHoveredTraffic] = useState(false);
   const [isHoveredOverlay, setIsHoveredOverlay] = useState(false);
 
+  // Server health state: 'loading' | 'online' | 'offline'
+  const [serverHealth, setServerHealth] = useState<ServerHealthStatus>("loading");
+  const [isCheckingHealth, setIsCheckingHealth] = useState(false);
+  const [iframeKey, setIframeKey] = useState(0);
+
   // Local active state with prop synchronization
   const [localIsActive, setLocalIsActive] = useState(false);
   const isActive = controlledIsActive !== undefined ? controlledIsActive : localIsActive;
@@ -103,6 +110,69 @@ export default function IframePanel({
     },
     [onActiveChange]
   );
+
+  // Check code-server health status
+  const checkServerHealth = useCallback(async () => {
+    setIsCheckingHealth(true);
+    try {
+      // 1. Try our Next.js health endpoint
+      const res = await fetch("/api/code-server-health", {
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      });
+
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data && data.online === true) {
+          setServerHealth("online");
+          setIsCheckingHealth(false);
+          return true;
+        }
+      }
+
+      // 2. Direct fetch fallback with CORS
+      const direct = await fetch("https://13.49.76.201.sslip.io/healthz", {
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      }).catch(() => null);
+
+      if (direct && direct.ok) {
+        const directData = await direct.json().catch(() => null);
+        if (directData && directData.status === "alive") {
+          setServerHealth("online");
+          setIsCheckingHealth(false);
+          return true;
+        }
+      }
+
+      setServerHealth("offline");
+      setIsLoading(false);
+      setIsCheckingHealth(false);
+      return false;
+    } catch {
+      setServerHealth("offline");
+      setIsLoading(false);
+      setIsCheckingHealth(false);
+      return false;
+    }
+  }, []);
+
+  // Periodic health check every 15 seconds & on initial mount
+  useEffect(() => {
+    checkServerHealth();
+    const interval = setInterval(checkServerHealth, 15000);
+    return () => clearInterval(interval);
+  }, [checkServerHealth]);
+
+  // Retry connection when server was offline
+  const handleRetry = useCallback(async () => {
+    setIsLoading(true);
+    setServerHealth("loading");
+    const ok = await checkServerHealth();
+    if (ok) {
+      setIframeKey((prev) => prev + 1);
+    }
+  }, [checkServerHealth]);
 
   // If a drawing tool is selected (line, arrow, circle, rectangle, draw, text), release active mode
   useEffect(() => {
@@ -414,7 +484,37 @@ export default function IframePanel({
 
   const handleIframeLoad = useCallback(() => {
     setIsLoading(false);
+    checkServerHealth();
+  }, [checkServerHealth]);
+
+  const handleIframeError = useCallback(() => {
+    setIsLoading(false);
+    setServerHealth("offline");
   }, []);
+
+  // Compute indicator dot color and shadow
+  const statusColorInfo = useMemo(() => {
+    if (serverHealth === "offline") {
+      return {
+        color: "#ef4444",
+        glow: "0 0 8px rgba(239, 68, 68, 0.85)",
+        label: "Offline (502 Bad Gateway)",
+      };
+    }
+    if (serverHealth === "loading" || isLoading) {
+      return {
+        color: "#f59e0b",
+        glow: "0 0 8px rgba(245, 158, 11, 0.85)",
+        label: "Loading...",
+      };
+    }
+    // Only green when online AND fully visible/loaded
+    return {
+      color: "#22c55e",
+      glow: "0 0 8px rgba(34, 197, 94, 0.85)",
+      label: "Online & Connected",
+    };
+  }, [serverHealth, isLoading]);
 
   return (
     <div
@@ -434,9 +534,13 @@ export default function IframePanel({
         borderRadius: 16,
         border: isActive
           ? "1.5px solid rgba(99, 102, 241, 0.75)"
+          : serverHealth === "offline"
+          ? "1.5px solid rgba(239, 68, 68, 0.45)"
           : "1.5px solid rgba(255, 255, 255, 0.14)",
         boxShadow: isActive
           ? "0 0 0 2px rgba(99, 102, 241, 0.25), 0 24px 60px -12px rgba(0, 0, 0, 0.85)"
+          : serverHealth === "offline"
+          ? "0 0 0 1px rgba(239, 68, 68, 0.2), 0 24px 60px -12px rgba(0, 0, 0, 0.8)"
           : "0 24px 60px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08)",
         overflow: "hidden",
         userSelect: isDragging || isResizing ? "none" : "auto",
@@ -460,6 +564,8 @@ export default function IframePanel({
           background: isActive ? "#1e1e26" : "#1c1c21",
           borderBottom: isActive
             ? "1px solid rgba(99, 102, 241, 0.28)"
+            : serverHealth === "offline"
+            ? "1px solid rgba(239, 68, 68, 0.25)"
             : "1px solid rgba(255, 255, 255, 0.08)",
           flexShrink: 0,
           userSelect: "none",
@@ -605,7 +711,7 @@ export default function IframePanel({
           </button>
         </div>
 
-        {/* Center / Right: Interactive Mode Status & Code Server Label */}
+        {/* Center / Right: Interactive Mode Status & Code Server Status Dot */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {/* Active Status Badge */}
           {isActive ? (
@@ -683,6 +789,7 @@ export default function IframePanel({
             </div>
           )}
 
+          {/* CODE SERVER Label with Dynamic Status Dot (Red when 502/down, Amber when loading, Green ONLY when online & visible) */}
           <div
             style={{
               fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
@@ -693,9 +800,23 @@ export default function IframePanel({
               textTransform: "uppercase",
               display: "flex",
               alignItems: "center",
-              gap: 6,
+              gap: 7,
+              cursor: "pointer",
             }}
+            onClick={checkServerHealth}
+            title={`Code Server: ${statusColorInfo.label}. Click to re-check.`}
           >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background: statusColorInfo.color,
+                boxShadow: statusColorInfo.glow,
+                display: "inline-block",
+                transition: "background 0.25s ease, box-shadow 0.25s ease",
+              }}
+            />
             <span>CODE SERVER</span>
           </div>
         </div>
@@ -713,7 +834,7 @@ export default function IframePanel({
         }}
       >
         {/* Loading Spinner */}
-        {isLoading && (
+        {(isLoading || serverHealth === "loading") && serverHealth !== "offline" && (
           <div
             style={{
               position: "absolute",
@@ -740,12 +861,81 @@ export default function IframePanel({
           </div>
         )}
 
+        {/* Offline / 502 Error Overlay */}
+        {serverHealth === "offline" && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "#18181b",
+              color: "#f4f4f5",
+              zIndex: 6,
+              padding: 24,
+              textAlign: "center",
+              gap: 12,
+            }}
+          >
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: "50%",
+                background: "rgba(239, 68, 68, 0.15)",
+                border: "1px solid rgba(239, 68, 68, 0.35)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#ef4444",
+                boxShadow: "0 0 16px rgba(239, 68, 68, 0.25)",
+              }}
+            >
+              <AlertTriangle size={24} />
+            </div>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#f87171", marginBottom: 4 }}>
+                Code Server Offline (502 Bad Gateway)
+              </div>
+              <div style={{ fontSize: 12, color: "#a1a1aa", maxWidth: 340, lineHeight: 1.5 }}>
+                The backend code-server process on the server is currently unreachable.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleRetry}
+              disabled={isCheckingHealth}
+              style={{
+                marginTop: 6,
+                padding: "7px 18px",
+                borderRadius: 8,
+                background: "#27272a",
+                border: "1px solid rgba(255, 255, 255, 0.14)",
+                color: "#f4f4f5",
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: isCheckingHealth ? "wait" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                transition: "background 0.15s ease",
+              }}
+            >
+              <RefreshCw size={14} className={isCheckingHealth ? "animate-spin" : ""} />
+              <span>{isCheckingHealth ? "Connecting…" : "Retry Connection"}</span>
+            </button>
+          </div>
+        )}
+
         <iframe
+          key={iframeKey}
           ref={iframeRef}
           src={CODE_SERVER_SECURE_URL}
           title="Code Server"
           onLoad={handleIframeLoad}
-          onError={() => setIsLoading(false)}
+          onError={handleIframeError}
           style={{
             position: "absolute",
             inset: 0,
@@ -759,7 +949,7 @@ export default function IframePanel({
         />
 
         {/* Canvas Mode Trackpad Scroll & Click-to-Focus Overlay */}
-        {!isActive && (
+        {!isActive && serverHealth !== "offline" && (
           <div
             className="screen-scroll-overlay"
             onWheel={forwardWheelToCanvas}
