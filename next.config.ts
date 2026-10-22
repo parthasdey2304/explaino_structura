@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/code-server",
-        destination: "http://13.49.76.201/",
+        destination: "http://13.49.76.201/login",
       },
       {
         source: "/code-server/:path*",
@@ -15,6 +15,14 @@ const nextConfig: NextConfig = {
       {
         source: "/_static/:path*",
         destination: "http://13.49.76.201/_static/:path*",
+      },
+      {
+        source: "/login",
+        destination: "http://13.49.76.201/login",
+      },
+      {
+        source: "/manifest.json",
+        destination: "http://13.49.76.201/manifest.json",
       },
     ];
   },

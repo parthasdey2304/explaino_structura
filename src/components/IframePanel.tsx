@@ -45,7 +45,7 @@ export interface IframePanelProps {
 }
 
 const CODE_SERVER_EXTERNAL_URL = "http://13.49.76.201";
-const CODE_SERVER_PROXY_PATH = "/code-server/";
+const CODE_SERVER_PROXY_PATH = "/code-server/login";
 const CODE_SERVER_PWD = "14d26b731d1571af7802cfe5";
 
 export interface SizePreset {
@@ -75,6 +75,8 @@ function isCodeServerUrl(u: string): boolean {
     !s ||
     s === CODE_SERVER_PROXY_PATH ||
     s === "/code-server" ||
+    s === "/code-server/" ||
+    s === "/code-server/login" ||
     s === CODE_SERVER_EXTERNAL_URL ||
     s === CODE_SERVER_EXTERNAL_URL + "/" ||
     s.startsWith(CODE_SERVER_EXTERNAL_URL) ||
