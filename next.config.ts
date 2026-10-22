@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/code-server",
-        destination: "https://13.49.76.201.sslip.io/",
+        destination: "https://13.49.76.201.sslip.io/?folder=/home/ubuntu/workspace",
       },
       {
         source: "/code-server/:path*",
