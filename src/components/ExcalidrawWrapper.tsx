@@ -37,7 +37,6 @@ import { createCodeCardSvg } from "@/lib/ai/highlight";
 import TodoPanel from "./TodoOverlay";
 import LaserOverlay from "./LaserOverlay";
 import RightCanvasToolbar from "./RightCanvasToolbar";
-import SmartBoardDock from "./SmartBoardDock";
 import { getOptimalSaveDebounceMs, getDeviceProfile } from "@/lib/deviceOptimization";
 
 const TextToDiagramModal = dynamic(() => import("./TextToDiagramModal"), {
@@ -382,6 +381,56 @@ export default function ExcalidrawWrapper() {
   });
   const [iframePanelLayout, setIframePanelLayout] = useState<IframePanelLayout>("center");
   const [isScreenActive, setIsScreenActive] = useState<boolean>(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<{
+    prompt: () => Promise<void>;
+    userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+  } | null>(null);
+  const [isPwaInstalled, setIsPwaInstalled] = useState(false);
+
+  useEffect(() => {
+    if (
+      typeof window !== "undefined" &&
+      (window.matchMedia("(display-mode: standalone)").matches ||
+        (window.navigator as unknown as { standalone?: boolean }).standalone === true)
+    ) {
+      setIsPwaInstalled(true);
+    }
+
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as unknown as typeof deferredPrompt);
+    };
+
+    const handleAppInstalled = () => {
+      setIsPwaInstalled(true);
+      setDeferredPrompt(null);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstall);
+    window.addEventListener("appinstalled", handleAppInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
+      window.removeEventListener("appinstalled", handleAppInstalled);
+    };
+  }, []);
+
+  const handleInstallPwa = useCallback(async () => {
+    if (!deferredPrompt) {
+      alert("To install Explaino as a Web App on this device, tap your browser menu (⋮ or Share) and select 'Install app' or 'Add to Home screen'.");
+      return;
+    }
+    try {
+      await deferredPrompt.prompt();
+      const choice = await deferredPrompt.userChoice;
+      if (choice.outcome === "accepted") {
+        setIsPwaInstalled(true);
+      }
+      setDeferredPrompt(null);
+    } catch (err) {
+      console.warn("PWA install error:", err);
+    }
+  }, [deferredPrompt]);
   const [deviceProfile, setDeviceProfile] = useState(() => getDeviceProfile());
   const localSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeToolType, setActiveToolType] = useState<string>("selection");
@@ -1795,9 +1844,7 @@ export default function ExcalidrawWrapper() {
           category: "System",
           shortcut: "Install",
           icon: <Download size={15} />,
-          run: () => {
-            window.dispatchEvent(new Event("beforeinstallprompt"));
-          },
+          run: handleInstallPwa,
         },
         {
           id: "tool-text",
@@ -2084,6 +2131,14 @@ export default function ExcalidrawWrapper() {
         >
           Creator: Parth Vastavik
         </MainMenu.ItemLink>
+        <MainMenu.Item
+          onSelect={handleInstallPwa}
+          icon={<Download size={16} strokeWidth={2.2} />}
+          className="explaino-menu-item"
+          title="Install Explaino as a Web App (PWA)"
+        >
+          {isPwaInstalled ? "Installed (Web App)" : "Install Web App"}
+        </MainMenu.Item>
         <MainMenu.Separator />
         <MainMenu.DefaultItems.ChangeCanvasBackground />
         <MainMenu.Item
@@ -2113,7 +2168,7 @@ export default function ExcalidrawWrapper() {
         </MainMenu.Item>
       </MainMenu>
     ),
-    [handleSaveClick, handleToggleTodos, handleOpenDiagramModal]
+    [handleSaveClick, handleToggleTodos, handleOpenDiagramModal, handleInstallPwa, isPwaInstalled]
   );
 
   const renderTopRightUI = useCallback(() => {
@@ -2329,16 +2384,6 @@ export default function ExcalidrawWrapper() {
           />
         </div>
       )}
-
-      {/* Floating Smart Board Dock for touchscreens, smart boards, and phones */}
-      <SmartBoardDock
-        activeToolType={activeToolType}
-        onSelectTool={handleSmartBoardToolSelect}
-        onUndo={handleCanvasUndo}
-        onRedo={handleCanvasRedo}
-        theme={theme}
-        isLowEnd={deviceProfile.isLowEnd}
-      />
 
       {/* Todo overlay — toggled by the top-left corner button */}
       {showTodos && <TodoPanel onClose={() => setShowTodos(false)} />}
