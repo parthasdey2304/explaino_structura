@@ -100,6 +100,9 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  overscroll-behavior: none;
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: none;
   font-family: "Assistant", -apple-system, BlinkMacSystemFont, "Segoe UI",
     Roboto, Helvetica, Arial, sans-serif;
   font-size: 14px;
@@ -4807,4 +4810,14 @@ canvas {
 .excalidraw .dropdown-menu-container,
 .excalidraw .main-menu-container {
   z-index: 50 !important;
+}
+
+
+/* Prevent trackpad horizontal swipe from triggering browser history navigation */
+.canvas-screen-panel,
+.screen-scroll-overlay,
+.excalidraw {
+  overscroll-behavior: none !important;
+  overscroll-behavior-x: none !important;
+  overscroll-behavior-y: none !important;
 }

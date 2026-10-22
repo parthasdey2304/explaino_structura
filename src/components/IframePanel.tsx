@@ -305,7 +305,7 @@ export default function IframePanel({
 
   // Forward wheel/trackpad events to canvas so panning and zooming work smoothly over the screen
   const forwardWheelToCanvas = useCallback(
-    (e: React.WheelEvent) => {
+    (e: React.WheelEvent | WheelEvent) => {
       // Prevent parent browser window from scrolling
       e.preventDefault();
       e.stopPropagation();
@@ -345,6 +345,25 @@ export default function IframePanel({
     [onCanvasScroll]
   );
 
+  // Prevent trackpad horizontal swipe (left/right) from triggering browser back/forward navigation
+  useEffect(() => {
+    const preventHistoryNav = (e: WheelEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.closest(".canvas-screen-panel") || target.closest(".screen-scroll-overlay"))
+      ) {
+        // Explicitly prevent default browser gesture (back/forward history navigation)
+        e.preventDefault();
+        e.stopPropagation();
+        forwardWheelToCanvas(e);
+      }
+    };
+
+    window.addEventListener("wheel", preventHistoryNav, { passive: false });
+    return () => window.removeEventListener("wheel", preventHistoryNav);
+  }, [forwardWheelToCanvas]);
+
   // Activate screen: gives keyboard and mouse focus to Code Server
   const handleActivateScreen = useCallback(
     (e?: React.PointerEvent | React.MouseEvent) => {
@@ -543,6 +562,9 @@ export default function IframePanel({
           ? "0 0 0 1px rgba(239, 68, 68, 0.2), 0 24px 60px -12px rgba(0, 0, 0, 0.8)"
           : "0 24px 60px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08)",
         overflow: "hidden",
+        overscrollBehavior: "none",
+        overscrollBehaviorX: "none",
+        overscrollBehaviorY: "none",
         userSelect: isDragging || isResizing ? "none" : "auto",
         touchAction: isDragging || isResizing ? "none" : "auto",
         transition: "border 0.18s ease, box-shadow 0.18s ease",
@@ -961,6 +983,9 @@ export default function IframePanel({
               inset: 0,
               zIndex: 10,
               cursor: "pointer",
+              overscrollBehavior: "none",
+              overscrollBehaviorX: "none",
+              overscrollBehaviorY: "none",
               background: isHoveredOverlay ? "rgba(0, 0, 0, 0.08)" : "transparent",
               display: "flex",
               alignItems: "flex-end",

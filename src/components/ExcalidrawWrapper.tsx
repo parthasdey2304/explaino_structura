@@ -53,7 +53,7 @@ import {
   type DataStructureDef,
   type StructureId,
 } from "@/lib/dataStructures";
-import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic, ListTodo, Monitor, LogOut } from "lucide-react";
+import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic, ListTodo, Monitor, LogOut, Terminal, MessageSquare, Layers, GitBranch, MousePointer, Square, Circle, Diamond, ArrowRight, Minus, PenTool, Type, Eraser, ZoomIn, ZoomOut, Maximize2, RotateCcw, Trash2, Download, RefreshCw } from "lucide-react";
 import { performClientLogout } from "./AuthGate";
 
 /**
@@ -1546,44 +1546,15 @@ export default function ExcalidrawWrapper() {
         const next = Math.max(0.1, Math.min(30, z * factor));
         a.updateScene({ appState: { zoom: { value: next } } as unknown as AppState });
       };
+
       return [
-        {
-          id: "toggle-code",
-          label: "Toggle Code editor",
-          hint: "panel",
-          run: () => {
-            if (!showCodePanel) closePanels();
-            setShowCodePanel(!showCodePanel);
-          },
-        },
-        {
-          id: "toggle-ai-text",
-          label: "Toggle AI Text assistant",
-          hint: "panel",
-          run: () => {
-            if (!showAiTextPanel) closePanels();
-            setShowAiTextPanel(!showAiTextPanel);
-          },
-        },
-        {
-          id: "toggle-data-structures",
-          label: "Toggle Data structure diagrams",
-          hint: "panel",
-          run: () => {
-            if (!showDataStructuresPanel) closePanels();
-            setShowDataStructuresPanel(!showDataStructuresPanel);
-          },
-        },
-        {
-          id: "toggle-todos",
-          label: "Toggle Todo list",
-          hint: "panel",
-          run: () => setShowTodos((v) => !v),
-        },
+        // ─── Screen & Code Server (Workspace) ───
         {
           id: "toggle-screen",
-          label: "Toggle Screen / Browser panel",
-          hint: "panel",
+          label: "Toggle Canvas Screen (Code Server)",
+          category: "Screen",
+          shortcut: "Browser",
+          icon: <Monitor size={15} />,
           run: () => {
             setShowIframePanel((v) => {
               const next = !v;
@@ -1593,61 +1564,338 @@ export default function ExcalidrawWrapper() {
           },
         },
         {
+          id: "focus-screen",
+          label: "Focus & Type in Code Server",
+          category: "Screen",
+          shortcut: "Enter",
+          icon: <Terminal size={15} />,
+          run: () => {
+            setShowIframePanel(true);
+            saveScreenState({ isOpen: true });
+            setIsScreenActive(true);
+          },
+        },
+        {
+          id: "release-screen",
+          label: "Release Focus to Canvas",
+          category: "Screen",
+          shortcut: "Esc",
+          icon: <MousePointer size={15} />,
+          run: () => {
+            setIsScreenActive(false);
+            const container = document.querySelector<HTMLElement>(".excalidraw");
+            container?.focus();
+          },
+        },
+        {
+          id: "toggle-terminal",
+          label: "Open Integrated Terminal",
+          category: "Code",
+          shortcut: "Ctrl+`",
+          icon: <Terminal size={15} />,
+          run: () => {
+            setShowCodePanel(true);
+            showCodePanelRef.current = true;
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent("explaino:open-terminal"));
+            }, 60);
+          },
+        },
+        {
+          id: "toggle-code",
+          label: "Toggle Code Editor & Runner",
+          category: "Code",
+          shortcut: "Ctrl+C",
+          icon: <Code size={15} />,
+          run: () => {
+            if (!showCodePanel) closePanels();
+            setShowCodePanel(!showCodePanel);
+          },
+        },
+
+        // ─── Drawing & Canvas Tools ───
+        {
+          id: "tool-selection",
+          label: "Tool: Selection",
+          category: "Tools",
+          shortcut: "V",
+          icon: <MousePointer size={15} />,
+          run: () => api()?.setActiveTool({ type: "selection" }),
+        },
+        {
+          id: "tool-rectangle",
+          label: "Tool: Rectangle",
+          category: "Tools",
+          shortcut: "R",
+          icon: <Square size={15} />,
+          run: () => api()?.setActiveTool({ type: "rectangle" }),
+        },
+        {
+          id: "tool-diamond",
+          label: "Tool: Diamond",
+          category: "Tools",
+          shortcut: "D",
+          icon: <Diamond size={15} />,
+          run: () => api()?.setActiveTool({ type: "diamond" }),
+        },
+        {
+          id: "tool-ellipse",
+          label: "Tool: Ellipse / Circle",
+          category: "Tools",
+          shortcut: "O",
+          icon: <Circle size={15} />,
+          run: () => api()?.setActiveTool({ type: "ellipse" }),
+        },
+        {
+          id: "tool-arrow",
+          label: "Tool: Arrow",
+          category: "Tools",
+          shortcut: "A",
+          icon: <ArrowRight size={15} />,
+          run: () => api()?.setActiveTool({ type: "arrow" }),
+        },
+        {
+          id: "tool-line",
+          label: "Tool: Line",
+          category: "Tools",
+          shortcut: "L",
+          icon: <Minus size={15} />,
+          run: () => api()?.setActiveTool({ type: "line" }),
+        },
+        {
+          id: "tool-freedraw",
+          label: "Tool: Draw / Freehand Pen",
+          category: "Tools",
+          shortcut: "P",
+          icon: <PenTool size={15} />,
+          run: () => api()?.setActiveTool({ type: "freedraw" }),
+        },
+        {
+          id: "tool-text",
+          label: "Tool: Text Box",
+          category: "Tools",
+          shortcut: "T",
+          icon: <Type size={15} />,
+          run: () => api()?.setActiveTool({ type: "text" }),
+        },
+        {
+          id: "tool-eraser",
+          label: "Tool: Eraser",
+          category: "Tools",
+          shortcut: "E",
+          icon: <Eraser size={15} />,
+          run: () => api()?.setActiveTool({ type: "eraser" }),
+        },
+        {
+          id: "toggle-laser",
+          label: `${laserActive ? "Stop" : "Start"} Laser Pointer`,
+          category: "Tools",
+          shortcut: "Laser",
+          icon: <Zap size={15} />,
+          run: () => setLaserActive((v) => !v),
+        },
+
+        // ─── Data Structures & Tables ───
+        {
+          id: "toggle-data-structures",
+          label: "Toggle Data Structures Panel",
+          category: "Diagrams",
+          shortcut: "DS",
+          icon: <Boxes size={15} />,
+          run: () => {
+            if (!showDataStructuresPanel) closePanels();
+            setShowDataStructuresPanel(!showDataStructuresPanel);
+          },
+        },
+        {
+          id: "insert-stack",
+          label: "Insert Stack Diagram",
+          category: "Diagrams",
+          hint: "DS",
+          icon: <Layers size={15} />,
+          run: () => {
+            const def = findStructureDef("stack");
+            if (def) handleInsertDataStructure(def, def.defaultData);
+          },
+        },
+        {
+          id: "insert-queue",
+          label: "Insert Queue Diagram",
+          category: "Diagrams",
+          hint: "DS",
+          icon: <Layers size={15} />,
+          run: () => {
+            const def = findStructureDef("queue");
+            if (def) handleInsertDataStructure(def, def.defaultData);
+          },
+        },
+        {
+          id: "insert-binary-tree",
+          label: "Insert Binary Tree Diagram",
+          category: "Diagrams",
+          hint: "DS",
+          icon: <GitBranch size={15} />,
+          run: () => {
+            const def = findStructureDef("binary-tree");
+            if (def) handleInsertDataStructure(def, def.defaultData);
+          },
+        },
+        {
+          id: "insert-linked-list",
+          label: "Insert Singly Linked List",
+          category: "Diagrams",
+          hint: "DS",
+          icon: <GitBranch size={15} />,
+          run: () => {
+            const def = findStructureDef("singly-linked-list");
+            if (def) handleInsertDataStructure(def, def.defaultData);
+          },
+        },
+        {
+          id: "insert-array",
+          label: "Insert Array Diagram",
+          category: "Diagrams",
+          hint: "DS",
+          icon: <Grid3x3 size={15} />,
+          run: () => {
+            const def = findStructureDef("array");
+            if (def) handleInsertDataStructure(def, def.defaultData);
+          },
+        },
+        {
+          id: "insert-table",
+          label: "Insert Editable Whiteboard Table",
+          category: "Diagrams",
+          shortcut: "Grid",
+          icon: <Grid3x3 size={15} />,
+          run: () => handleInsertTable(),
+        },
+
+        // ─── AI & Diagram Generation ───
+        {
+          id: "text-to-diagram",
+          label: "Text to Diagram (Mermaid & AI)",
+          category: "AI",
+          shortcut: "AI",
+          icon: <Sparkles size={15} />,
+          run: () => setShowTextToDiagramModal(true),
+        },
+        {
+          id: "toggle-ai-text",
+          label: "Toggle AI Text Assistant / Prompts",
+          category: "AI",
+          shortcut: "Chat",
+          icon: <MessageSquare size={15} />,
+          run: () => {
+            if (!showAiTextPanel) closePanels();
+            setShowAiTextPanel(!showAiTextPanel);
+          },
+        },
+        {
           id: "toggle-explaino",
-          label: "Toggle Explaino voice notes",
-          hint: "panel",
+          label: "Open Explaino Voice Notes",
+          category: "AI",
+          shortcut: "Voice",
+          icon: <Mic size={15} />,
           run: () => {
             if (!showExplaino) closePanels();
             setShowExplaino(!showExplaino);
           },
         },
-        {
-          id: "toggle-theme",
-          label: `Switch to ${theme === "dark" ? "light" : "dark"} mode`,
-          hint: "theme",
-          run: () => setTheme(theme === "dark" ? "light" : "dark"),
-        },
-        {
-          id: "toggle-laser",
-          label: `${laserActive ? "Stop" : "Start"} laser pointer`,
-          hint: "canvas",
-          run: () => setLaserActive((v) => !v),
-        },
-        {
-          id: "insert-table",
-          label: "Insert editable table",
-          hint: "canvas",
-          run: () => handleInsertTable(),
-        },
-        {
-          id: "text-to-diagram",
-          label: "Text to Diagram / Mermaid",
-          hint: "diagram",
-          run: () => setShowTextToDiagramModal(true),
-        },
-        {
-          id: "save-cloud",
-          label: "Save drawing to cloud",
-          hint: "file",
-          run: () => handleSaveClick(),
-        },
-        {
-          id: "clear-canvas",
-          label: "Clear canvas",
-          hint: "canvas",
-          run: () => api()?.resetScene(),
-        },
+
+        // ─── View & Zoom ───
         {
           id: "zoom-in",
-          label: "Zoom in",
-          hint: "view",
+          label: "Zoom In Canvas",
+          category: "View",
+          shortcut: "Ctrl + +",
+          icon: <ZoomIn size={15} />,
           run: () => zoomBy(1.25),
         },
         {
           id: "zoom-out",
-          label: "Zoom out",
-          hint: "view",
+          label: "Zoom Out Canvas",
+          category: "View",
+          shortcut: "Ctrl + -",
+          icon: <ZoomOut size={15} />,
           run: () => zoomBy(0.8),
+        },
+        {
+          id: "zoom-reset",
+          label: "Reset Zoom to 100%",
+          category: "View",
+          shortcut: "Ctrl + 0",
+          icon: <RotateCcw size={15} />,
+          run: () => {
+            const a = api();
+            if (a) a.updateScene({ appState: { zoom: { value: 1 } } as unknown as AppState });
+          },
+        },
+        {
+          id: "zoom-fit",
+          label: "Zoom to Fit Drawing Content",
+          category: "View",
+          shortcut: "Shift + 1",
+          icon: <Maximize2 size={15} />,
+          run: () => {
+            api()?.scrollToContent(undefined, { fitToViewport: true, animate: true });
+          },
+        },
+        {
+          id: "reset-view",
+          label: "Reset View to Origin (0, 0)",
+          category: "View",
+          icon: <RotateCcw size={15} />,
+          run: () => {
+            const a = api();
+            if (a) a.updateScene({ appState: { scrollX: 0, scrollY: 0, zoom: { value: 1 } } as unknown as AppState });
+          },
+        },
+        {
+          id: "toggle-theme",
+          label: `Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`,
+          category: "View",
+          shortcut: "Theme",
+          icon: theme === "dark" ? <Sun size={15} /> : <Moon size={15} />,
+          run: () => setTheme(theme === "dark" ? "light" : "dark"),
+        },
+
+        // ─── Productivity & Tasks ───
+        {
+          id: "toggle-todos",
+          label: "Toggle Todo List & Notes",
+          category: "Tasks",
+          shortcut: "Todos",
+          icon: <ListTodo size={15} />,
+          run: () => setShowTodos((v) => !v),
+        },
+
+        // ─── Cloud & File ───
+        {
+          id: "save-cloud",
+          label: "Save Drawing to Cloud (Firebase)",
+          category: "File",
+          shortcut: "Ctrl + S",
+          icon: <Save size={15} />,
+          run: () => handleSaveClick(),
+        },
+        {
+          id: "clear-canvas",
+          label: "Clear Entire Whiteboard Canvas",
+          category: "File",
+          shortcut: "Clear",
+          icon: <Trash2 size={15} />,
+          run: () => api()?.resetScene(),
+        },
+
+        // ─── Account ───
+        {
+          id: "sign-out",
+          label: "Sign Out of Workspace",
+          category: "Account",
+          shortcut: "Logout",
+          icon: <LogOut size={15} />,
+          run: () => performClientLogout(),
         },
       ];
     },
@@ -1659,6 +1907,7 @@ export default function ExcalidrawWrapper() {
       showDataStructuresPanel,
       showExplaino,
       handleInsertTable,
+      handleInsertDataStructure,
       handleSaveClick,
     ]
   );
