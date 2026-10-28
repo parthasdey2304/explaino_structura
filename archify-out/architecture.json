@@ -5,7 +5,7 @@
   "components": [
     { "id": "user", "type": "external", "label": "User", "sublabel": "Browser / PWA", "pos": [40, 300], "size": [120, 60] },
     { "id": "next", "type": "frontend", "label": "Next.js App", "sublabel": "src/app (Turbopack)", "pos": [250, 300], "size": [140, 64] },
-    { "id": "components", "type": "frontend", "label": "Components", "sublabel": "canvas, chat, editor, screen, vscode", "pos": [250, 150], "size": [140, 64] },
+    { "id": "components", "type": "frontend", "label": "Components", "sublabel": "canvas, chat, editor, screen, stopwatch", "pos": [250, 150], "size": [140, 64] },
     { "id": "hooks", "type": "frontend", "label": "Custom Hooks", "sublabel": "src/hooks (canvas, shortcuts, persistence)", "pos": [250, 460], "size": [140, 64] },
     { "id": "api-ai", "type": "backend", "label": "AI Chat & Mermaid", "sublabel": "/api/ai/chat & /mermaid", "pos": [500, 140], "size": [140, 64] },
     { "id": "api-exec", "type": "backend", "label": "Execute API", "sublabel": "/api/execute", "pos": [500, 300], "size": [140, 64] },
@@ -33,8 +33,8 @@
     { "id": "components-codeserver", "from": "components", "to": "codeserver", "label": "WebSocket/HTTPS", "variant": "dashed" }
   ],
   "cards": [
-    { "dot": "cyan", "title": "Frontend", "items": ["Next.js 16 App Router (Turbopack)", "Excalidraw canvas + sequence lifeline segmentation", "macOS window code-server & VSCodeScreenView", "custom hooks: persistence, quickshape, shortcuts, list-mode"] },
+    { "dot": "cyan", "title": "Frontend", "items": ["Next.js 16 App Router (Turbopack)", "Excalidraw canvas + sequence lifeline segmentation", "macOS window code-server & VSCodeScreenView", "Canvas Stopwatch / Timer (Orbitron font, MainMenu checkbox)", "custom hooks: persistence, quickshape, shortcuts, list-mode"] },
     { "dot": "emerald", "title": "Backend", "items": ["AI chat (Mistral BYOK) & Mermaid conversion APIs", "WebAssembly executors (Pyodide, Clang WASM) & terminal", "Code-server health check heartbeat & auth proxy"] },
-    { "dot": "rose", "title": "Data", "items": ["Google Cloud Firestore cloud persistence", "Browser localStorage workspace and drawing cache"] }
+    { "dot": "rose", "title": "Data", "items": ["Google Cloud Firestore cloud persistence", "Browser localStorage workspace, drawing and stopwatch state cache"] }
   ]
 }

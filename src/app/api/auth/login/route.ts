@@ -3,8 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export const AUTHORIZED_EMAIL = "parthasdeyofficial@gmail.com";
-export const AUTHORIZED_PASSWORD = "Vastavik1234Parth@Hacker";
+const AUTHORIZED_EMAIL = "parthasdeyofficial@gmail.com";
+const AUTHORIZED_PASSWORD = "Vastavik1234Parth@Hacker";
 
 export async function POST(req: NextRequest) {
   try {

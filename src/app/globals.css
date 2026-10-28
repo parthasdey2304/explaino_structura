@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&display=swap");
 @source "../components";
 @source "../app";
 
@@ -4960,4 +4961,18 @@ canvas,
 .text-to-diagram-preview-canvas {
   padding: 28px !important;
   box-sizing: border-box !important;
+}
+
+
+/* ============================================================
+   Stopwatch / Timer Orbitron Typography
+   ============================================================ */
+.font-orbitron,
+.stopwatch-digits {
+  font-family: "Orbitron", ui-monospace, monospace, sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 700;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
 }
