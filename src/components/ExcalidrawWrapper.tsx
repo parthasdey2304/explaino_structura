@@ -35,6 +35,7 @@ import CommandPalette, { type PaletteCommand } from "./CommandPalette";
 import { chatStreamAuto, MistralError, type ChatMessage } from "@/lib/ai/mistral";
 import { createCodeCardSvg } from "@/lib/ai/highlight";
 import TodoPanel from "./TodoOverlay";
+import Stopwatch from "./Stopwatch";
 import LaserOverlay from "./LaserOverlay";
 import RightCanvasToolbar from "./RightCanvasToolbar";
 import { getOptimalSaveDebounceMs, getDeviceProfile } from "@/lib/deviceOptimization";
@@ -54,7 +55,7 @@ import {
   type DataStructureDef,
   type StructureId,
 } from "@/lib/dataStructures";
-import { Moon, Sun, Code, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic, ListTodo, Monitor, LogOut, Terminal, MessageSquare, Layers, GitBranch, MousePointer, Square, Circle, Diamond, ArrowRight, Minus, PenTool, Type, Eraser, ZoomIn, ZoomOut, Maximize2, RotateCcw, Trash2, Download, RefreshCw, Hand, Sliders } from "lucide-react";
+import { Moon, Sun, Code, Check, Clock, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic, ListTodo, Monitor, LogOut, Terminal, MessageSquare, Layers, GitBranch, MousePointer, Square, Circle, Diamond, ArrowRight, Minus, PenTool, Type, Eraser, ZoomIn, ZoomOut, Maximize2, RotateCcw, Trash2, Download, RefreshCw, Hand, Sliders } from "lucide-react";
 import { performClientLogout } from "./AuthGate";
 
 /**
@@ -436,6 +437,23 @@ export default function ExcalidrawWrapper() {
   const [activeToolType, setActiveToolType] = useState<string>("selection");
   const [showDataStructuresPanel, setShowDataStructuresPanel] = useState(false);
   const [showTodos, setShowTodos] = useState(false);
+  const [showStopwatch, setShowStopwatch] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      const saved = localStorage.getItem("explaino-show-stopwatch");
+      return saved !== null ? saved === "true" : true;
+    } catch {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("explaino-show-stopwatch", String(showStopwatch));
+    } catch {
+      // Ignore write errors
+    }
+  }, [showStopwatch]);
   const [showAiTextPanel, setShowAiTextPanel] = useState(false);
   const [showExplaino, setShowExplaino] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
@@ -2045,6 +2063,14 @@ export default function ExcalidrawWrapper() {
           icon: <ListTodo size={15} />,
           run: () => setShowTodos((v) => !v),
         },
+        {
+          id: "toggle-stopwatch",
+          label: "Toggle Stopwatch / Timer",
+          category: "Tasks",
+          shortcut: "Stopwatch",
+          icon: <Clock size={15} />,
+          run: () => setShowStopwatch((v) => !v),
+        },
 
         // ─── Cloud & File ───
         {
@@ -2094,6 +2120,7 @@ export default function ExcalidrawWrapper() {
   }, []);
 
   const handleToggleTodos = useCallback(() => setShowTodos((v) => !v), []);
+  const handleToggleStopwatch = useCallback(() => setShowStopwatch((v) => !v), []);
   const handleOpenDiagramModal = useCallback(() => setShowTextToDiagramModal(true), []);
 
   const mainMenuContent = useMemo(
@@ -2150,6 +2177,24 @@ export default function ExcalidrawWrapper() {
           Todos
         </MainMenu.Item>
         <MainMenu.Item
+          onSelect={handleToggleStopwatch}
+          icon={
+            <div
+              className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${
+                showStopwatch
+                  ? "bg-indigo-600 border-indigo-600 text-white"
+                  : "border-gray-400 dark:border-gray-500 bg-transparent"
+              }`}
+            >
+              {showStopwatch && <Check size={12} strokeWidth={3} />}
+            </div>
+          }
+          className="explaino-menu-item"
+          title="Toggle Stopwatch on canvas"
+        >
+          Stopwatch
+        </MainMenu.Item>
+        <MainMenu.Item
           onSelect={handleOpenDiagramModal}
           icon={<Sparkles size={16} strokeWidth={2.2} />}
           className="explaino-menu-item"
@@ -2168,7 +2213,7 @@ export default function ExcalidrawWrapper() {
         </MainMenu.Item>
       </MainMenu>
     ),
-    [handleSaveClick, handleToggleTodos, handleOpenDiagramModal, handleInstallPwa, isPwaInstalled]
+    [handleSaveClick, handleToggleTodos, handleToggleStopwatch, showStopwatch, handleOpenDiagramModal, handleInstallPwa, isPwaInstalled]
   );
 
   const renderTopRightUI = useCallback(() => {
@@ -2349,6 +2394,12 @@ export default function ExcalidrawWrapper() {
       {/* Transient laser-pointer layer: screen-space only, never touches the
           scene or the undo/redo history. */}
       <LaserOverlay active={laserActive} />
+      {/* Stopwatch & Timer — positioned directly to the right of the top-left hamburger menu (3 slashes) */}
+      {showStopwatch && (
+        <div className="fixed top-2.5 sm:top-3 left-[56px] sm:left-[60px] z-20 pointer-events-auto flex items-center h-9">
+          <Stopwatch theme={theme} />
+        </div>
+      )}
       </div>
       )}
 

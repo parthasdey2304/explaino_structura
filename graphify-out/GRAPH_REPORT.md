@@ -1,15 +1,15 @@
-# Graph Report - explaino_structura  (2026-10-22)
+# Graph Report - explaino_structura  (2026-10-29)
 
 ## Corpus Check
 - cluster-only mode — file stats not available
 
 ## Summary
-- 695 nodes · 1336 edges · 36 communities (31 shown, 5 thin omitted)
-- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 13 edges (avg confidence: 0.85)
+- 700 nodes · 1345 edges · 41 communities (35 shown, 6 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 15 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `e60b13d1`
+- Built from commit: `75d5d866`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -17,8 +17,8 @@
 - CodeEditorPanel.tsx
 - dataStructures.ts
 - dependencies
-- ExcalidrawWrapper.tsx
-- react
+- hooks/index.ts
+- AuthGate.tsx
 - instrumentation.ts
 - devDependencies
 - compilerOptions
@@ -50,12 +50,17 @@
 - mermaid/route.ts
 - logout/route.ts
 - sw.js
+- ExcalidrawWrapper.tsx
+- IframePanel.tsx
+- react
+- TextToDiagramModal.tsx
+- TodoOverlay.tsx
 
 ## God Nodes (most connected - your core abstractions)
-1. `ExcalidrawWrapper()` - 40 edges
+1. `ExcalidrawWrapper()` - 41 edges
 2. `CodeEditorPanel()` - 32 edges
-3. `react` - 25 edges
-4. `lucide-react` - 19 edges
+3. `react` - 26 edges
+4. `lucide-react` - 20 edges
 5. `AIChatPanel()` - 18 edges
 6. `next` - 18 edges
 7. `GeminiLiveSession` - 16 edges
@@ -78,7 +83,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (36 total, 5 thin omitted)
+## Communities (41 total, 6 thin omitted)
 
 ### Community 0 - "CodeEditorPanel.tsx"
 Cohesion: 0.06
@@ -92,21 +97,21 @@ Nodes (58): CanvasStructureControls(), CanvasStructureControlsProps, ViewportBox
 Cohesion: 0.07
 Nodes (27): dependencies, codemirror, @codemirror/commands, @codemirror/lang-cpp, @codemirror/lang-html, @codemirror/lang-java, @codemirror/lang-javascript, @codemirror/lang-python (+19 more)
 
-### Community 3 - "ExcalidrawWrapper.tsx"
-Cohesion: 0.05
-Nodes (68): @excalidraw/excalidraw, performClientLogout(), CommandPalette(), fuzzyMatch(), PaletteCommand, boxOf(), CreatorAvatarIcon(), ExcalidrawComponent (+60 more)
+### Community 3 - "hooks/index.ts"
+Cohesion: 0.14
+Nodes (23): @excalidraw/excalidraw, CanvasShortcutHandlers, isEditableElement(), useCanvasShortcuts(), ListMode, ListModeHandle, useListMode(), filesToDataURLMap() (+15 more)
 
-### Community 4 - "react"
-Cohesion: 0.06
-Nodes (28): @excalidraw/mermaid-to-excalidraw, lucide-react, mermaid, react, ExcalidrawWrapper, Home(), AuthGate(), AUTHORIZED_EMAIL (+20 more)
+### Community 4 - "AuthGate.tsx"
+Cohesion: 0.17
+Nodes (8): ExcalidrawWrapper, Home(), AuthGate(), AUTHORIZED_EMAIL, AUTHORIZED_PASSWORD, checkIsAuthenticated(), EXPLAINO_AUTH_STORAGE_KEY, ExcalidrawErrorBoundary
 
 ### Community 5 - "instrumentation.ts"
 Cohesion: 0.10
 Nodes (32): ArrayVisualizer(), MemoryBlock(), ObjectVisualizer(), VariableCard(), VisualizerPanel(), VisualizerPanelProps, Analysis, analyze() (+24 more)
 
 ### Community 6 - "devDependencies"
-Cohesion: 0.20
-Nodes (10): devDependencies, eslint, eslint-config-next, tailwindcss, @tailwindcss/postcss, @types/dompurify, @types/node, @types/react (+2 more)
+Cohesion: 0.18
+Nodes (11): devDependencies, eslint, eslint-config-next, playwright, tailwindcss, @tailwindcss/postcss, @types/dompurify, @types/node (+3 more)
 
 ### Community 7 - "compilerOptions"
 Cohesion: 0.11
@@ -145,8 +150,8 @@ Cohesion: 0.40
 Nodes (4): emmet, ExtractedAbbreviation, ExtractOptions, UserConfig
 
 ### Community 17 - "package.json"
-Cohesion: 0.12
-Nodes (16): name, private, version, lightningcss-win32-x64-msvc, @next/swc-win32-x64-msvc, perfect-freehand, react-colorful, react-dom (+8 more)
+Cohesion: 0.11
+Nodes (17): name, private, version, lightningcss-win32-x64-msvc, @next/swc-win32-x64-msvc, perfect-freehand, playwright, react-colorful (+9 more)
 
 ### Community 18 - "highlight.ts"
 Cohesion: 0.14
@@ -169,8 +174,8 @@ Cohesion: 0.25
 Nodes (6): codemirror, @codemirror/lang-javascript, VSCodeScreenViewProps, vsDarkTheme, vsHighlight, STARTER_CODE
 
 ### Community 24 - "LaserOverlay.tsx"
-Cohesion: 0.38
-Nodes (6): drawTipDot(), LASER_RED, paintFrame(), tracePath(), Trail, TrailPoint
+Cohesion: 0.36
+Nodes (7): drawTipDot(), LASER_RED, LaserOverlay(), paintFrame(), tracePath(), Trail, TrailPoint
 
 ### Community 25 - "createCodeCardSvg"
 Cohesion: 0.32
@@ -179,10 +184,6 @@ Nodes (5): createCodeCardSvg(), compensateForDarkCanvas(), hexToRgb(), rgbToHex(
 ### Community 26 - "scripts"
 Cohesion: 0.40
 Nodes (5): scripts, build, dev, lint, start
-
-### Community 27 - "login/route.ts"
-Cohesion: 0.33
-Nodes (4): AUTHORIZED_EMAIL, AUTHORIZED_PASSWORD, dynamic, runtime
 
 ### Community 28 - "optionalDependencies"
 Cohesion: 0.67
@@ -204,25 +205,45 @@ Nodes (3): ChatMessage, isChatMessage(), POST()
 Cohesion: 0.83
 Nodes (3): cleanMermaidCode(), getFallbackMermaid(), POST()
 
+### Community 36 - "ExcalidrawWrapper.tsx"
+Cohesion: 0.13
+Nodes (25): performClientLogout(), boxOf(), CreatorAvatarIcon(), ExcalidrawComponent, ExcalidrawWrapper(), load(), GithubIcon(), harvestLabels() (+17 more)
+
+### Community 37 - "IframePanel.tsx"
+Cohesion: 0.16
+Nodes (16): CANVAS_SCREEN_STORAGE_KEY, CanvasScreenMode, CanvasScreenSavedState, CanvasViewport, CODE_SERVER_SECURE_URL, IframePanel(), IframePanelLayout, IframePanelProps (+8 more)
+
+### Community 38 - "react"
+Cohesion: 0.15
+Nodes (11): lucide-react, react, CommandPalette(), fuzzyMatch(), PaletteCommand, Props, State, RightCanvasToolbarProps (+3 more)
+
+### Community 39 - "TextToDiagramModal.tsx"
+Cohesion: 0.20
+Nodes (8): @excalidraw/mermaid-to-excalidraw, mermaid, EXAMPLE_PROMPTS, ExamplePrompt, INITIAL_MERMAID, sanitizeSequenceDiagramLifelines(), TextToDiagramModal(), TextToDiagramModalProps
+
+### Community 40 - "TodoOverlay.tsx"
+Cohesion: 0.36
+Nodes (6): loadTodos(), nextTodoId(), saveTodos(), TodoItem, TodoPanel(), TodoStatus
+
 ## Knowledge Gaps
-- **13 isolated node(s):** `lightningcss-win32-x64-msvc`, `@next/swc-win32-x64-msvc`, `perfect-freehand`, `react-colorful`, `react-dom` (+8 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 277 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **5 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **14 isolated node(s):** `lightningcss-win32-x64-msvc`, `@next/swc-win32-x64-msvc`, `perfect-freehand`, `playwright`, `react-colorful` (+9 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 280 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **6 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `react` connect `react` to `CodeEditorPanel.tsx`, `dataStructures.ts`, `ExcalidrawWrapper.tsx`, `instrumentation.ts`, `AIChatPanel.tsx`, `quickshape.ts`, `ExplainoPanel.tsx`, `service.ts`, `package.json`, `emmetExtension.ts`, `VSCodeScreenView.tsx`, `LaserOverlay.tsx`?**
-  _High betweenness centrality (0.139) - this node is a cross-community bridge._
+- **Why does `react` connect `react` to `CodeEditorPanel.tsx`, `dataStructures.ts`, `hooks/index.ts`, `AuthGate.tsx`, `ExcalidrawWrapper.tsx`, `IframePanel.tsx`, `TextToDiagramModal.tsx`, `AIChatPanel.tsx`, `TodoOverlay.tsx`, `instrumentation.ts`, `quickshape.ts`, `ExplainoPanel.tsx`, `service.ts`, `package.json`, `emmetExtension.ts`, `VSCodeScreenView.tsx`, `LaserOverlay.tsx`?**
+  _High betweenness centrality (0.140) - this node is a cross-community bridge._
 - **What connects `lightningcss-win32-x64-msvc`, `@next/swc-win32-x64-msvc`, `perfect-freehand` to the rest of the system?**
-  _13 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _14 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `CodeEditorPanel.tsx` be split into smaller, more focused modules?**
   _Cohesion score 0.05802469135802469 - nodes in this community are weakly interconnected._
-- **Why does `next` connect `next` to `chat/route.ts`, `mermaid/route.ts`, `logout/route.ts`, `ExcalidrawWrapper.tsx`, `react`, `TerminalService`, `service.ts`, `package.json`, `login/route.ts`, `code-server-login/route.ts`, `proxy/route.ts`, `layout.tsx`?**
-  _High betweenness centrality (0.131) - this node is a cross-community bridge._
+- **Why does `next` connect `next` to `chat/route.ts`, `mermaid/route.ts`, `logout/route.ts`, `AuthGate.tsx`, `ExcalidrawWrapper.tsx`, `TerminalService`, `service.ts`, `package.json`, `login/route.ts`, `code-server-login/route.ts`, `proxy/route.ts`, `layout.tsx`?**
+  _High betweenness centrality (0.126) - this node is a cross-community bridge._
 - **Should `dataStructures.ts` be split into smaller, more focused modules?**
   _Cohesion score 0.07103825136612021 - nodes in this community are weakly interconnected._
-- **Why does `lucide-react` connect `react` to `CodeEditorPanel.tsx`, `dataStructures.ts`, `ExcalidrawWrapper.tsx`, `instrumentation.ts`, `AIChatPanel.tsx`, `ExplainoPanel.tsx`, `package.json`, `emmetExtension.ts`, `VSCodeScreenView.tsx`?**
-  _High betweenness centrality (0.086) - this node is a cross-community bridge._
+- **Why does `lucide-react` connect `react` to `CodeEditorPanel.tsx`, `dataStructures.ts`, `AuthGate.tsx`, `ExcalidrawWrapper.tsx`, `IframePanel.tsx`, `TextToDiagramModal.tsx`, `AIChatPanel.tsx`, `TodoOverlay.tsx`, `instrumentation.ts`, `ExplainoPanel.tsx`, `package.json`, `emmetExtension.ts`, `VSCodeScreenView.tsx`?**
+  _High betweenness centrality (0.087) - this node is a cross-community bridge._
 - **Should `dependencies` be split into smaller, more focused modules?**
   _Cohesion score 0.07407407407407407 - nodes in this community are weakly interconnected._
