@@ -3,6 +3,19 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   transpilePackages: ["@excalidraw/excalidraw"],
   skipTrailingSlashRedirect: true,
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "Permissions-Policy",
+            value: "unload=*",
+          },
+        ],
+      },
+    ];
+  },
   async rewrites() {
     return [
       {

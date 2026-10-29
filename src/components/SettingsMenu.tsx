@@ -23,7 +23,7 @@ const OPTIONS: { key: keyof EditorSettings; label: string; hint: string }[] = [
   {
     key: "aiEnabled",
     label: "AI assistant",
-    hint: "Mistral-powered chat and code generation",
+    hint: "Gemini 3.8 Flash chat and code generation",
   },
 ];
 
