@@ -118,6 +118,9 @@ export default function IframePanel({
     [onActiveChange]
   );
 
+  // Track consecutive health check failures to prevent false 502 offline alerts during network jitter
+  const failureCountRef = useRef(0);
+
   // Check code-server health status
   const checkServerHealth = useCallback(async () => {
     setIsCheckingHealth(true);
@@ -131,6 +134,7 @@ export default function IframePanel({
       if (res.ok) {
         const data = await res.json().catch(() => null);
         if (data && data.online === true) {
+          failureCountRef.current = 0;
           setServerHealth("online");
           setIsCheckingHealth(false);
           return true;
@@ -151,19 +155,27 @@ export default function IframePanel({
             directData.status === "expired" ||
             Boolean(directData.lastHeartbeat));
         if (isDirectAlive) {
+          failureCountRef.current = 0;
           setServerHealth("online");
           setIsCheckingHealth(false);
           return true;
         }
       }
 
-      setServerHealth("offline");
-      setIsLoading(false);
+      failureCountRef.current += 1;
+      // Require 2 consecutive failures before showing 502 offline overlay
+      if (failureCountRef.current >= 2) {
+        setServerHealth("offline");
+        setIsLoading(false);
+      }
       setIsCheckingHealth(false);
       return false;
     } catch {
-      setServerHealth("offline");
-      setIsLoading(false);
+      failureCountRef.current += 1;
+      if (failureCountRef.current >= 2) {
+        setServerHealth("offline");
+        setIsLoading(false);
+      }
       setIsCheckingHealth(false);
       return false;
     }
@@ -535,6 +547,8 @@ export default function IframePanel({
 
   const handleIframeLoad = useCallback(() => {
     setIsLoading(false);
+    failureCountRef.current = 0;
+    setServerHealth("online");
     checkServerHealth();
   }, [checkServerHealth]);
 

@@ -401,6 +401,7 @@ export default function ExcalidrawWrapper() {
   });
   const [iframePanelLayout, setIframePanelLayout] = useState<IframePanelLayout>("center");
   const [screenRecenterTrigger, setScreenRecenterTrigger] = useState(0);
+  const [isScreenActive, setIsScreenActive] = useState<boolean>(false);
 
   const handleOpenScreen = useCallback(() => {
     setShowIframePanel(true);
@@ -410,7 +411,6 @@ export default function ExcalidrawWrapper() {
     saveScreenState({ isOpen: true, shouldRecenter: true });
     window.dispatchEvent(new CustomEvent("explaino-recenter-screen"));
   }, []);
-  const [isScreenActive, setIsScreenActive] = useState<boolean>(false);
   const [deferredPrompt, setDeferredPrompt] = useState<{
     prompt: () => Promise<void>;
     userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
