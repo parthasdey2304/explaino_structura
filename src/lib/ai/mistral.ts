@@ -1,10 +1,9 @@
 /**
- * Client-side Mistral chat helper.
+ * Multi-Provider AI Client Helper (Google Gemini & Mistral AI).
  *
- * Bring-your-own-key: the user pastes their own Mistral API key into the AI
- * panel. It's kept in localStorage only (never sent anywhere but Mistral,
- * via our own /api/ai/chat proxy, and never logged there — see route.ts)
- * so nothing server-side needs to manage or bill for API usage.
+ * Models supported:
+ * - Gemini: Gemini 3.8 Flash, Gemini 3.5 Flash
+ * - Mistral: Mistral Small, Codestral, Mistral Nemo
  */
 
 export interface ChatMessage {
@@ -12,58 +11,127 @@ export interface ChatMessage {
   content: string;
 }
 
-export interface MistralModel {
+export interface AIModel {
   id: string;
   label: string;
+  provider: "gemini" | "mistral";
   description: string;
 }
 
-// A short, current curated list rather than every model Mistral hosts —
-// these are the ones actually suited to a coding assistant.
-export const MISTRAL_MODELS: MistralModel[] = [
-  { id: "codestral-latest", label: "Codestral", description: "Tuned specifically for code generation" },
-  { id: "open-mistral-nemo", label: "Open Mistral Nemo", description: "Fast, high-performance general and canvas text model" },
-  { id: "mistral-large-latest", label: "Mistral Large", description: "Strongest reasoning and code quality" },
+export type GeminiModel = AIModel;
+export type MistralModel = AIModel;
+
+export const ALL_MODELS: AIModel[] = [
+  // Google Gemini
+  {
+    id: "gemini-3.8-flash",
+    label: "Gemini 3.8 Flash",
+    provider: "gemini",
+    description: "Google's premier high-speed multimodal reasoning model",
+  },
+  {
+    id: "gemini-3.5-flash",
+    label: "Gemini 3.5 Flash",
+    provider: "gemini",
+    description: "Fast, reliable high-throughput foundational model",
+  },
+  // Mistral AI
+  {
+    id: "mistral-small-latest",
+    label: "Mistral Small",
+    provider: "mistral",
+    description: "Fast, lightweight general reasoning model",
+  },
+  {
+    id: "codestral-latest",
+    label: "Codestral",
+    provider: "mistral",
+    description: "Mistral's model tuned specifically for code generation",
+  },
+  {
+    id: "open-mistral-nemo",
+    label: "Mistral Nemo",
+    provider: "mistral",
+    description: "High-performance multilingual and canvas text model",
+  },
 ];
 
-const KEY_STORAGE = "explaino-mistral-api-key";
-const MODEL_STORAGE = "explaino-mistral-model";
+export const GEMINI_MODELS: GeminiModel[] = ALL_MODELS.filter((m) => m.provider === "gemini");
+export const MISTRAL_MODELS: MistralModel[] = ALL_MODELS;
+
+export function getModelLabel(id: string): string {
+  const match = ALL_MODELS.find((m) => m.id === id);
+  if (match) return match.label;
+  if (id.includes("3.8")) return "Gemini 3.8 Flash";
+  if (id.includes("3.5")) return "Gemini 3.5 Flash";
+  if (id.includes("small")) return "Mistral Small";
+  if (id.includes("codestral")) return "Codestral";
+  if (id.includes("nemo")) return "Mistral Nemo";
+  return id;
+}
+
+export const DEFAULT_GEMINI_KEY = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
+export const DEFAULT_MISTRAL_KEY = process.env.MISTRAL_API_KEY || process.env.NEXT_PUBLIC_MISTRAL_API_KEY || "";
+
+const GEMINI_KEY_STORAGE = "explaino-gemini-api-key";
+const MISTRAL_KEY_STORAGE = "explaino-mistral-api-key";
+const MODEL_STORAGE = "explaino-gemini-model";
+
+export function getStoredGeminiKey(): string {
+  if (typeof window === "undefined") return DEFAULT_GEMINI_KEY;
+  try {
+    return window.localStorage.getItem(GEMINI_KEY_STORAGE)?.trim() || DEFAULT_GEMINI_KEY;
+  } catch {
+    return DEFAULT_GEMINI_KEY;
+  }
+}
+
+export function getStoredMistralKey(): string {
+  if (typeof window === "undefined") return DEFAULT_MISTRAL_KEY;
+  try {
+    return window.localStorage.getItem(MISTRAL_KEY_STORAGE)?.trim() || DEFAULT_MISTRAL_KEY;
+  } catch {
+    return DEFAULT_MISTRAL_KEY;
+  }
+}
 
 export function getStoredApiKey(): string {
-  if (typeof window === "undefined") return "";
-  try {
-    return window.localStorage.getItem(KEY_STORAGE) ?? "";
-  } catch {
-    return "";
+  const model = getStoredModel();
+  if (model.includes("mistral") || model.includes("codestral")) {
+    return getStoredMistralKey();
   }
+  return getStoredGeminiKey();
 }
 
 export function setStoredApiKey(key: string): void {
   try {
-    if (key) window.localStorage.setItem(KEY_STORAGE, key);
-    else window.localStorage.removeItem(KEY_STORAGE);
+    if (key) {
+      window.localStorage.setItem(GEMINI_KEY_STORAGE, key);
+      window.localStorage.setItem(MISTRAL_KEY_STORAGE, key);
+    } else {
+      window.localStorage.removeItem(GEMINI_KEY_STORAGE);
+      window.localStorage.removeItem(MISTRAL_KEY_STORAGE);
+    }
   } catch {
     // ignore quota errors
   }
 }
 
 export function getStoredModel(): string {
-  if (typeof window === "undefined") return MISTRAL_MODELS[0].id;
+  if (typeof window === "undefined") return ALL_MODELS[0].id;
   try {
     const stored = window.localStorage.getItem(MODEL_STORAGE);
-    if (stored === "mistral-large-latest") {
-      // Auto-migrate to codestral-latest
-      window.localStorage.setItem(MODEL_STORAGE, "codestral-latest");
-      return "codestral-latest";
-    }
-    if (stored === "mistral-small-latest") {
-      // Auto-migrate to open-mistral-nemo
-      window.localStorage.setItem(MODEL_STORAGE, "open-mistral-nemo");
-      return "open-mistral-nemo";
-    }
-    return stored ?? MISTRAL_MODELS[0].id;
+    if (!stored) return ALL_MODELS[0].id;
+    const match = ALL_MODELS.find((m) => m.id === stored);
+    if (match) return match.id;
+    if (stored.includes("3.8")) return "gemini-3.8-flash";
+    if (stored.includes("3.5")) return "gemini-3.5-flash";
+    if (stored.includes("small")) return "mistral-small-latest";
+    if (stored.includes("codestral")) return "codestral-latest";
+    if (stored.includes("nemo")) return "open-mistral-nemo";
+    return ALL_MODELS[0].id;
   } catch {
-    return MISTRAL_MODELS[0].id;
+    return ALL_MODELS[0].id;
   }
 }
 
@@ -75,42 +143,53 @@ export function setStoredModel(model: string): void {
   }
 }
 
-export class MistralError extends Error {}
+export class GeminiError extends Error {}
+export const MistralError = GeminiError;
 
 /** Non-streaming chat call. Used for one-shot code generation. */
 export async function chatComplete(
   messages: ChatMessage[],
-  model: string
+  model?: string
 ): Promise<string> {
-  const apiKey = getStoredApiKey();
-  if (!apiKey) throw new MistralError("No Mistral API key configured.");
+  const chosenModel = model || getStoredModel();
+  const geminiKey = getStoredGeminiKey();
+  const mistralKey = getStoredMistralKey();
 
   const res = await fetch("/api/ai/chat", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Mistral-Key": apiKey },
-    body: JSON.stringify({ model, messages, stream: false }),
+    headers: {
+      "Content-Type": "application/json",
+      "X-Gemini-Key": geminiKey,
+      "X-Mistral-Key": mistralKey,
+    },
+    body: JSON.stringify({ model: chosenModel, messages, stream: false }),
   });
 
   const data = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new MistralError(data?.error ?? `Request failed (${res.status})`);
+    throw new GeminiError(data?.error ?? `Request failed (${res.status})`);
   }
   const content = data?.choices?.[0]?.message?.content;
   if (typeof content !== "string") {
-    throw new MistralError("Mistral returned an unexpected response shape.");
+    throw new GeminiError("AI returned an unexpected response shape.");
   }
   return content;
 }
 
-/** Open a streaming chat request. Sends the caller's key only when one exists. */
+/** Open a streaming chat request. */
 async function openChatStream(
   messages: ChatMessage[],
   model: string,
-  apiKey: string,
   signal?: AbortSignal
 ): Promise<Response> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (apiKey) headers["X-Mistral-Key"] = apiKey;
+  const geminiKey = getStoredGeminiKey();
+  const mistralKey = getStoredMistralKey();
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Gemini-Key": geminiKey,
+    "X-Mistral-Key": mistralKey,
+  };
 
   const res = await fetch("/api/ai/chat", {
     method: "POST",
@@ -121,10 +200,10 @@ async function openChatStream(
 
   if (!res.ok) {
     const data = await res.json().catch(() => null);
-    throw new MistralError(data?.error ?? `Request failed (${res.status})`);
+    throw new GeminiError(data?.error ?? `Request failed (${res.status})`);
   }
   if (!res.body) {
-    throw new MistralError("Streaming isn't supported in this environment.");
+    throw new GeminiError("Streaming isn't supported in this environment.");
   }
   return res;
 }
@@ -144,8 +223,6 @@ async function readSseStream(
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
 
-    // Server-sent events: lines start with "data: ", one JSON chunk each,
-    // terminated by a literal "data: [DONE]".
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
     for (const line of lines) {
@@ -161,7 +238,7 @@ async function readSseStream(
           onToken(delta);
         }
       } catch {
-        // Ignore malformed SSE chunks rather than aborting the whole stream.
+        // Ignore malformed SSE chunks
       }
     }
   }
@@ -170,42 +247,28 @@ async function readSseStream(
 }
 
 /**
- * Streaming chat call. Invokes `onToken` with each incremental chunk of
- * text as it arrives, so the panel can render tokens live. Requires a
- * client-stored key (bring-your-own-key flow).
- */
-export async function chatStream(
-  messages: ChatMessage[],
-  model: string,
-  onToken: (delta: string) => void,
-  signal?: AbortSignal
-): Promise<string> {
-  const apiKey = getStoredApiKey();
-  if (!apiKey) throw new MistralError("No Mistral API key configured.");
-
-  const res = await openChatStream(messages, model, apiKey, signal);
-  return readSseStream(res, onToken);
-}
-
-/**
- * Streaming chat call that works without a client key: when none is stored
- * the request is sent bare and the server authenticates with its own
- * `MISTRAL_API_KEY` (never exposed to the browser).
+ * Streaming chat call that works with default or client key.
  */
 export async function chatStreamAuto(
   messages: ChatMessage[],
-  model: string,
-  onToken: (delta: string) => void,
+  model?: string,
+  onToken?: (delta: string) => void,
   signal?: AbortSignal
 ): Promise<string> {
-  const res = await openChatStream(messages, model, getStoredApiKey(), signal);
-  return readSseStream(res, onToken);
+  const chosenModel = model || getStoredModel();
+  const tokenCallback = onToken || (() => {});
+  const res = await openChatStream(messages, chosenModel, signal);
+  return readSseStream(res, tokenCallback);
 }
 
 /**
+ * Compatibility export for chatStream
+ */
+export const chatStream = chatStreamAuto;
+
+/**
  * Pull the first fenced code block out of a markdown-formatted reply, for
- * the "Apply to file" action. Returns null when the reply has no code
- * fence (e.g. a plain explanation).
+ * the "Apply to file" action.
  */
 export function extractFirstCodeBlock(markdown: string): string | null {
   const match = markdown.match(/```[a-zA-Z0-9_+-]*\n([\s\S]*?)```/);
