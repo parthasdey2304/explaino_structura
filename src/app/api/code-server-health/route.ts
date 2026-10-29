@@ -4,7 +4,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 3500);
+  // 8-second timeout for international round-trips & TLS handshakes
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
 
   try {
     const res = await fetch("https://13.49.76.201.sslip.io/healthz", {
@@ -19,12 +20,20 @@ export async function GET() {
 
     if (res.ok) {
       const data = await res.json().catch(() => null);
-      if (data && data.status === "alive") {
+      // Code-server returns {"status":"alive"} when actively receiving input,
+      // and {"status":"expired"} when idle. In both states, code-server is
+      // alive, healthy, and ready to serve requests.
+      const isOnline =
+        res.status === 200 &&
+        (data?.status === "alive" || data?.status === "expired" || Boolean(data?.lastHeartbeat));
+
+      if (isOnline) {
         return NextResponse.json({
           status: "online",
           online: true,
           statusCode: res.status,
-          lastHeartbeat: data.lastHeartbeat,
+          healthStatus: data?.status || "alive",
+          lastHeartbeat: data?.lastHeartbeat,
         });
       }
     }
@@ -45,7 +54,7 @@ export async function GET() {
       {
         status: "offline",
         online: false,
-        statusCode: 502,
+        statusCode: 504,
         error: message,
       },
       { status: 200 }

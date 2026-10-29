@@ -145,7 +145,12 @@ export default function IframePanel({
 
       if (direct && direct.ok) {
         const directData = await direct.json().catch(() => null);
-        if (directData && directData.status === "alive") {
+        const isDirectAlive =
+          directData &&
+          (directData.status === "alive" ||
+            directData.status === "expired" ||
+            Boolean(directData.lastHeartbeat));
+        if (isDirectAlive) {
           setServerHealth("online");
           setIsCheckingHealth(false);
           return true;
