@@ -4982,3 +4982,13 @@ canvas,
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.05em;
 }
+
+/* Hide desktop/tablet Extensions button and RightCanvasToolbar on phones (< 768px) */
+@media (max-width: 767px) {
+  [data-extensions-toggle="true"] {
+    display: none !important;
+  }
+  .canvas-quick-tools-toolbar {
+    display: none !important;
+  }
+}

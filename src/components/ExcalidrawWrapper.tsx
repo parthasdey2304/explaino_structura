@@ -2273,7 +2273,7 @@ export default function ExcalidrawWrapper() {
             }
             setShowExtensionsPanel((v) => !v);
           }}
-          className="excalidraw-button"
+          className="excalidraw-button hidden md:inline-flex"
           style={{
             ...EXTENSIONS_BUTTON_STYLE,
             ...(showExtensionsPanel
@@ -2350,39 +2350,37 @@ export default function ExcalidrawWrapper() {
       </div>
       )}
 
-      {/* Floating right canvas toolbar for small screens (<1024px) */}
-      {isSmallScreen && (
-        <div className="lg:hidden">
-          <RightCanvasToolbar
-            laserActive={laserActive}
-            onToggleLaser={() => setLaserActive((v) => !v)}
-            showScreen={showIframePanel}
-            onToggleScreen={() => {
-              if (!showIframePanel) {
-                handleOpenScreen();
-              } else {
-                setShowIframePanel(false);
-                saveScreenState({ isOpen: false });
-              }
-            }}
-            onOpenDiagram={() => setShowTextToDiagramModal(true)}
-            showDataStructures={showDataStructuresPanel}
-            onToggleDataStructures={() => {
-              const api = excalidrawAPI.current;
-              if (!showDataStructuresPanel && api) {
-                api.updateScene({ appState: { showLibrary: false } as unknown as AppState });
-                if (showCodePanel) setShowCodePanel(false);
-              }
-              setShowDataStructuresPanel(!showDataStructuresPanel);
-            }}
-            onInsertTable={handleInsertTable}
-            theme={theme}
-            onToggleTheme={() => setTheme(theme === "dark" ? "light" : "dark")}
-            penActive={activeToolType === "freedraw"}
-            onTogglePen={() => handleSmartBoardToolSelect("pen")}
-          />
-        </div>
-      )}
+      {/* Floating right canvas toolbar for tablets and laptops (hidden on phones) */}
+      <div className="hidden md:flex">
+        <RightCanvasToolbar
+          laserActive={laserActive}
+          onToggleLaser={() => setLaserActive((v) => !v)}
+          showScreen={showIframePanel}
+          onToggleScreen={() => {
+            if (!showIframePanel) {
+              handleOpenScreen();
+            } else {
+              setShowIframePanel(false);
+              saveScreenState({ isOpen: false });
+            }
+          }}
+          onOpenDiagram={() => setShowTextToDiagramModal(true)}
+          showDataStructures={showDataStructuresPanel}
+          onToggleDataStructures={() => {
+            const api = excalidrawAPI.current;
+            if (!showDataStructuresPanel && api) {
+              api.updateScene({ appState: { showLibrary: false } as unknown as AppState });
+              if (showCodePanel) setShowCodePanel(false);
+            }
+            setShowDataStructuresPanel(!showDataStructuresPanel);
+          }}
+          onInsertTable={handleInsertTable}
+          theme={theme}
+          onToggleTheme={() => setTheme(theme === "dark" ? "light" : "dark")}
+          penActive={activeToolType === "freedraw"}
+          onTogglePen={() => handleSmartBoardToolSelect("pen")}
+        />
+      </div>
 
       {/* Todo overlay — toggled by the top-left corner button */}
       {showTodos && <TodoPanel onClose={() => setShowTodos(false)} />}
@@ -2576,6 +2574,53 @@ export default function ExcalidrawWrapper() {
           </button>
         </div>
       )}
+
+            {/* Phone-only Floating Extensions Button (Excalidraw signature light purple / lavender circle in bottom right) */}
+      <button
+        type="button"
+        data-phone-extensions-fab="true"
+        onClick={() => {
+          const api = excalidrawAPI.current;
+          if (!showExtensionsPanel && api) {
+            api.updateScene({
+              appState: { showLibrary: false, openSidebar: null } as unknown as AppState,
+            });
+          }
+          setShowExtensionsPanel((v) => !v);
+        }}
+        className="md:hidden fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full flex items-center justify-center shadow-xl transition-all duration-200 active:scale-90 hover:scale-105 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-400/50 cursor-pointer"
+        style={{
+          background: showExtensionsPanel
+            ? theme === "dark"
+              ? "#e0dfff"
+              : "#6965db"
+            : theme === "dark"
+            ? "#2d2b52"
+            : "#e0dfff",
+          color: showExtensionsPanel
+            ? theme === "dark"
+              ? "#030064"
+              : "#ffffff"
+            : theme === "dark"
+            ? "#e0dfff"
+            : "#030064",
+          boxShadow:
+            theme === "dark"
+              ? "0 10px 25px -4px rgba(0, 0, 0, 0.6), 0 0 0 1.5px rgba(224, 223, 255, 0.25) inset"
+              : "0 10px 25px -4px rgba(105, 101, 219, 0.4), 0 0 0 1.5px rgba(3, 0, 100, 0.12) inset",
+        }}
+        title="Extensions"
+        aria-label="Open Extensions Menu"
+        aria-pressed={showExtensionsPanel}
+      >
+        <GoogleExtensionIcon size={24} className="drop-shadow-sm" />
+        {laserActive && (
+          <span
+            className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full bg-red-500 border-2 border-white animate-pulse"
+            title="Laser is active"
+          />
+        )}
+      </button>
 
       {/* Extensions Side Panel */}
       <ExtensionsPanel
