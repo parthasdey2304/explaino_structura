@@ -38,6 +38,7 @@ export interface IframePanelProps {
   onActiveChange?: (active: boolean) => void;
   /** Currently active tool in Excalidraw (e.g. 'selection', 'rectangle', 'line', etc.) */
   activeToolType?: string;
+  recenterTrigger?: number;
 }
 
 export const CODE_SERVER_SECURE_URL = "https://13.49.76.201.sslip.io/?folder=/home/ubuntu/workspace";
@@ -52,6 +53,7 @@ export interface CanvasScreenSavedState {
   sceneWidth?: number;
   sceneHeight?: number;
   url?: string;
+  shouldRecenter?: boolean;
 }
 
 export function loadSavedScreenState(): CanvasScreenSavedState | null {
@@ -74,6 +76,7 @@ export function saveScreenState(partial: Partial<CanvasScreenSavedState>): void 
       sceneY: existing?.sceneY ?? 0,
       sceneWidth: existing?.sceneWidth ?? 920,
       sceneHeight: existing?.sceneHeight ?? 580,
+      shouldRecenter: existing?.shouldRecenter ?? false,
       ...partial,
       // Always guarantee persistent URL is locked to secure code server
       url: CODE_SERVER_SECURE_URL,
@@ -89,11 +92,13 @@ export default function IframePanel({
   isActive: controlledIsActive,
   onActiveChange,
   activeToolType,
+  recenterTrigger,
 }: IframePanelProps) {
   const [saved] = useState(() => loadSavedScreenState());
 
   const [isLoading, setIsLoading] = useState(true);
   const [isHoveredTraffic, setIsHoveredTraffic] = useState(false);
+  const [hoveredTrafficButton, setHoveredTrafficButton] = useState<"close" | "recenter" | "maximize" | null>(null);
   const [isHoveredOverlay, setIsHoveredOverlay] = useState(false);
 
   // Server health state: 'loading' | 'online' | 'offline'
@@ -190,6 +195,12 @@ export default function IframePanel({
     sceneWidth: number;
     sceneHeight: number;
   } | null>(() => {
+    if (recenterTrigger !== undefined && recenterTrigger > 0) {
+      return null;
+    }
+    if (saved?.shouldRecenter) {
+      return null;
+    }
     if (
       saved &&
       typeof saved.sceneX === "number" &&
@@ -230,44 +241,56 @@ export default function IframePanel({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Center code server window in current canvas view on initial load if not restored
-  useEffect(() => {
-    if (scenePos === null && viewport) {
-      const center = viewportCoordsToSceneCoords(
-        { clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 },
-        viewport
-      );
-      const defaultWidth = 920;
-      const defaultHeight = 580;
-      const initialPos = {
-        sceneX: center.x - defaultWidth / 2,
-        sceneY: center.y - defaultHeight / 2,
-        sceneWidth: defaultWidth,
-        sceneHeight: defaultHeight,
-      };
-      setScenePos(initialPos);
-      saveScreenState(initialPos);
-    }
-  }, [viewport, scenePos]);
-
-  // Recenter in current view (Yellow traffic light)
+  // Recenter in current view (Yellow traffic light or on opening Screen)
   const handleRecenter = useCallback(() => {
     if (!viewport) return;
+    const zoom = viewport.zoom?.value || 1;
+    // Golden ratio window matching screenshot: ~68% width x ~70% height
+    const targetViewportW = Math.min(Math.max(window.innerWidth * 0.68, 780), window.innerWidth - 80);
+    const targetViewportH = Math.min(Math.max(window.innerHeight * 0.70, 520), window.innerHeight - 100);
+    const sceneWidth = targetViewportW / zoom;
+    const sceneHeight = targetViewportH / zoom;
     const center = viewportCoordsToSceneCoords(
       { clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 },
       viewport
     );
-    const width = scenePos?.sceneWidth ?? 920;
-    const height = scenePos?.sceneHeight ?? 580;
     const nextPos = {
-      sceneX: center.x - width / 2,
-      sceneY: center.y - height / 2,
-      sceneWidth: width,
-      sceneHeight: height,
+      sceneX: center.x - sceneWidth / 2,
+      sceneY: center.y - sceneHeight / 2,
+      sceneWidth,
+      sceneHeight,
     };
+    latestScenePosRef.current = nextPos;
     setScenePos(nextPos);
-    saveScreenState(nextPos);
-  }, [viewport, scenePos]);
+    saveScreenState({ ...nextPos, shouldRecenter: false });
+  }, [viewport]);
+
+  // Center code server window in current canvas view on initial load if not restored or recenter requested
+  useEffect(() => {
+    if (scenePos === null && viewport) {
+      handleRecenter();
+    }
+  }, [viewport, scenePos, handleRecenter]);
+
+  // Listen for recenterTrigger prop updates from parent (e.g. clicking Screen in Extensions panel or toolbar)
+  const lastRecenterTriggerRef = useRef(recenterTrigger ?? 0);
+  useEffect(() => {
+    if (recenterTrigger !== undefined && recenterTrigger > 0 && recenterTrigger !== lastRecenterTriggerRef.current) {
+      lastRecenterTriggerRef.current = recenterTrigger;
+      handleRecenter();
+    }
+  }, [recenterTrigger, handleRecenter]);
+
+  // Listen for global custom event 'explaino-recenter-screen'
+  useEffect(() => {
+    const onRecenterEvent = () => {
+      handleRecenter();
+    };
+    window.addEventListener("explaino-recenter-screen", onRecenterEvent);
+    return () => {
+      window.removeEventListener("explaino-recenter-screen", onRecenterEvent);
+    };
+  }, [handleRecenter]);
 
   // Maximize / Restore size (Green traffic light)
   const handleToggleMaximize = useCallback(() => {
@@ -364,8 +387,8 @@ export default function IframePanel({
 
     window.addEventListener("wheel", preventHistoryNav, { passive: false });
     return () => window.removeEventListener("wheel", preventHistoryNav);
-  }, [forwardWheelToCanvas]);
-
+  }, [forwardWheelToCanvas]);
+
   // Activate screen: gives keyboard and mouse focus to Code Server
   const handleActivateScreen = useCallback(
     (e?: React.PointerEvent | React.MouseEvent) => {
@@ -483,11 +506,13 @@ export default function IframePanel({
   // Convert scene coordinates to screen viewport coordinates
   const viewportCoords = useMemo(() => {
     if (!scenePos || !viewport) {
+      const defaultW = Math.min(Math.max(window.innerWidth * 0.68, 780), window.innerWidth - 80);
+      const defaultH = Math.min(Math.max(window.innerHeight * 0.70, 520), window.innerHeight - 100);
       return {
-        x: window.innerWidth / 2 - 460,
-        y: window.innerHeight / 2 - 290,
-        width: 920,
-        height: 580,
+        x: (window.innerWidth - defaultW) / 2,
+        y: (window.innerHeight - defaultH) / 2,
+        width: defaultW,
+        height: defaultH,
       };
     }
     const screenTopLeft = sceneCoordsToViewportCoords(
@@ -601,9 +626,12 @@ export default function IframePanel({
       >
         {/* Left: macOS Traffic Light Buttons */}
         <div
-          style={{ display: "flex", alignItems: "center", gap: 8 }}
+          style={{ display: "flex", alignItems: "center", gap: isHoveredTraffic ? 6 : 8, transition: "gap 0.18s cubic-bezier(0.16, 1, 0.3, 1)" }}
           onMouseEnter={() => setIsHoveredTraffic(true)}
-          onMouseLeave={() => setIsHoveredTraffic(false)}
+          onMouseLeave={() => {
+            setIsHoveredTraffic(false);
+            setHoveredTrafficButton(null);
+          }}
         >
           {/* Red: Close */}
           <button
@@ -613,9 +641,11 @@ export default function IframePanel({
               e.stopPropagation();
               handleClose();
             }}
+            onMouseEnter={() => setHoveredTrafficButton("close")}
+            onMouseLeave={() => setHoveredTrafficButton(null)}
             style={{
-              width: 20,
-              height: 20,
+              width: isHoveredTraffic ? 22 : 12,
+              height: 24,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -623,28 +653,43 @@ export default function IframePanel({
               border: "none",
               padding: 0,
               cursor: "pointer",
+              transition: "width 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
             }}
             title="Close window"
             aria-label="Close"
           >
             <span
               style={{
-                width: 12,
-                height: 12,
+                width: isHoveredTraffic ? (hoveredTrafficButton === "close" ? 18 : 16) : 12,
+                height: isHoveredTraffic ? (hoveredTrafficButton === "close" ? 18 : 16) : 12,
                 borderRadius: "50%",
                 background: "#ff5f56",
-                border: "0.5px solid rgba(0,0,0,0.25)",
+                border: "0.5px solid rgba(0,0,0,0.3)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "rgba(0,0,0,0.6)",
-                fontSize: 9,
-                fontWeight: 900,
+                color: "rgba(0,0,0,0.75)",
                 lineHeight: 1,
-                boxShadow: "inset 0 1px 1px rgba(255,255,255,0.2)",
+                boxShadow: isHoveredTraffic && hoveredTrafficButton === "close"
+                  ? "0 0 10px rgba(255, 95, 86, 0.75), inset 0 1px 1px rgba(255,255,255,0.4)"
+                  : "inset 0 1px 1px rgba(255,255,255,0.25)",
+                transform: isHoveredTraffic && hoveredTrafficButton === "close" ? "scale(1.08)" : "scale(1)",
+                transition: "width 0.18s cubic-bezier(0.16, 1, 0.3, 1), height 0.18s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s ease",
               }}
             >
-              {isHoveredTraffic && "×"}
+              {isHoveredTraffic && (
+                <svg
+                  width={hoveredTrafficButton === "close" ? "9" : "8"}
+                  height={hoveredTrafficButton === "close" ? "9" : "8"}
+                  viewBox="0 0 10 10"
+                  fill="none"
+                  stroke="rgba(0,0,0,0.75)"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <path d="M2 2L8 8M8 2L2 8" />
+                </svg>
+              )}
             </span>
           </button>
 
@@ -656,9 +701,11 @@ export default function IframePanel({
               e.stopPropagation();
               handleRecenter();
             }}
+            onMouseEnter={() => setHoveredTrafficButton("recenter")}
+            onMouseLeave={() => setHoveredTrafficButton(null)}
             style={{
-              width: 20,
-              height: 20,
+              width: isHoveredTraffic ? 22 : 12,
+              height: 24,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -666,28 +713,43 @@ export default function IframePanel({
               border: "none",
               padding: 0,
               cursor: "pointer",
+              transition: "width 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
             }}
             title="Recenter in canvas view"
             aria-label="Recenter"
           >
             <span
               style={{
-                width: 12,
-                height: 12,
+                width: isHoveredTraffic ? (hoveredTrafficButton === "recenter" ? 18 : 16) : 12,
+                height: isHoveredTraffic ? (hoveredTrafficButton === "recenter" ? 18 : 16) : 12,
                 borderRadius: "50%",
                 background: "#ffbd2e",
-                border: "0.5px solid rgba(0,0,0,0.25)",
+                border: "0.5px solid rgba(0,0,0,0.3)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "rgba(0,0,0,0.6)",
-                fontSize: 9,
-                fontWeight: 900,
+                color: "rgba(0,0,0,0.75)",
                 lineHeight: 1,
-                boxShadow: "inset 0 1px 1px rgba(255,255,255,0.2)",
+                boxShadow: isHoveredTraffic && hoveredTrafficButton === "recenter"
+                  ? "0 0 10px rgba(255, 189, 46, 0.75), inset 0 1px 1px rgba(255,255,255,0.4)"
+                  : "inset 0 1px 1px rgba(255,255,255,0.25)",
+                transform: isHoveredTraffic && hoveredTrafficButton === "recenter" ? "scale(1.08)" : "scale(1)",
+                transition: "width 0.18s cubic-bezier(0.16, 1, 0.3, 1), height 0.18s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s ease",
               }}
             >
-              {isHoveredTraffic && "–"}
+              {isHoveredTraffic && (
+                <svg
+                  width={hoveredTrafficButton === "recenter" ? "9" : "8"}
+                  height={hoveredTrafficButton === "recenter" ? "9" : "8"}
+                  viewBox="0 0 10 10"
+                  fill="none"
+                  stroke="rgba(0,0,0,0.75)"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <path d="M2 5H8" />
+                </svg>
+              )}
             </span>
           </button>
 
@@ -699,9 +761,11 @@ export default function IframePanel({
               e.stopPropagation();
               handleToggleMaximize();
             }}
+            onMouseEnter={() => setHoveredTrafficButton("maximize")}
+            onMouseLeave={() => setHoveredTrafficButton(null)}
             style={{
-              width: 20,
-              height: 20,
+              width: isHoveredTraffic ? 22 : 12,
+              height: 24,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -709,30 +773,109 @@ export default function IframePanel({
               border: "none",
               padding: 0,
               cursor: "pointer",
+              transition: "width 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
             }}
             title={preMaximizePos ? "Restore size" : "Maximize in canvas"}
             aria-label="Maximize"
           >
             <span
               style={{
-                width: 12,
-                height: 12,
+                width: isHoveredTraffic ? (hoveredTrafficButton === "maximize" ? 18 : 16) : 12,
+                height: isHoveredTraffic ? (hoveredTrafficButton === "maximize" ? 18 : 16) : 12,
                 borderRadius: "50%",
                 background: "#27c93f",
-                border: "0.5px solid rgba(0,0,0,0.25)",
+                border: "0.5px solid rgba(0,0,0,0.3)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "rgba(0,0,0,0.6)",
-                fontSize: 8,
-                fontWeight: 900,
+                color: "rgba(0,0,0,0.75)",
                 lineHeight: 1,
-                boxShadow: "inset 0 1px 1px rgba(255,255,255,0.2)",
+                boxShadow: isHoveredTraffic && hoveredTrafficButton === "maximize"
+                  ? "0 0 10px rgba(39, 201, 63, 0.75), inset 0 1px 1px rgba(255,255,255,0.4)"
+                  : "inset 0 1px 1px rgba(255,255,255,0.25)",
+                transform: isHoveredTraffic && hoveredTrafficButton === "maximize" ? "scale(1.08)" : "scale(1)",
+                transition: "width 0.18s cubic-bezier(0.16, 1, 0.3, 1), height 0.18s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s ease",
               }}
             >
-              {isHoveredTraffic && "+"}
+              {isHoveredTraffic && (
+                preMaximizePos ? (
+                  <svg
+                    width={hoveredTrafficButton === "maximize" ? "9" : "8"}
+                    height={hoveredTrafficButton === "maximize" ? "9" : "8"}
+                    viewBox="0 0 10 10"
+                    fill="none"
+                    stroke="rgba(0,0,0,0.75)"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M2 4.5V2H4.5M8 5.5V8H5.5" />
+                    <path d="M2 2L4.5 4.5M8 8L5.5 5.5" />
+                  </svg>
+                ) : (
+                  <svg
+                    width={hoveredTrafficButton === "maximize" ? "9" : "8"}
+                    height={hoveredTrafficButton === "maximize" ? "9" : "8"}
+                    viewBox="0 0 10 10"
+                    fill="none"
+                    stroke="rgba(0,0,0,0.75)"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  >
+                    <path d="M5 2V8M2 5H8" />
+                  </svg>
+                )
+              )}
             </span>
           </button>
+
+          {/* Dynamic Action Pill indicating which option is doing what */}
+          {isHoveredTraffic && (
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                marginLeft: 6,
+                padding: "2px 8px",
+                borderRadius: 6,
+                fontSize: 10,
+                fontWeight: 600,
+                lineHeight: 1.2,
+                letterSpacing: "0.01em",
+                whiteSpace: "nowrap",
+                pointerEvents: "none",
+                transition: "all 0.15s ease",
+                ...(hoveredTrafficButton === "close"
+                  ? {
+                      background: "rgba(239, 68, 68, 0.18)",
+                      color: "#fca5a5",
+                      border: "1px solid rgba(239, 68, 68, 0.35)",
+                    }
+                  : hoveredTrafficButton === "recenter"
+                  ? {
+                      background: "rgba(245, 158, 11, 0.18)",
+                      color: "#fde047",
+                      border: "1px solid rgba(245, 158, 11, 0.35)",
+                    }
+                  : hoveredTrafficButton === "maximize"
+                  ? {
+                      background: "rgba(34, 197, 94, 0.18)",
+                      color: "#86efac",
+                      border: "1px solid rgba(34, 197, 94, 0.35)",
+                    }
+                  : {
+                      background: "rgba(255, 255, 255, 0.08)",
+                      color: "#d4d4d8",
+                      border: "1px solid rgba(255, 255, 255, 0.15)",
+                    }),
+              }}
+            >
+              {hoveredTrafficButton === "close" && "Close Window"}
+              {hoveredTrafficButton === "recenter" && "Recenter in Canvas"}
+              {hoveredTrafficButton === "maximize" && (preMaximizePos ? "Restore Size" : "Maximize Canvas")}
+              {!hoveredTrafficButton && "Window Controls"}
+            </div>
+          )}
         </div>
 
         {/* Center / Right: Interactive Mode Status & Code Server Status Dot */}
