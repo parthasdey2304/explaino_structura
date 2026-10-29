@@ -336,7 +336,7 @@ export default function AIChatPanel({
       if (controller.signal.aborted) {
         // User-initiated stop — leave the partial reply as-is.
       } else {
-        const msg = err instanceof MistralError ? err.message : "Something went wrong reaching Mistral.";
+        const msg = err instanceof MistralError ? err.message : "Something went wrong reaching Gemini.";
         setMessages((prev) => [
           ...prev.filter((m) => m.id !== assistantId || m.text),
           { id: nextId(), role: "error", text: msg },
@@ -444,7 +444,7 @@ export default function AIChatPanel({
         <div className="ai-chat-panel__header-left">
           <Bot size={15} />
           <span className="ai-chat-panel__title">AI Assistant</span>
-          <span className="ai-chat-panel__badge">Mistral</span>
+          <span className="ai-chat-panel__badge">Gemini 3.8 Flash</span>
         </div>
         <div className="ai-chat-panel__header-right">
           <button
@@ -485,13 +485,10 @@ export default function AIChatPanel({
             </select>
           </label>
           <p className="ai-chat-panel__keybox-hint">
-            Uses the same Mistral API key as the AI Text panel (bottom-right) — set it there once.
-            Need a key? Get one at{" "}
-            <a href="https://console.mistral.ai/api-keys" target="_blank" rel="noreferrer noopener">
-              console.mistral.ai/api-keys
-            </a>
-            . It's saved to this browser's local storage and sent only to Mistral, via this app's own
-            proxy — never logged or stored server-side.
+            Powered by <strong>Gemini 3.8 Flash</strong>. Key is pre-configured, or bring your own at{" "}
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer noopener">
+              aistudio.google.com/apikey
+            </a>.
           </p>
         </div>
       )}
