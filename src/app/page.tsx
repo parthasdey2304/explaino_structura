@@ -1,5 +1,6 @@
 "use client";
 
+import "@/lib/suppressUnloadViolation";
 import dynamic from "next/dynamic";
 import { ExcalidrawErrorBoundary } from "@/components/ExcalidrawErrorBoundary";
 import AuthGate from "@/components/AuthGate";

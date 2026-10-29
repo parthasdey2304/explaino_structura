@@ -737,7 +737,7 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
               onClick={() => setShowAIChat(!showAIChat)}
               className={`code-editor__ai-btn${showAIChat ? " code-editor__ai-btn--active" : ""}`}
               id="ai-chat-button"
-              title="AI assistant (Mistral)"
+              title="AI assistant (Gemini 3.8 Flash)"
             >
               <Sparkles size={14} />
               <span>AI</span>
@@ -1034,7 +1034,7 @@ export default function CodeEditorPanel({ onClose }: CodeEditorPanelProps) {
         />
       )}
 
-      {/* AI Assistant Panel (Mistral) */}
+      {/* AI Assistant Panel (Gemini 3.8 Flash) */}
       {showAIChat && settingsSnapshot.aiEnabled && (
         <AIChatPanel
           onClose={() => setShowAIChat(false)}

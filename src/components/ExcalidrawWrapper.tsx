@@ -1,5 +1,6 @@
 "use client";
 
+import "@/lib/suppressUnloadViolation";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
@@ -32,11 +33,13 @@ import CanvasStructureControls, { type ViewportBox } from "./CanvasStructureCont
 import AITextSidebar from "./AITextSidebar";
 import ExplainoPanel from "./ExplainoPanel";
 import CommandPalette, { type PaletteCommand } from "./CommandPalette";
-import { chatStreamAuto, MistralError, type ChatMessage } from "@/lib/ai/mistral";
+import { chatStreamAuto, MistralError, getStoredModel, type ChatMessage } from "@/lib/ai/mistral";
 import { createCodeCardSvg } from "@/lib/ai/highlight";
 import TodoPanel from "./TodoOverlay";
 import Stopwatch from "./Stopwatch";
 import LaserOverlay from "./LaserOverlay";
+import ExtensionsPanel from "./ExtensionsPanel";
+import GoogleExtensionIcon from "./GoogleExtensionIcon";
 import RightCanvasToolbar from "./RightCanvasToolbar";
 import { getOptimalSaveDebounceMs, getDeviceProfile } from "@/lib/deviceOptimization";
 
@@ -55,7 +58,7 @@ import {
   type DataStructureDef,
   type StructureId,
 } from "@/lib/dataStructures";
-import { Moon, Sun, Code, Check, Clock, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic, ListTodo, Monitor, LogOut, Terminal, MessageSquare, Layers, GitBranch, MousePointer, Square, Circle, Diamond, ArrowRight, Minus, PenTool, Type, Eraser, ZoomIn, ZoomOut, Maximize2, RotateCcw, Trash2, Download, RefreshCw, Hand, Sliders } from "lucide-react";
+import { Blocks, Moon, Sun, Code, Check, Clock, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic, ListTodo, Monitor, LogOut, Terminal, MessageSquare, Layers, GitBranch, MousePointer, Square, Circle, Diamond, ArrowRight, Minus, PenTool, Type, Eraser, ZoomIn, ZoomOut, Maximize2, RotateCcw, Trash2, Download, RefreshCw, Hand, Sliders } from "lucide-react";
 import { performClientLogout } from "./AuthGate";
 
 /**
@@ -230,6 +233,22 @@ const PANEL_BUTTON_STYLE: React.CSSProperties = {
   gap: 4,
 };
 
+const EXTENSIONS_BUTTON_STYLE: React.CSSProperties = {
+  height: "2rem",
+  padding: "0 16px",
+  width: "auto",
+  minWidth: "fit-content",
+  whiteSpace: "nowrap",
+  fontSize: "0.8rem",
+  borderRadius: "0.5rem",
+  cursor: "pointer",
+  fontWeight: 500,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "8px",
+};
+
 /** GitHub mark, inlined because this lucide version dropped brand icons. */
 function GithubIcon() {
   return (
@@ -381,6 +400,16 @@ export default function ExcalidrawWrapper() {
     }
   });
   const [iframePanelLayout, setIframePanelLayout] = useState<IframePanelLayout>("center");
+  const [screenRecenterTrigger, setScreenRecenterTrigger] = useState(0);
+
+  const handleOpenScreen = useCallback(() => {
+    setShowIframePanel(true);
+    setIframePanelLayout("center");
+    setIsScreenActive(true);
+    setScreenRecenterTrigger((v) => v + 1);
+    saveScreenState({ isOpen: true, shouldRecenter: true });
+    window.dispatchEvent(new CustomEvent("explaino-recenter-screen"));
+  }, []);
   const [isScreenActive, setIsScreenActive] = useState<boolean>(false);
   const [deferredPrompt, setDeferredPrompt] = useState<{
     prompt: () => Promise<void>;
@@ -467,6 +496,11 @@ export default function ExcalidrawWrapper() {
     maxY: number;
   } | null>(null);
   const [laserActive, setLaserActive] = useState(false);
+  const [showExtensionsPanel, setShowExtensionsPanel] = useState(false);
+  const showExtensionsPanelRef = useRef(false);
+  useEffect(() => {
+    showExtensionsPanelRef.current = showExtensionsPanel;
+  }, [showExtensionsPanel]);
   const showDataStructuresPanelRef = useRef(false);
   const [drawingName, setDrawingName] = useState("Untitled");
   const [drawingId, setDrawingId] = useState<string | null>(null);
@@ -492,10 +526,12 @@ export default function ExcalidrawWrapper() {
 
   // Responsive breakpoint for mobile/tablet/narrow screens
   const [isSmallScreen, setIsSmallScreen] = useState<boolean>(false);
+  const [isNarrowForStopwatch, setIsNarrowForStopwatch] = useState<boolean>(false);
 
   useEffect(() => {
     const handleResize = () => {
       setIsSmallScreen(window.innerWidth < 1024);
+      setIsNarrowForStopwatch(window.innerWidth < 1280);
     };
     handleResize();
     window.addEventListener("resize", handleResize);
@@ -678,7 +714,11 @@ export default function ExcalidrawWrapper() {
       }
 
       // Close code panel / data structures panel if Excalidraw library opens
-      if ((appState as unknown as Record<string, unknown>).showLibrary) {
+      if ((appState as unknown as Record<string, unknown>).showLibrary || (appState as unknown as { openSidebar?: { name?: string } | null }).openSidebar?.name === "library") {
+        if (showExtensionsPanelRef.current) {
+          setShowExtensionsPanel(false);
+          showExtensionsPanelRef.current = false;
+        }
         if (showCodePanelRef.current) {
           setShowCodePanel(false);
           showCodePanelRef.current = false;
@@ -965,7 +1005,9 @@ export default function ExcalidrawWrapper() {
   }, [handleSaveToCloud]);
 
   useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
     document.documentElement.classList.toggle("theme-dark", theme === "dark");
+    document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("explaino-theme", theme);
   }, [theme]);
 
@@ -1194,9 +1236,14 @@ export default function ExcalidrawWrapper() {
   }, [handleInsertDataStructure]);
 
   // --- Insert native diagram elements (from Text-to-Diagram / Mermaid) onto canvas
-  const handleInsertDiagramElements = useCallback((elements: readonly ExcalidrawElement[]) => {
+  const handleInsertDiagramElements = useCallback((elements: readonly ExcalidrawElement[], files?: BinaryFiles) => {
     const api = excalidrawAPI.current;
     if (!api || elements.length === 0) return;
+
+    // Register any binary files (such as high-res SVG fallback graphics) with Excalidraw so image elements render clearly
+    if (files && Object.keys(files).length > 0) {
+      api.addFiles(Object.values(files));
+    }
 
     const appState = api.getAppState();
     const { x: targetCenterX, y: targetCenterY } = viewportCoordsToSceneCoords(
@@ -1322,24 +1369,7 @@ export default function ExcalidrawWrapper() {
     [theme]
   );
 
-  // Hide Excalidraw's built-in Library button (its class names drift between
-  // versions, so match on the rendered "Library" label text instead).
-  useEffect(() => {
-    const hide = () => {
-      document
-        .querySelectorAll(".excalidraw button")
-        .forEach((b) => {
-          if ((b.textContent ?? "").trim() === "Library") {
-            (b as HTMLElement).style.display = "none";
-          }
-        });
-    };
-    hide();
-    const obs = new MutationObserver(hide);
-    obs.observe(document.body, { childList: true, subtree: true });
-    return () => obs.disconnect();
-  }, []);
-
+  
   const handleUpdateCanvasText = useCallback((id: string, raw: string) => {
     const api = excalidrawAPI.current;
     if (!api) return;
@@ -1417,7 +1447,7 @@ export default function ExcalidrawWrapper() {
     const controller = new AbortController();
     textAiAbort.current = controller;
     const isCode = textAiMode === "code";
-    const model = isCode ? "codestral-latest" : "open-mistral-nemo";
+    const model = getStoredModel();
     const system = isCode
       ? "You are Explaino Code. Output ONLY raw code Markdown (fenced code blocks) for the requested language(s), no explanations."
       : "You are Explaino Canvas Text Editor. Output ONLY raw markdown content for direct placement on the canvas. No greetings, no explanations.";
@@ -1667,8 +1697,8 @@ export default function ExcalidrawWrapper() {
       }
     },
     []
-  );
-
+  );
+
   // Global shortcuts handled via useCanvasShortcuts hook
   useCanvasShortcuts({
     onTogglePalette: () => setShowPalette((v) => !v),
@@ -1718,11 +1748,12 @@ export default function ExcalidrawWrapper() {
           shortcut: "Browser",
           icon: <Monitor size={15} />,
           run: () => {
-            setShowIframePanel((v) => {
-              const next = !v;
-              saveScreenState({ isOpen: next });
-              return next;
-            });
+            if (!showIframePanel) {
+              handleOpenScreen();
+            } else {
+              setShowIframePanel(false);
+              saveScreenState({ isOpen: false });
+            }
           },
         },
         {
@@ -1732,9 +1763,7 @@ export default function ExcalidrawWrapper() {
           shortcut: "Enter",
           icon: <Terminal size={15} />,
           run: () => {
-            setShowIframePanel(true);
-            saveScreenState({ isOpen: true });
-            setIsScreenActive(true);
+            handleOpenScreen();
           },
         },
         {
@@ -2177,24 +2206,6 @@ export default function ExcalidrawWrapper() {
           Todos
         </MainMenu.Item>
         <MainMenu.Item
-          onSelect={handleToggleStopwatch}
-          icon={
-            <div
-              className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${
-                showStopwatch
-                  ? "bg-indigo-600 border-indigo-600 text-white"
-                  : "border-gray-400 dark:border-gray-500 bg-transparent"
-              }`}
-            >
-              {showStopwatch && <Check size={12} strokeWidth={3} />}
-            </div>
-          }
-          className="explaino-menu-item"
-          title="Toggle Stopwatch on canvas"
-        >
-          Stopwatch
-        </MainMenu.Item>
-        <MainMenu.Item
           onSelect={handleOpenDiagramModal}
           icon={<Sparkles size={16} strokeWidth={2.2} />}
           className="explaino-menu-item"
@@ -2217,62 +2228,9 @@ export default function ExcalidrawWrapper() {
   );
 
   const renderTopRightUI = useCallback(() => {
-    if (isSmallScreen) return null;
     return (
-      <div className="hidden lg:flex items-center gap-1.5" style={{ marginLeft: 8 }}>
-        <button
-          type="button"
-          onClick={() => setLaserActive((v) => !v)}
-          className="excalidraw-button"
-          style={
-            laserActive
-              ? theme === "dark"
-                ? {
-                    ...PANEL_BUTTON_STYLE,
-                    background: "#e0dfff",
-                    color: "#030064",
-                  }
-                : {
-                    ...PANEL_BUTTON_STYLE,
-                    background: "var(--color-on-primary-container, #030064)",
-                    color: "#ffffff",
-                  }
-              : PANEL_BUTTON_STYLE
-          }
-          title="Laser pointer — transient red marks that fade away (never saved, never undoable). Esc to exit."
-          aria-pressed={laserActive}
-        >
-          <Zap size={16} strokeWidth={2.2} />
-          <span className="hidden xl:inline" style={{ marginLeft: 4 }}>Laser</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setShowIframePanel((v) => {
-              const next = !v;
-              saveScreenState({ isOpen: next });
-              return next;
-            });
-          }}
-          className="excalidraw-button"
-          style={PANEL_BUTTON_STYLE}
-          title="Open screen / browser panel"
-          aria-pressed={showIframePanel}
-        >
-          <Monitor size={16} strokeWidth={2.2} />
-          <span className="hidden xl:inline" style={{ marginLeft: 4 }}>Screen</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowTextToDiagramModal(true)}
-          className="excalidraw-button"
-          style={PANEL_BUTTON_STYLE}
-          title="Text to Diagram / Mermaid — generate editable diagrams from prompts or Mermaid code"
-          aria-label="Text to Diagram"
-        >
-          <Sparkles size={16} strokeWidth={2.2} />
-          <span className="hidden xl:inline" style={{ marginLeft: 4 }}>Diagram</span>
-        </button>
+      <div className="flex items-center gap-1.5" style={{ marginLeft: 8 }}>
+        {/* 1. Theme toggle outside on the left of Extensions button */}
         <button
           type="button"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -2292,7 +2250,8 @@ export default function ExcalidrawWrapper() {
             alignItems: "center",
             justifyContent: "center",
           }}
-          title="Toggle dark mode"
+          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          aria-label="Toggle dark mode"
         >
           {theme === "dark" ? (
             <Sun size={16} strokeWidth={2.2} />
@@ -2300,71 +2259,55 @@ export default function ExcalidrawWrapper() {
             <Moon size={16} strokeWidth={2.2} />
           )}
         </button>
+
+        {/* 2. Extensions button with icon before Extensions (opens side panel) */}
         <button
           type="button"
+          data-extensions-toggle="true"
           onClick={() => {
             const api = excalidrawAPI.current;
-            if (!showDataStructuresPanel && api) {
-              api.updateScene({ appState: { showLibrary: false } as unknown as AppState });
-              if (showCodePanel) setShowCodePanel(false);
+            if (!showExtensionsPanel && api) {
+              api.updateScene({
+                appState: { showLibrary: false, openSidebar: null } as unknown as AppState,
+              });
             }
-            setShowDataStructuresPanel(!showDataStructuresPanel);
+            setShowExtensionsPanel((v) => !v);
           }}
           className="excalidraw-button"
           style={{
-            height: "2rem",
-            padding: "0 0.6rem",
-            minWidth: "2.6rem",
-            fontSize: "0.8rem",
-            borderRadius: "0.5rem",
-            background: "var(--color-surface-primary-container, #e0dfff)",
-            color: "var(--color-on-primary-container, #030064)",
-            border: "none",
-            cursor: "pointer",
-            fontWeight: 500,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
+            ...EXTENSIONS_BUTTON_STYLE,
+            ...(showExtensionsPanel
+              ? theme === "dark"
+                ? {
+                    background: "#e0dfff",
+                    color: "#030064",
+                  }
+                : {
+                    background: "var(--color-on-primary-container, #030064)",
+                    color: "#ffffff",
+                  }
+              : {
+                  background: "var(--color-surface-primary-container, #e0dfff)",
+                  color: "var(--color-on-primary-container, #030064)",
+                  border: "none",
+                }),
           }}
-          title="Data structure diagrams"
+          title="Extensions — canvas tools, AI, screen, diagrams, and stopwatch"
+          aria-pressed={showExtensionsPanel}
         >
-          <Boxes size={16} strokeWidth={2.2} />
-        </button>
-        <button
-          type="button"
-          onClick={handleInsertTable}
-          className="excalidraw-button"
-          style={{
-            height: "2rem",
-            padding: "0 0.6rem",
-            minWidth: "2.6rem",
-            fontSize: "0.8rem",
-            borderRadius: "0.5rem",
-            background: "var(--color-surface-primary-container, #e0dfff)",
-            color: "var(--color-on-primary-container, #030064)",
-            border: "none",
-            cursor: "pointer",
-            fontWeight: 500,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          title="Insert editable table"
-          aria-label="Insert editable table"
-        >
-          <Grid3x3 size={16} strokeWidth={2.2} />
+          <GoogleExtensionIcon size={16} />
+          <span>Extensions</span>
+          {laserActive && (
+            <span
+              className="w-2 h-2 rounded-full bg-red-500 animate-pulse"
+              style={{ marginLeft: 2 }}
+              title="Laser is active"
+            />
+          )}
         </button>
       </div>
     );
-  }, [
-    isSmallScreen,
-    laserActive,
-    theme,
-    showIframePanel,
-    showDataStructuresPanel,
-    showCodePanel,
-    handleInsertTable,
-  ]);
+  }, [theme, showExtensionsPanel, laserActive]);
 
   // QuickShape hold-detection pipeline managed via useQuickShape hook
   useQuickShape(excalidrawAPI, apiReady);
@@ -2394,10 +2337,14 @@ export default function ExcalidrawWrapper() {
       {/* Transient laser-pointer layer: screen-space only, never touches the
           scene or the undo/redo history. */}
       <LaserOverlay active={laserActive} />
-      {/* Stopwatch & Timer — positioned directly to the right of the top-left hamburger menu (3 slashes) */}
+      {/* Stopwatch & Timer — responsive position:
+          Desktop (>=1024px): anchored to top-left next to hamburger menu (3 slashes)
+          Narrow screen (<1024px): anchored to bottom-center of the page below drawing/canvas tools */}
       {showStopwatch && (
-        <div className="fixed top-2.5 sm:top-3 left-[56px] sm:left-[60px] z-20 pointer-events-auto flex items-center h-9">
-          <Stopwatch theme={theme} />
+        <div
+          className="fixed z-20 pointer-events-auto transition-all duration-300 max-xl:bottom-3 max-xl:left-1/2 max-xl:-translate-x-1/2 xl:top-2.5 xl:left-[60px] xl:bottom-auto xl:translate-x-0 flex items-center"
+        >
+          <Stopwatch theme={theme} isCompact={isNarrowForStopwatch} />
         </div>
       )}
       </div>
@@ -2411,11 +2358,12 @@ export default function ExcalidrawWrapper() {
             onToggleLaser={() => setLaserActive((v) => !v)}
             showScreen={showIframePanel}
             onToggleScreen={() => {
-              setShowIframePanel((v) => {
-                const next = !v;
-                saveScreenState({ isOpen: next });
-                return next;
-              });
+              if (!showIframePanel) {
+                handleOpenScreen();
+              } else {
+                setShowIframePanel(false);
+                saveScreenState({ isOpen: false });
+              }
             }}
             onOpenDiagram={() => setShowTextToDiagramModal(true)}
             showDataStructures={showDataStructuresPanel}
@@ -2515,7 +2463,7 @@ export default function ExcalidrawWrapper() {
                       sendTextAi();
                     }
                   }}
-                  placeholder={textAiMode === "code" ? "Ask Codestral…" : "Ask Mistral…"}
+                  placeholder="Ask Gemini 3.8 Flash…"
                   aria-label="AI instruction"
                   autoFocus
                 />
@@ -2561,47 +2509,9 @@ export default function ExcalidrawWrapper() {
             }
           }}
           activeToolType={activeToolType}
+          recenterTrigger={screenRecenterTrigger}
         />
       )}
-
-      {/* Launchers — bottom-right: single stack, Explaino above AI Text */}
-      <div className="bottom-controls-right ai-text-dock launcher-stack">
-        <button
-          type="button"
-          className="excalidraw-button"
-          style={PANEL_BUTTON_STYLE}
-          onClick={() => {
-            if (!showExplaino) {
-              setShowCodePanel(false);
-              setShowAiTextPanel(false);
-              setShowDataStructuresPanel(false);
-            }
-            setShowExplaino(!showExplaino);
-          }}
-          title="Open Explaino voice notes"
-          aria-label="Explaino"
-        >
-          <Mic size={16} strokeWidth={2.2} />
-          <span className="hidden sm:inline" style={{ marginLeft: 4 }}>Explaino</span>
-        </button>
-        <button
-          type="button"
-          className="excalidraw-button"
-          style={PANEL_BUTTON_STYLE}
-          onClick={() => {
-            if (!showAiTextPanel) {
-              setShowCodePanel(false);
-              setShowDataStructuresPanel(false);
-            }
-            setShowAiTextPanel(!showAiTextPanel);
-          }}
-          title="Open AI text assistant"
-          aria-label="AI Text"
-        >
-          <Sparkles size={16} strokeWidth={2.2} />
-          <span className="hidden sm:inline" style={{ marginLeft: 4 }}>AI Text</span>
-        </button>
-      </div>
 
       {/* Explaino voice notes panel */}
       {showExplaino && (
@@ -2644,12 +2554,55 @@ export default function ExcalidrawWrapper() {
 
       {saveStatus && (
         <div
-          className="fixed top-3 left-1/2 -translate-x-1/2 z-[100] text-white text-xs font-medium px-4 py-2 rounded-lg shadow-lg"
+          className="fixed bottom-6 max-xl:bottom-16 left-1/2 -translate-x-1/2 z-[100] text-white text-xs font-medium px-4 py-2 rounded-lg shadow-lg"
           style={{ background: "var(--color-gray-90, #1e1e1e)" }}
         >
           {saveStatus}
         </div>
       )}
+
+            {/* Laser indicator banner when laser is actively drawing */}
+      {laserActive && (
+        <div className="fixed bottom-6 max-xl:bottom-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-red-600/95 text-white text-xs font-semibold shadow-2xl backdrop-blur transition-all pointer-events-auto border border-red-400/40 animate-in fade-in slide-in-from-bottom-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-white animate-pulse" />
+          <span>Laser Pointer Active</span>
+          <button
+            type="button"
+            onClick={() => setLaserActive(false)}
+            className="ml-2 px-2 py-0.5 rounded bg-black/30 hover:bg-black/50 text-white text-[11px] font-medium transition-colors"
+            title="Turn off laser (Esc)"
+          >
+            Exit (Esc)
+          </button>
+        </div>
+      )}
+
+      {/* Extensions Side Panel */}
+      <ExtensionsPanel
+        isOpen={showExtensionsPanel}
+        onClose={() => setShowExtensionsPanel(false)}
+        theme={theme}
+        laserActive={laserActive}
+        onToggleLaser={() => setLaserActive((v) => !v)}
+        showScreen={showIframePanel}
+        onOpenScreen={handleOpenScreen}
+        onOpenDiagram={() => setShowTextToDiagramModal(true)}
+        showDataStructures={showDataStructuresPanel}
+        onOpenDataStructures={() => {
+          const api = excalidrawAPI.current;
+          if (api) {
+            api.updateScene({ appState: { showLibrary: false, openSidebar: null } as unknown as AppState });
+          }
+          setShowDataStructuresPanel(true);
+        }}
+        onInsertTable={handleInsertTable}
+        showExplaino={showExplaino}
+        onOpenExplaino={() => setShowExplaino(true)}
+        showAiText={showAiTextPanel}
+        onOpenAiText={() => setShowAiTextPanel(true)}
+        showStopwatch={showStopwatch}
+        onToggleStopwatch={() => setShowStopwatch((v) => !v)}
+      />
 
       {/* Text to Diagram / Mermaid Modal */}
       {showTextToDiagramModal && (
