@@ -3,6 +3,9 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   Sparkles,
+  History,
+  Trash2,
+  Clock,
   ArrowRight,
   Loader2,
   X,
@@ -23,12 +26,14 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
-import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
+import type { BinaryFiles } from "@excalidraw/excalidraw/types";
+import { safeParseMermaidToExcalidraw } from "@/lib/mermaidParser";
+import { getStoredModel, getModelLabel } from "@/lib/ai/mistral";
 
 interface TextToDiagramModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onInsert: (elements: readonly ExcalidrawElement[]) => void;
+  onInsert: (elements: readonly ExcalidrawElement[], files?: BinaryFiles) => void;
   theme?: "light" | "dark";
 }
 
@@ -156,13 +161,87 @@ function sanitizeSequenceDiagramLifelines(elements: any[]): any[] {
   return [...linesToReorder, ...processedElements];
 }
 
+
+export interface DiagramHistoryItem {
+  id: string;
+  prompt: string;
+  mermaidCode: string;
+  model?: string;
+  timestamp: number;
+}
+
+const HISTORY_STORAGE_KEY = "explaino-text-to-diagram-history";
+const MAX_HISTORY_ITEMS = 30;
+
+const STARTER_HISTORY_ITEM: DiagramHistoryItem = {
+  id: "diag-starter-tcp",
+  prompt: "tcp/ip 3-way handshake sequence diagram",
+  mermaidCode: INITIAL_MERMAID,
+  model: "gemini-3.5-flash",
+  timestamp: Date.now() - 3600000,
+};
+
+function loadDiagramHistory(): DiagramHistoryItem[] {
+  if (typeof window === "undefined") return [STARTER_HISTORY_ITEM];
+  try {
+    const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
+    if (!raw) return [STARTER_HISTORY_ITEM];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    return [STARTER_HISTORY_ITEM];
+  } catch {
+    return [STARTER_HISTORY_ITEM];
+  }
+}
+
+function saveDiagramHistory(items: DiagramHistoryItem[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(items.slice(0, MAX_HISTORY_ITEMS)));
+  } catch {}
+}
+
+function getDiagramType(code: string): string {
+  const trimmed = code.trim().toLowerCase();
+  if (trimmed.startsWith("sequencediagram")) return "Sequence Diagram";
+  if (trimmed.startsWith("flowchart") || trimmed.startsWith("graph")) return "Flowchart";
+  if (trimmed.startsWith("classdiagram")) return "Class Diagram";
+  if (trimmed.startsWith("statediagram")) return "State Diagram";
+  if (trimmed.startsWith("erdiagram")) return "ER Diagram";
+  if (trimmed.startsWith("gantt")) return "Gantt Chart";
+  if (trimmed.startsWith("pie")) return "Pie Chart";
+  if (trimmed.startsWith("mindmap")) return "Mindmap";
+  return "Mermaid Diagram";
+}
+
+function formatTimeAgo(timestamp: number): string {
+  const diff = Date.now() - timestamp;
+  const secs = Math.floor(diff / 1000);
+  if (secs < 60) return "Just now";
+  const mins = Math.floor(secs / 1000 / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 export default function TextToDiagramModal({
   isOpen,
   onClose,
   onInsert,
   theme = "light",
 }: TextToDiagramModalProps) {
-  const [activeTab, setActiveTab] = useState<"text" | "mermaid">("text");
+  const [activeTab, setActiveTab] = useState<"text" | "mermaid" | "history">("text");
+  const [history, setHistory] = useState<DiagramHistoryItem[]>(() => {
+    if (typeof window !== "undefined") {
+      return loadDiagramHistory();
+    }
+    return [STARTER_HISTORY_ITEM];
+  });
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>("diag-starter-tcp");
+  const [historyToast, setHistoryToast] = useState<string | null>(null);
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const [mermaidCode, setMermaidCode] = useState(INITIAL_MERMAID);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -174,6 +253,39 @@ export default function TextToDiagramModal({
   const [zoomScale, setZoomScale] = useState<number>(1);
 
   const previewContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleLoadHistory = (item: DiagramHistoryItem, switchTab?: "text" | "mermaid") => {
+    setPrompt(item.prompt);
+    setMermaidCode(item.mermaidCode);
+    updateMermaidPreview(item.mermaidCode);
+    setSelectedHistoryId(item.id);
+    setZoomScale(1);
+    setHistoryToast(`Loaded "${item.prompt.slice(0, 32)}..." into preview and editor`);
+    setTimeout(() => setHistoryToast(null), 3000);
+
+    if (switchTab) {
+      setActiveTab(switchTab);
+    }
+  };
+
+  const handleDeleteHistory = (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setHistory((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      saveDiagramHistory(updated);
+      return updated;
+    });
+    if (selectedHistoryId === id) {
+      setSelectedHistoryId(null);
+    }
+  };
+
+  const handleClearHistory = () => {
+    setHistory([]);
+    saveDiagramHistory([]);
+    setSelectedHistoryId(null);
+  };
+
   const isDark = theme === "dark";
 
   // Re-render Mermaid SVG preview with clean theme variables
@@ -264,11 +376,13 @@ export default function TextToDiagramModal({
     [isDark]
   );
 
+  // Debounced live preview update when editing Mermaid code
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) return;
+    const timer = setTimeout(() => {
       updateMermaidPreview(mermaidCode);
-      setZoomScale(1);
-    }
+    }, 250);
+    return () => clearTimeout(timer);
   }, [isOpen, mermaidCode, updateMermaidPreview]);
 
   // Handle Escape key to close
@@ -293,7 +407,7 @@ export default function TextToDiagramModal({
       const res = await fetch("/api/ai/mermaid", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: textToRun }),
+        body: JSON.stringify({ prompt: textToRun, model: getStoredModel() }),
       });
 
       if (!res.ok) {
@@ -305,6 +419,25 @@ export default function TextToDiagramModal({
         setMermaidCode(data.mermaid);
         await updateMermaidPreview(data.mermaid);
         setZoomScale(1);
+
+        // Auto-save to local history cache
+        const historyItem: DiagramHistoryItem = {
+          id: `diag-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          prompt: textToRun,
+          mermaidCode: data.mermaid,
+          model: getStoredModel(),
+          timestamp: Date.now(),
+        };
+
+        setHistory((prev) => {
+          const filtered = prev.filter(
+            (h) => h.prompt.trim().toLowerCase() !== textToRun.toLowerCase()
+          );
+          const updated = [historyItem, ...filtered].slice(0, MAX_HISTORY_ITEMS);
+          saveDiagramHistory(updated);
+          return updated;
+        });
+        setSelectedHistoryId(historyItem.id);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error generating diagram";
@@ -325,18 +458,15 @@ export default function TextToDiagramModal({
     setInsertError(null);
 
     try {
-      const { parseMermaidToExcalidraw } = await import("@excalidraw/mermaid-to-excalidraw");
-      const { elements } = await parseMermaidToExcalidraw(mermaidCode.trim(), {
-        themeVariables: { fontSize: "16px" },
+      const { elements, files } = await safeParseMermaidToExcalidraw(mermaidCode.trim(), {
+        fontSize: "16px",
       });
 
       if (!elements || elements.length === 0) {
         throw new Error("No elements generated from this Mermaid diagram.");
       }
 
-            const sanitizedElements = sanitizeSequenceDiagramLifelines(elements);
-      const excalidrawElements = convertToExcalidrawElements(sanitizedElements);
-            onInsert(excalidrawElements);
+      onInsert(elements, files);
       onClose();
     } catch (err) {
       const msg =
@@ -357,9 +487,12 @@ export default function TextToDiagramModal({
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 md:p-8 lg:p-10 bg-black/80 backdrop-blur-md transition-all duration-200"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+      className={`fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 md:p-8 lg:p-10 transition-all duration-200 ${
+        isDark ? "bg-black/45" : "bg-black/[0.15]"
+      }`}
+      style={{
+        backdropFilter: "blur(6px)",
+        WebkitBackdropFilter: "blur(6px)",
       }}
       aria-modal="true"
       role="dialog"
@@ -417,8 +550,8 @@ export default function TextToDiagramModal({
               <button
                 type="button"
                 onClick={() => setActiveTab("text")}
-                style={{ padding: "7px 16px", lineHeight: "1.2" }}
-                className={`text-to-diagram-tab-btn flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                style={{ padding: "6px 13px", lineHeight: "1.2" }}
+                className={`text-to-diagram-tab-btn flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   activeTab === "text"
                     ? isDark
                       ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/40"
@@ -434,8 +567,8 @@ export default function TextToDiagramModal({
               <button
                 type="button"
                 onClick={() => setActiveTab("mermaid")}
-                style={{ padding: "7px 16px", lineHeight: "1.2" }}
-                className={`text-to-diagram-tab-btn flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                style={{ padding: "6px 13px", lineHeight: "1.2" }}
+                className={`text-to-diagram-tab-btn flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   activeTab === "mermaid"
                     ? isDark
                       ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/40"
@@ -447,6 +580,36 @@ export default function TextToDiagramModal({
               >
                 <Code2 size={14} />
                 <span>Mermaid Code</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("history")}
+                style={{ padding: "6px 13px", lineHeight: "1.2" }}
+                className={`text-to-diagram-tab-btn flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  activeTab === "history"
+                    ? isDark
+                      ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/40"
+                      : "bg-[#6965db] text-white shadow-sm"
+                    : isDark
+                    ? "text-zinc-400 hover:text-zinc-200"
+                    : "text-zinc-600 hover:text-zinc-900"
+                }`}
+              >
+                <History size={14} />
+                <span>History</span>
+                {history.length > 0 && (
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                      activeTab === "history"
+                        ? "bg-white/25 text-white"
+                        : isDark
+                        ? "bg-zinc-800 text-zinc-300 border border-zinc-700/60"
+                        : "bg-zinc-300 text-zinc-700"
+                    }`}
+                  >
+                    {history.length}
+                  </span>
+                )}
               </button>
             </div>
 
@@ -476,7 +639,184 @@ export default function TextToDiagramModal({
               isDark ? "border-zinc-800/80 bg-[#16161b]" : "border-zinc-200/80 bg-white"
             }`}
           >
-            {activeTab === "text" ? (
+            
+            {activeTab === "history" ? (
+              <div className="flex flex-col h-full gap-3.5">
+                <div className="flex items-center justify-between pb-2 border-b border-zinc-200/80 dark:border-zinc-800/80 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <History size={16} className="text-indigo-400" />
+                    <span className="text-xs font-bold tracking-wider uppercase text-indigo-400">
+                      Diagram History
+                    </span>
+                    <span
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                        isDark
+                          ? "bg-zinc-800 text-zinc-300 border-zinc-700"
+                          : "bg-zinc-100 text-zinc-600 border-zinc-200"
+                      }`}
+                    >
+                      {history.length} {history.length === 1 ? "cached" : "cached"}
+                    </span>
+                  </div>
+                  {history.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearHistory}
+                      className="text-[11px] text-zinc-400 hover:text-red-400 flex items-center gap-1 transition-colors px-2 py-1 rounded hover:bg-red-500/10 cursor-pointer"
+                      title="Clear all history from cache"
+                    >
+                      <Trash2 size={12} />
+                      <span>Clear All</span>
+                    </button>
+                  )}
+                </div>
+
+                {historyToast && (
+                  <div className="px-3 py-2 rounded-xl text-xs bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center gap-2 animate-in fade-in shrink-0">
+                    <CheckCircle2 size={14} className="shrink-0" />
+                    <span className="truncate">{historyToast}</span>
+                  </div>
+                )}
+
+                {history.length === 0 ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-zinc-500 gap-3">
+                    <Clock size={36} className="opacity-40" />
+                    <div>
+                      <p className="text-xs font-semibold text-zinc-400">No cached diagram history</p>
+                      <p className="text-[11px] text-zinc-500 mt-1 max-w-[260px]">
+                        Diagrams generated from natural prompts or Mermaid code will be automatically saved in your browser cache.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("text")}
+                      className="mt-2 text-xs font-medium px-3.5 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-colors cursor-pointer"
+                    >
+                      Generate New Diagram
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
+                    {history.map((item) => {
+                      const isSelected = selectedHistoryId === item.id;
+                      const diagType = getDiagramType(item.mermaidCode);
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => handleLoadHistory(item)}
+                          className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer relative group ${
+                            isSelected
+                              ? isDark
+                                ? "bg-indigo-950/50 border-indigo-500 shadow-md shadow-indigo-950/50"
+                                : "bg-indigo-50/80 border-indigo-400 shadow-sm"
+                              : isDark
+                              ? "bg-zinc-900/70 border-zinc-800/80 hover:bg-zinc-800/60 hover:border-zinc-700 text-zinc-300"
+                              : "bg-zinc-50 border-zinc-200/90 hover:bg-zinc-100 hover:border-zinc-300 text-zinc-800"
+                          }`}
+                        >
+                          {/* Card Header: Prompt + Time */}
+                          <div className="flex items-start justify-between gap-2 mb-1.5">
+                            <h4
+                              className={`text-xs font-semibold line-clamp-2 leading-snug ${
+                                isSelected
+                                  ? isDark
+                                    ? "text-indigo-200"
+                                    : "text-indigo-950 font-bold"
+                                  : isDark
+                                  ? "text-zinc-200"
+                                  : "text-zinc-900"
+                              }`}
+                            >
+                              {item.prompt}
+                            </h4>
+                            <span className="text-[10px] text-zinc-400 shrink-0 font-medium">
+                              {formatTimeAgo(item.timestamp)}
+                            </span>
+                          </div>
+
+                          {/* Metadata row: Badges */}
+                          <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                            <span
+                              className={`text-[10px] font-medium px-2 py-0.5 rounded-md border ${
+                                isDark
+                                  ? "bg-zinc-800/90 text-indigo-300 border-indigo-500/25"
+                                  : "bg-white text-indigo-700 border-indigo-200"
+                              }`}
+                            >
+                              {diagType}
+                            </span>
+                            {item.model && (
+                              <span
+                                className={`text-[10px] font-medium px-2 py-0.5 rounded-md border ${
+                                  isDark
+                                    ? "bg-zinc-800/70 text-zinc-400 border-zinc-700/60"
+                                    : "bg-white text-zinc-600 border-zinc-200"
+                                }`}
+                              >
+                                {getModelLabel(item.model)}
+                              </span>
+                            )}
+                            {isSelected && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 ml-auto">
+                                Active in Preview
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Mermaid code snippet */}
+                          <pre
+                            className={`text-[10px] font-mono p-2 rounded-lg line-clamp-2 overflow-hidden border leading-relaxed ${
+                              isDark
+                                ? "bg-black/40 border-zinc-800/80 text-zinc-400"
+                                : "bg-white border-zinc-200/90 text-zinc-600"
+                            }`}
+                          >
+                            {item.mermaidCode.slice(0, 140)}
+                          </pre>
+
+                          {/* Actions on hover/active */}
+                          <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-zinc-200/50 dark:border-zinc-800/60">
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleLoadHistory(item, "text");
+                                }}
+                                className="text-[11px] font-semibold text-indigo-500 hover:text-indigo-400 flex items-center gap-1 cursor-pointer transition-colors"
+                              >
+                                <span>Edit Prompt</span>
+                              </button>
+                              <span className="text-zinc-500 text-[10px]">•</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleLoadHistory(item, "mermaid");
+                                }}
+                                className="text-[11px] font-semibold text-indigo-500 hover:text-indigo-400 flex items-center gap-1 cursor-pointer transition-colors"
+                              >
+                                <span>Edit Mermaid</span>
+                              </button>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteHistory(item.id, e)}
+                              className="text-zinc-400 hover:text-red-400 p-1 rounded hover:bg-red-500/10 transition-colors cursor-pointer"
+                              title="Delete from history"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : activeTab === "text" ? (
+
               <div className="flex flex-col h-full gap-5">
                 {/* Prompt Section */}
                 <div>
@@ -522,9 +862,22 @@ export default function TextToDiagramModal({
 
                 {/* Example Quick Templates */}
                 <div>
-                  <span className={`text-xs font-bold tracking-wider uppercase block mb-2.5 ${isDark ? "text-zinc-400" : "text-zinc-500"}`}>
-                    Popular Templates
-                  </span>
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className={`text-xs font-bold tracking-wider uppercase ${isDark ? "text-zinc-400" : "text-zinc-500"}`}>
+                      Popular Templates
+                    </span>
+                    {history.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("history")}
+                        className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors cursor-pointer"
+                        title="View cached diagram history"
+                      >
+                        <History size={12} />
+                        <span>History ({history.length})</span>
+                      </button>
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 gap-2.5">
                     {EXAMPLE_PROMPTS.map((ex) => {
                       const Icon = ex.icon;
@@ -590,6 +943,15 @@ export default function TextToDiagramModal({
                       </>
                     )}
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("mermaid")}
+                    className="w-full mt-2.5 inline-flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-medium rounded-xl border border-dashed text-indigo-400 hover:text-indigo-300 border-indigo-500/30 hover:border-indigo-500/60 bg-indigo-500/5 hover:bg-indigo-500/10 transition-colors cursor-pointer"
+                  >
+                    <Code2 size={14} />
+                    <span>View & Edit Mermaid Code</span>
+                  </button>
                 </div>
 
                 {/* Pro Tip Card */}
@@ -607,15 +969,21 @@ export default function TextToDiagramModal({
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col h-full gap-4">
+              <div className="flex flex-col h-full gap-3">
                 <div className="flex items-center justify-between">
-                  <label
-                    htmlFor="mermaid-code"
-                    className="text-xs font-bold tracking-wider uppercase text-indigo-400 flex items-center gap-1.5"
-                  >
-                    <FileCode2 size={15} />
-                    <span>Mermaid Definition</span>
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <label
+                      htmlFor="mermaid-code"
+                      className="text-xs font-bold tracking-wider uppercase text-indigo-400 flex items-center gap-1.5"
+                    >
+                      <FileCode2 size={15} />
+                      <span>Mermaid Code</span>
+                    </label>
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Live Editor
+                    </span>
+                  </div>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -648,25 +1016,30 @@ export default function TextToDiagramModal({
                   </div>
                 </div>
 
-                <textarea
-                  id="mermaid-code"
-                  value={mermaidCode}
-                  onChange={(e) => {
-                    setMermaidCode(e.target.value);
-                    updateMermaidPreview(e.target.value);
-                  }}
-                  rows={14}
-                  spellCheck={false}
-                  style={{ padding: "14px 16px", boxSizing: "border-box" }}
-                  className={`text-to-diagram-textarea w-full flex-1 p-4 font-mono text-xs rounded-xl border outline-none transition-all resize-none leading-relaxed ${
-                    isDark
-                      ? "bg-zinc-900 border-zinc-800 text-zinc-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                      : "bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#6965db] focus:ring-2 focus:ring-[#6965db]/20"
-                  }`}
-                />
+                <div className="relative flex-1 flex flex-col min-h-0">
+                  <textarea
+                    id="mermaid-code"
+                    value={mermaidCode}
+                    onChange={(e) => {
+                      setMermaidCode(e.target.value);
+                      setRenderError(null);
+                    }}
+                    placeholder="Enter Mermaid diagram code here..."
+                    spellCheck={false}
+                    style={{ padding: "14px 16px", boxSizing: "border-box" }}
+                    className={`text-to-diagram-textarea w-full flex-1 p-4 font-mono text-xs rounded-xl border outline-none transition-all resize-none leading-relaxed ${
+                      isDark
+                        ? "bg-zinc-900 border-zinc-800 text-zinc-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                        : "bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-[#6965db] focus:ring-2 focus:ring-[#6965db]/20"
+                    }`}
+                  />
+                  <div className="absolute bottom-2.5 right-3 text-[10px] font-mono text-zinc-500 pointer-events-none bg-black/40 px-2 py-0.5 rounded backdrop-blur-sm">
+                    {mermaidCode.split("\n").length} lines • {mermaidCode.length} chars
+                  </div>
+                </div>
 
                 {renderError && (
-                  <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-red-500/10 border border-red-500/25 text-red-400 text-xs">
+                  <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs shrink-0">
                     <AlertCircle size={15} className="shrink-0 mt-0.5" />
                     <span className="line-clamp-2">{renderError}</span>
                   </div>
@@ -828,7 +1201,7 @@ export default function TextToDiagramModal({
             <button
               type="button"
               onClick={handleInsert}
-              disabled={isInserting || !mermaidCode.trim() || !!renderError}
+              disabled={isInserting || !mermaidCode.trim()}
               className="inline-flex items-center justify-center gap-2 px-6 py-2.5 sm:px-7 sm:py-2.5 text-xs sm:text-sm font-semibold rounded-xl text-white transition-all shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.98]"
               style={{
                 padding: "12px 28px",
