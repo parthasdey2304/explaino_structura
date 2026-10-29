@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
+const GEMINI_INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1beta/interactions";
 const MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions";
+
+const DEFAULT_GEMINI_KEY = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
+const DEFAULT_MISTRAL_KEY = process.env.MISTRAL_API_KEY || process.env.NEXT_PUBLIC_MISTRAL_API_KEY || "";
 
 const SYSTEM_PROMPT =
   "You are a Mermaid diagram expert. Convert the user's diagram description into valid Mermaid.js diagram code.\n" +
@@ -9,17 +13,16 @@ const SYSTEM_PROMPT =
   "2. Do NOT include conversational filler, greetings, comments, or explanations.\n" +
   "3. Choose the most appropriate diagram type: sequenceDiagram, flowchart TD/LR, classDiagram, stateDiagram-v2, or erDiagram.\n" +
   "4. Ensure node labels, arrows, and syntax are 100% valid Mermaid syntax.\n" +
-  "5. In sequence diagrams, always use 'participant' (e.g. participant Client as 💻 Client) instead of 'actor' to render modern clean rectangular cards instead of stick figures.";
+  "5. In sequence diagrams, always use 'participant' (e.g. participant Client as 💻 Client) instead of 'actor' to render modern clean rectangular cards instead of stick figures.\n" +
+  "6. In flowcharts with subgraphs, always declare subgraphs using an alphanumeric ID followed by a bracketed label, e.g. `subgraph Backend [\"Backend Systems\"]` or `subgraph Clients [\"Clients\"]`. Never put quotes directly after the subgraph keyword (avoid `subgraph \"Backend\"`).";
 
 function cleanMermaidCode(raw: string): string {
   let cleaned = raw.trim();
-  // Strip starting ```mermaid or ```
   if (cleaned.startsWith("```mermaid")) {
     cleaned = cleaned.slice(10).trim();
   } else if (cleaned.startsWith("```")) {
     cleaned = cleaned.slice(3).trim();
   }
-  // Strip ending ```
   if (cleaned.endsWith("```")) {
     cleaned = cleaned.slice(0, -3).trim();
   }
@@ -125,7 +128,6 @@ function getFallbackMermaid(prompt: string): string {
     ].join("\n");
   }
 
-  // Generic intuitive flowchart based on prompt keywords
   const title = prompt.length > 30 ? prompt.slice(0, 30) + "..." : prompt;
   return [
     "flowchart TD",
@@ -138,29 +140,11 @@ function getFallbackMermaid(prompt: string): string {
   ].join("\n");
 }
 
-export async function POST(request: Request) {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-
-  const { prompt } = (body ?? {}) as { prompt?: unknown };
-  if (typeof prompt !== "string" || !prompt.trim()) {
-    return NextResponse.json({ error: "\"prompt\" is required" }, { status: 400 });
-  }
-
-  const trimmedPrompt = prompt.trim();
-  const headerKey = request.headers.get("x-mistral-key")?.trim();
-  const apiKey = headerKey || process.env.MISTRAL_API_KEY?.trim();
-
-  // If no API key is available, use the fallback generator immediately
-  if (!apiKey) {
-    const fallback = getFallbackMermaid(trimmedPrompt);
-    return NextResponse.json({ mermaid: fallback, source: "template" });
-  }
-
+async function generateMermaidWithMistral(
+  prompt: string,
+  apiKey: string,
+  model: string = "open-mistral-nemo"
+): Promise<string | null> {
   try {
     const upstream = await fetch(MISTRAL_URL, {
       method: "POST",
@@ -169,10 +153,10 @@ export async function POST(request: Request) {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "open-mistral-nemo",
+        model,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: `Generate a Mermaid diagram for: ${trimmedPrompt}` },
+          { role: "user", content: `Generate a Mermaid diagram for: ${prompt}` },
         ],
         temperature: 0.2,
       }),
@@ -182,12 +166,107 @@ export async function POST(request: Request) {
       const data = await upstream.json();
       const rawContent = data?.choices?.[0]?.message?.content;
       if (typeof rawContent === "string" && rawContent.trim()) {
-        const cleaned = cleanMermaidCode(rawContent);
-        return NextResponse.json({ mermaid: cleaned, source: "ai" });
+        return cleanMermaidCode(rawContent);
       }
+    } else if (upstream.status === 429 && model.includes("small")) {
+      return await generateMermaidWithMistral(prompt, apiKey, "open-mistral-nemo");
     }
   } catch {
-    // If upstream network error occurs, fall back to template seamlessly
+    // network failure
+  }
+  return null;
+}
+
+async function generateMermaidWithGemini(
+  prompt: string,
+  apiKey: string,
+  model: string = "gemini-3.8-flash"
+): Promise<string | null> {
+  try {
+    const upstream = await fetch(`${GEMINI_INTERACTIONS_URL}?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        system_instruction: SYSTEM_PROMPT,
+        input: `Generate a Mermaid diagram for: ${prompt}`,
+        generation_config: {
+          thinking_level: "low",
+          temperature: 0.2,
+        },
+      }),
+    });
+
+    if (upstream.ok) {
+      const data = await upstream.json();
+      const outputStep = data?.steps?.find((s: { type: string }) => s.type === "model_output");
+      const text = outputStep?.content?.find((c: { type: string; text?: string }) => c.type === "text")?.text;
+      if (typeof text === "string" && text.trim()) {
+        return cleanMermaidCode(text);
+      }
+    } else if ((upstream.status === 429 || upstream.status === 503) && model === "gemini-3.8-flash") {
+      return await generateMermaidWithGemini(prompt, apiKey, "gemini-3.5-flash");
+    } else if ((upstream.status === 429 || upstream.status === 503) && model === "gemini-3.5-flash") {
+      return await generateMermaidWithGemini(prompt, apiKey, "gemini-3.1-flash-lite");
+    }
+  } catch {
+    // Network failure
+  }
+  return null;
+}
+
+export async function POST(request: Request) {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const { prompt, model } = (body ?? {}) as { prompt?: unknown; model?: unknown };
+  if (typeof prompt !== "string" || !prompt.trim()) {
+    return NextResponse.json({ error: "\"prompt\" is required" }, { status: 400 });
+  }
+
+  const trimmedPrompt = prompt.trim();
+  const requestedModel = typeof model === "string" && model.trim() ? model.trim() : "gemini-3.8-flash";
+  const isMistral = requestedModel.includes("mistral") || requestedModel.includes("codestral");
+
+  if (isMistral) {
+    const headerKey = request.headers.get("x-mistral-key")?.trim();
+    const apiKey =
+      headerKey ||
+      process.env.MISTRAL_API_KEY?.trim() ||
+      process.env.NEXT_PUBLIC_MISTRAL_API_KEY?.trim() ||
+      DEFAULT_MISTRAL_KEY;
+
+    if (!apiKey) {
+      const fallback = getFallbackMermaid(trimmedPrompt);
+      return NextResponse.json({ mermaid: fallback, source: "template" });
+    }
+
+    const generated = await generateMermaidWithMistral(trimmedPrompt, apiKey, requestedModel);
+    if (generated) {
+      return NextResponse.json({ mermaid: generated, source: "ai" });
+    }
+  } else {
+    const headerKey = request.headers.get("x-gemini-key")?.trim();
+    const apiKey =
+      headerKey ||
+      process.env.GEMINI_API_KEY?.trim() ||
+      process.env.NEXT_PUBLIC_GEMINI_API_KEY?.trim() ||
+      DEFAULT_GEMINI_KEY;
+
+    if (!apiKey) {
+      const fallback = getFallbackMermaid(trimmedPrompt);
+      return NextResponse.json({ mermaid: fallback, source: "template" });
+    }
+
+    const mappedModel = requestedModel.includes("3.5") ? "gemini-3.5-flash" : "gemini-3.8-flash";
+    const generated = await generateMermaidWithGemini(trimmedPrompt, apiKey, mappedModel);
+    if (generated) {
+      return NextResponse.json({ mermaid: generated, source: "ai" });
+    }
   }
 
   const fallback = getFallbackMermaid(trimmedPrompt);
