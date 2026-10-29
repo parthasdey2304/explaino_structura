@@ -21,13 +21,15 @@ import {
 import {
   MistralError,
   chatStreamAuto,
+  getStoredModel,
+  getModelLabel,
   type ChatMessage,
 } from "@/lib/ai/mistral";
 import { highlightCode } from "@/lib/ai/highlight";
 
-/** Pinned models: Open Mistral Nemo is the main model, Codestral is for /code. */
-const MAIN_MODEL = "open-mistral-nemo";
-const CODE_MODEL = "codestral-latest";
+/** Pinned models: Gemini 3.8 Flash is the main model, Gemini 3.8 Flash is for /code. */
+const MAIN_MODEL = "gemini-3.8-flash";
+const CODE_MODEL = "gemini-3.8-flash";
 
 /**
  * Strict scope + multi-output contract for /code requests:
@@ -408,8 +410,8 @@ export interface AITextSidebarProps {
 
 /**
  * Right-hand AI Text sidebar:
- * - Open Mistral Nemo for normal / canvas text messages (clean, raw text output)
- * - Codestral for /code messages (4-language runnable tabs)
+ * - Gemini 3.8 Flash for normal / canvas text messages (clean, raw text output)
+ * - Gemini 3.8 Flash for /code messages (4-language runnable tabs)
  * - 1-line auto-expanding textarea up to 4 lines with hidden scrollbar
  * - Microphone embedded inside the placeholder on the right
  * - Word wrap enabled in all code blocks
@@ -421,6 +423,19 @@ export default function AITextSidebar({
   onInsertText,
 }: AITextSidebarProps) {
   const [entered, setEntered] = useState(false);
+  const [activeModel, setActiveModel] = useState<string>(() => {
+    if (typeof window !== "undefined") return getStoredModel();
+    return "gemini-3.8-flash";
+  });
+
+  useEffect(() => {
+    const handleModelChange = () => {
+      setActiveModel(getStoredModel());
+    };
+    window.addEventListener("explaino-model-changed", handleModelChange);
+    return () => window.removeEventListener("explaino-model-changed", handleModelChange);
+  }, []);
+
   const [messages, setMessages] = useState<UiMessage[]>(() => loadCachedMessages());
   const [draft, setDraft] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -559,7 +574,7 @@ export default function AITextSidebar({
 
     const isCode = /\/code\b/i.test(raw);
     const mode: "code" | "text" = isCode ? "code" : "text";
-    const modelToUse = isCode ? CODE_MODEL : MAIN_MODEL;
+    const modelToUse = activeModel;
     const systemPromptToUse = isCode ? CODE_SYSTEM_PROMPT : CANVAS_TEXT_SYSTEM_PROMPT;
 
     // Strip /code or /text command tags for clean model processing
@@ -654,7 +669,7 @@ export default function AITextSidebar({
         <div className="ai-text-panel__header-left">
           <span className="ai-text-panel__title">AI Text</span>
           <span className="ai-text-panel__badge">
-            {isDraftCode ? "Codestral (/code)" : "Open Mistral Nemo"}
+            {isDraftCode ? `${getModelLabel(activeModel)} (/code)` : getModelLabel(activeModel)}
           </span>
         </div>
         <div className="ai-text-panel__header-actions">
@@ -686,10 +701,10 @@ export default function AITextSidebar({
           <div className="ai-text-panel__empty">
             <Bot size={22} strokeWidth={1.8} />
             <p>
-              Canvas text generation powered by <strong>Open Mistral Nemo</strong>.
+              Canvas text generation powered by <strong>{getModelLabel(activeModel)}</strong>.
             </p>
             <p>
-              Type <strong>/code</strong> for <strong>Codestral</strong> 4-language runnable tabs (Java, Python, C, C++).
+              Type <strong>/code</strong> for <strong>{getModelLabel(activeModel)}</strong> 4-language runnable tabs (Java, Python, C, C++).
             </p>
             <p className="ai-text-panel__empty-hint">
               Enter to send, Shift + Enter for newline. Use the microphone inside placeholder to dictate.
