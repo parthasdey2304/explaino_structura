@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/code-server",
-        destination: "https://13.49.76.201.sslip.io/?folder=/home/ubuntu/workspace",
+        destination: "https://13.49.76.201.sslip.io/?token=explaino_sec_8b41915d25547e2edd553bab03ea4cbd&folder=/home/ubuntu/workspace",
       },
       {
         source: "/code-server/:path*",

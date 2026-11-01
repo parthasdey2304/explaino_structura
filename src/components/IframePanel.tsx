@@ -41,7 +41,7 @@ export interface IframePanelProps {
   recenterTrigger?: number;
 }
 
-export const CODE_SERVER_SECURE_URL = "https://13.49.76.201.sslip.io/?folder=/home/ubuntu/workspace";
+export const CODE_SERVER_SECURE_URL = "https://13.49.76.201.sslip.io/?token=explaino_sec_8b41915d25547e2edd553bab03ea4cbd&folder=/home/ubuntu/workspace";
 export const CANVAS_SCREEN_STORAGE_KEY = "explaino-canvas-screen-state";
 
 export type ServerHealthStatus = "loading" | "online" | "offline";
@@ -142,7 +142,7 @@ export default function IframePanel({
       }
 
       // 2. Direct fetch fallback with CORS
-      const direct = await fetch("https://13.49.76.201.sslip.io/healthz", {
+      const direct = await fetch("https://13.49.76.201.sslip.io/healthz?token=explaino_sec_8b41915d25547e2edd553bab03ea4cbd", {
         cache: "no-store",
         headers: { Accept: "application/json" },
       }).catch(() => null);
