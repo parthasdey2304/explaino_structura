@@ -8,7 +8,7 @@ export async function GET() {
   const timeoutId = setTimeout(() => controller.abort(), 8000);
 
   try {
-    const res = await fetch("https://13.49.76.201.sslip.io/healthz", {
+    const res = await fetch("https://13.49.76.201.sslip.io/healthz?token=explaino_sec_8b41915d25547e2edd553bab03ea4cbd", {
       signal: controller.signal,
       cache: "no-store",
       headers: {
