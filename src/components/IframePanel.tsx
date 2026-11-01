@@ -39,6 +39,8 @@ export interface IframePanelProps {
   /** Currently active tool in Excalidraw (e.g. 'selection', 'rectangle', 'line', etc.) */
   activeToolType?: string;
   recenterTrigger?: number;
+  /** Callback fired whenever scenePos changes (used to sync export placeholder with Excalidraw) */
+  onScenePosChange?: (pos: { sceneX: number; sceneY: number; sceneWidth: number; sceneHeight: number } | null) => void;
 }
 
 export const CODE_SERVER_SECURE_URL = "https://13.49.76.201.sslip.io/?token=explaino_sec_8b41915d25547e2edd553bab03ea4cbd&folder=/home/ubuntu/workspace";
@@ -93,6 +95,7 @@ export default function IframePanel({
   onActiveChange,
   activeToolType,
   recenterTrigger,
+  onScenePosChange,
 }: IframePanelProps) {
   const [saved] = useState(() => loadSavedScreenState());
 
@@ -253,6 +256,17 @@ export default function IframePanel({
     startHeight: number;
   } | null>(null);
   const latestScenePosRef = useRef(scenePos);
+
+  // Notify parent of current scene coordinates for export synchronization
+  useEffect(() => {
+    onScenePosChange?.(scenePos);
+  }, [scenePos, onScenePosChange]);
+
+  useEffect(() => {
+    return () => {
+      onScenePosChange?.(null);
+    };
+  }, [onScenePosChange]);
   latestScenePosRef.current = scenePos;
 
   const iframeRef = useRef<HTMLIFrameElement>(null);

@@ -12,6 +12,7 @@ import {
   Mic,
   Bot,
   Clock,
+  PanelsRightBottom,
   X,
   ChevronRight,
 } from "lucide-react";
@@ -32,6 +33,8 @@ export interface ExtensionsPanelProps {
   onInsertTable: () => void;
   onOpenExplaino: () => void;
   onOpenAiText: () => void;
+  showHandyToolbar?: boolean;
+  onToggleHandyToolbar?: () => void;
   showStopwatch?: boolean;
   onToggleStopwatch: () => void;
 }
@@ -63,6 +66,8 @@ export default function ExtensionsPanel({
   onInsertTable,
   onOpenExplaino,
   onOpenAiText,
+  showHandyToolbar = true,
+  onToggleHandyToolbar,
   showStopwatch = false,
   onToggleStopwatch,
 }: ExtensionsPanelProps) {
@@ -307,6 +312,68 @@ export default function ExtensionsPanel({
 
       {/* Extension Items List */}
       <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+        {/* Handy Extension Toolbar Toggle Card */}
+        {onToggleHandyToolbar && (
+          <div
+            className={`p-3 rounded-xl border mb-2 transition-all ${
+              isDark
+                ? "bg-zinc-800/40 border-zinc-700/70"
+                : "bg-zinc-50 border-zinc-200/90"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div
+                  className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                    isDark ? "bg-indigo-500/20 text-indigo-400" : "bg-indigo-50 text-indigo-600 border border-indigo-100"
+                  }`}
+                >
+                  <PanelsRightBottom size={18} strokeWidth={2.2} />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-semibold truncate ${isDark ? "text-zinc-200" : "text-zinc-800"}`}>
+                      Handy Toolbar
+                    </span>
+                    <span
+                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                        showHandyToolbar
+                          ? isDark
+                            ? "bg-emerald-950/70 text-emerald-300 border border-emerald-800/60"
+                            : "bg-emerald-50 text-emerald-700 border border-emerald-200/80"
+                          : isDark
+                          ? "bg-zinc-800 text-zinc-400 border border-zinc-700"
+                          : "bg-zinc-200 text-zinc-600 border border-zinc-300"
+                      }`}
+                    >
+                      {showHandyToolbar ? "Visible" : "Hidden"}
+                    </span>
+                  </div>
+                  <p className={`text-[11px] truncate mt-0.5 ${isDark ? "text-zinc-400" : "text-zinc-500"}`}>
+                    Floating quick tools on laptop & phone
+                  </p>
+                </div>
+              </div>
+              {/* Toggle switch */}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={showHandyToolbar}
+                aria-label="Toggle Handy Toolbar visibility"
+                onClick={onToggleHandyToolbar}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                  showHandyToolbar ? "bg-indigo-600" : isDark ? "bg-zinc-700" : "bg-zinc-300"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                    showHandyToolbar ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        )}
         <div className={`px-2 pt-1 pb-1.5 text-[10px] font-bold tracking-wider uppercase ${isDark ? "text-zinc-500" : "text-zinc-400"}`}>
           Tools & AI
         </div>

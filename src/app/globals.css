@@ -4983,12 +4983,11 @@ canvas,
   letter-spacing: 0.05em;
 }
 
-/* Hide desktop/tablet Extensions button and RightCanvasToolbar on phones (< 768px) */
+/* Hide desktop/tablet top-right Extensions button on phones (< 768px) in favor of the mobile FAB.
+   The Handy Toolbar (.canvas-quick-tools-toolbar) visibility on phone and laptop is governed dynamically
+   by the user's Handy Extension toggle setting. */
 @media (max-width: 767px) {
   [data-extensions-toggle="true"] {
-    display: none !important;
-  }
-  .canvas-quick-tools-toolbar {
     display: none !important;
   }
 }
