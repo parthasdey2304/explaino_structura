@@ -402,6 +402,44 @@ export default function ExcalidrawWrapper() {
   const [iframePanelLayout, setIframePanelLayout] = useState<IframePanelLayout>("center");
   const [screenRecenterTrigger, setScreenRecenterTrigger] = useState(0);
   const [isScreenActive, setIsScreenActive] = useState<boolean>(false);
+  const [screenScenePos, setScreenScenePos] = useState<{
+    sceneX: number;
+    sceneY: number;
+    sceneWidth: number;
+    sceneHeight: number;
+  } | null>(() => {
+    if (typeof window === "undefined") return null;
+    const saved = loadSavedScreenState();
+    if (saved?.isOpen && saved.sceneX !== undefined && saved.sceneY !== undefined && saved.sceneWidth && saved.sceneHeight) {
+      return {
+        sceneX: saved.sceneX,
+        sceneY: saved.sceneY,
+        sceneWidth: saved.sceneWidth,
+        sceneHeight: saved.sceneHeight,
+      };
+    }
+    return null;
+  });
+
+  const [showHandyToolbar, setShowHandyToolbar] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      const saved = localStorage.getItem("explaino-handy-toolbar-enabled");
+      return saved !== null ? saved === "true" : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleHandyToolbar = useCallback(() => {
+    setShowHandyToolbar((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("explaino-handy-toolbar-enabled", String(next));
+      } catch {}
+      return next;
+    });
+  }, []);
 
   const handleOpenScreen = useCallback(() => {
     setShowIframePanel(true);
@@ -411,7 +449,7 @@ export default function ExcalidrawWrapper() {
     saveScreenState({ isOpen: true, shouldRecenter: true });
     window.dispatchEvent(new CustomEvent("explaino-recenter-screen"));
   }, []);
-  const [deferredPrompt, setDeferredPrompt] = useState<{
+    const [deferredPrompt, setDeferredPrompt] = useState<{
     prompt: () => Promise<void>;
     userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
   } | null>(null);
@@ -496,6 +534,20 @@ export default function ExcalidrawWrapper() {
     maxY: number;
   } | null>(null);
   const [laserActive, setLaserActive] = useState(false);
+
+  // Global Escape handler for exiting laser mode (capture phase guarantees interception)
+  useEffect(() => {
+    if (!laserActive) return;
+    const handleLaserEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setLaserActive(false);
+      }
+    };
+    window.addEventListener("keydown", handleLaserEscape, true);
+    return () => window.removeEventListener("keydown", handleLaserEscape, true);
+  }, [laserActive]);
   const [showExtensionsPanel, setShowExtensionsPanel] = useState(false);
   const showExtensionsPanelRef = useRef(false);
   useEffect(() => {
@@ -537,6 +589,148 @@ export default function ExcalidrawWrapper() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  // Synchronize Screen representation in Excalidraw's scene so that:
+  // 1. In Excalidraw's "Export image" modal, the screen fits with all annotations in natural aspect ratio
+  // 2. The exported SVG / PNG / Clipboard includes the IDE screen window
+  useEffect(() => {
+    const api = excalidrawAPI.current;
+    if (!api || !apiReady) return;
+
+    const allElements = api.getSceneElements();
+    const isScreenOpen = showIframePanel && screenScenePos !== null;
+
+    // Filter out existing screen sync elements
+    const nonScreenElements = allElements.filter(
+      (el) => !(el as { customData?: { isScreenSyncElement?: boolean } }).customData?.isScreenSyncElement
+    );
+
+    if (!isScreenOpen || !screenScenePos) {
+      if (nonScreenElements.length !== allElements.length) {
+        api.updateScene({ elements: nonScreenElements });
+      }
+      return;
+    }
+
+    const { sceneX, sceneY, sceneWidth, sceneHeight } = screenScenePos;
+    const isDark = theme === "dark";
+
+    const screenElementsRaw = [
+      // 1. Window Outer Frame
+      {
+        id: "explaino-screen-window-frame",
+        type: "rectangle",
+        x: Math.round(sceneX),
+        y: Math.round(sceneY),
+        width: Math.round(sceneWidth),
+        height: Math.round(sceneHeight),
+        backgroundColor: isDark ? "#16161a" : "#1e1e24",
+        strokeColor: "#6366f1",
+        strokeWidth: 2,
+        fillStyle: "solid",
+        roughness: 0,
+        roundness: { type: 3 },
+        locked: true,
+        customData: { isScreenSyncElement: true },
+      },
+      // 2. Window Header Bar
+      {
+        id: "explaino-screen-window-header",
+        type: "rectangle",
+        x: Math.round(sceneX),
+        y: Math.round(sceneY),
+        width: Math.round(sceneWidth),
+        height: 38,
+        backgroundColor: isDark ? "#1c1c21" : "#282830",
+        strokeColor: "transparent",
+        strokeWidth: 0,
+        fillStyle: "solid",
+        roughness: 0,
+        roundness: { type: 3 },
+        locked: true,
+        customData: { isScreenSyncElement: true },
+      },
+      // 3. Traffic Lights
+      {
+        id: "explaino-screen-dot-red",
+        type: "ellipse",
+        x: Math.round(sceneX + 14),
+        y: Math.round(sceneY + 13),
+        width: 12,
+        height: 12,
+        backgroundColor: "#ef4444",
+        strokeColor: "#dc2626",
+        strokeWidth: 1,
+        fillStyle: "solid",
+        roughness: 0,
+        locked: true,
+        customData: { isScreenSyncElement: true },
+      },
+      {
+        id: "explaino-screen-dot-yellow",
+        type: "ellipse",
+        x: Math.round(sceneX + 32),
+        y: Math.round(sceneY + 13),
+        width: 12,
+        height: 12,
+        backgroundColor: "#f59e0b",
+        strokeColor: "#d97706",
+        strokeWidth: 1,
+        fillStyle: "solid",
+        roughness: 0,
+        locked: true,
+        customData: { isScreenSyncElement: true },
+      },
+      {
+        id: "explaino-screen-dot-green",
+        type: "ellipse",
+        x: Math.round(sceneX + 50),
+        y: Math.round(sceneY + 13),
+        width: 12,
+        height: 12,
+        backgroundColor: "#22c55e",
+        strokeColor: "#16a34a",
+        strokeWidth: 1,
+        fillStyle: "solid",
+        roughness: 0,
+        locked: true,
+        customData: { isScreenSyncElement: true },
+      },
+      // 4. Header title text
+      {
+        id: "explaino-screen-title",
+        type: "text",
+        x: Math.round(sceneX + 74),
+        y: Math.round(sceneY + 11),
+        text: "code-server — Ubuntu Terminal & Editor",
+        fontSize: 14,
+        fontFamily: 3,
+        strokeColor: "#94a3b8",
+        locked: true,
+        customData: { isScreenSyncElement: true },
+      },
+      // 5. Header status text
+      {
+        id: "explaino-screen-status",
+        type: "text",
+        x: Math.max(Math.round(sceneX + 74), Math.round(sceneX + sceneWidth - 140)),
+        y: Math.round(sceneY + 11),
+        text: "● CODE SERVER",
+        fontSize: 12,
+        fontFamily: 3,
+        strokeColor: "#22c55e",
+        locked: true,
+        customData: { isScreenSyncElement: true },
+      },
+    ];
+
+    const screenElements = convertToExcalidrawElements(screenElementsRaw as any);
+
+    // Place screenElements at the bottom of the element stack so user whiteboard drawings stay visibly on top
+    api.updateScene({
+      elements: [...screenElements, ...nonScreenElements],
+    });
+  }, [showIframePanel, screenScenePos, apiReady, theme]);
 
   const drawingIdRef = useRef<string | null>(null);
   const nameRef = useRef<string>("Untitled");
@@ -2336,7 +2530,7 @@ export default function ExcalidrawWrapper() {
       </ExcalidrawComponent>
       {/* Transient laser-pointer layer: screen-space only, never touches the
           scene or the undo/redo history. */}
-      <LaserOverlay active={laserActive} />
+      <LaserOverlay active={laserActive} onExit={() => setLaserActive(false)} />
       {/* Stopwatch & Timer — responsive position:
           Desktop (>=1024px): anchored to top-left next to hamburger menu (3 slashes)
           Narrow screen (<1024px): anchored to bottom-center of the page below drawing/canvas tools */}
@@ -2351,7 +2545,8 @@ export default function ExcalidrawWrapper() {
       )}
 
       {/* Floating right canvas toolbar for tablets and laptops (hidden on phones) */}
-      <div className="hidden md:flex">
+      {showHandyToolbar && (
+        <div className="flex">
         <RightCanvasToolbar
           laserActive={laserActive}
           onToggleLaser={() => setLaserActive((v) => !v)}
@@ -2380,7 +2575,8 @@ export default function ExcalidrawWrapper() {
           penActive={activeToolType === "freedraw"}
           onTogglePen={() => handleSmartBoardToolSelect("pen")}
         />
-      </div>
+        </div>
+      )}
 
       {/* Todo overlay — toggled by the top-left corner button */}
       {showTodos && <TodoPanel onClose={() => setShowTodos(false)} />}
@@ -2508,6 +2704,7 @@ export default function ExcalidrawWrapper() {
           }}
           activeToolType={activeToolType}
           recenterTrigger={screenRecenterTrigger}
+          onScenePosChange={setScreenScenePos}
         />
       )}
 
@@ -2561,13 +2758,22 @@ export default function ExcalidrawWrapper() {
 
             {/* Laser indicator banner when laser is actively drawing */}
       {laserActive && (
-        <div className="fixed bottom-6 max-xl:bottom-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-red-600/95 text-white text-xs font-semibold shadow-2xl backdrop-blur transition-all pointer-events-auto border border-red-400/40 animate-in fade-in slide-in-from-bottom-2">
+        <div className="fixed bottom-6 max-xl:bottom-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-red-600/95 text-white text-xs font-semibold shadow-2xl backdrop-blur transition-all pointer-events-auto border border-red-400/40 animate-in fade-in slide-in-from-bottom-2 select-none" onPointerDown={(e) => e.stopPropagation()}>
           <span className="w-2.5 h-2.5 rounded-full bg-white animate-pulse" />
           <span>Laser Pointer Active</span>
           <button
             type="button"
-            onClick={() => setLaserActive(false)}
-            className="ml-2 px-2 py-0.5 rounded bg-black/30 hover:bg-black/50 text-white text-[11px] font-medium transition-colors"
+            onPointerDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setLaserActive(false);
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setLaserActive(false);
+            }}
+            className="ml-2 px-2.5 py-1 rounded-md bg-black/40 hover:bg-black/60 active:bg-black/80 text-white text-[11px] font-semibold transition-colors cursor-pointer select-none"
             title="Turn off laser (Esc)"
           >
             Exit (Esc)
@@ -2647,6 +2853,8 @@ export default function ExcalidrawWrapper() {
         onOpenAiText={() => setShowAiTextPanel(true)}
         showStopwatch={showStopwatch}
         onToggleStopwatch={() => setShowStopwatch((v) => !v)}
+        showHandyToolbar={showHandyToolbar}
+        onToggleHandyToolbar={handleToggleHandyToolbar}
       />
 
       {/* Text to Diagram / Mermaid Modal */}

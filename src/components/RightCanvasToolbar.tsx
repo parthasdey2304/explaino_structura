@@ -128,7 +128,7 @@ export default function RightCanvasToolbar({
   return (
     <aside
       aria-label="Canvas Quick Tools"
-      className={`canvas-quick-tools-toolbar hidden md:flex fixed right-2 sm:right-3 top-1/2 -translate-y-1/2 z-40 p-1.5 rounded-2xl flex-col gap-1.5 shadow-2xl transition-all duration-200 border ${
+      className={`canvas-quick-tools-toolbar flex fixed right-2 sm:right-3 top-1/2 -translate-y-1/2 z-40 p-1.5 rounded-2xl flex-col gap-1.5 shadow-2xl transition-all duration-200 border ${
         isDark
           ? "bg-[#232329]/95 border-zinc-700/60 shadow-black/60"
           : "bg-white/95 border-zinc-200 shadow-zinc-900/15"
@@ -168,7 +168,7 @@ export default function RightCanvasToolbar({
               {/* Rich Tooltip */}
               <div
                 role="tooltip"
-                className="pointer-events-none absolute right-[calc(100%+12px)] top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-150 z-50 whitespace-nowrap translate-x-1 group-hover:translate-x-0 group-focus-within:translate-x-0"
+                className="pointer-events-none hidden md:block absolute right-[calc(100%+12px)] top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-150 z-50 whitespace-nowrap translate-x-1 group-hover:translate-x-0 group-focus-within:translate-x-0"
               >
                 <div
                   style={{

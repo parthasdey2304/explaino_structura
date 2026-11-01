@@ -102,9 +102,13 @@ export function useCanvasShortcuts({
   useEffect(() => {
     if (!isLaserActive) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onExitLaser();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onExitLaser();
+      }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [isLaserActive, onExitLaser]);
 }

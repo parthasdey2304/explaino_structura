@@ -43,7 +43,7 @@ interface Trail {
   finishedAt: number | null;
 }
 
-export default function LaserOverlay({ active }: { active: boolean }) {
+export default function LaserOverlay({ active, onExit }: { active: boolean; onExit?: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const trailsRef = useRef<Trail[]>([]);
   const rafRef = useRef<number>(0);
@@ -121,6 +121,11 @@ export default function LaserOverlay({ active }: { active: boolean }) {
     let spaceHeld = false;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.code === "Space") spaceHeld = true;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onExit?.();
+      }
     };
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === "Space") spaceHeld = false;
@@ -159,7 +164,7 @@ export default function LaserOverlay({ active }: { active: boolean }) {
         appendPoints(ev.clientX, ev.clientY);
       }
     };
-    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("keyup", onKeyUp);
     window.addEventListener("pointerdown", onPointerDown, { capture: true });
     window.addEventListener("pointermove", onPointerMove);
@@ -167,7 +172,7 @@ export default function LaserOverlay({ active }: { active: boolean }) {
     window.addEventListener("pointercancel", finishStroke);
     window.addEventListener("blur", finishStroke);
     return () => {
-      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("pointerdown", onPointerDown, {
         capture: true,
@@ -178,7 +183,7 @@ export default function LaserOverlay({ active }: { active: boolean }) {
       window.removeEventListener("blur", finishStroke);
       spaceHeld = false;
     };
-  }, [active]);
+  }, [active, onExit]);
 
   return (
     <canvas
