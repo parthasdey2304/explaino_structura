@@ -599,6 +599,7 @@ export default function IframePanel({
     <div
       ref={panelRef}
       className="canvas-screen-panel"
+      data-testid="canvas-screen-panel"
       onWheel={forwardWheelToCanvas}
       style={{
         position: "fixed",

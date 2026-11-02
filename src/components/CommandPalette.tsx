@@ -9,19 +9,161 @@ export interface PaletteCommand {
   category?: string;
   hint?: string;
   shortcut?: string;
+  keywords?: string[];
   icon?: React.ReactNode;
   run: () => void;
 }
 
-function fuzzyMatch(query: string, text: string): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  const l = text.toLowerCase();
-  let qi = 0;
-  for (let i = 0; i < l.length && qi < q.length; i++) {
-    if (l[i] === q[qi]) qi++;
+/** Subsequence check: does pattern appear as an ordered subsequence in text? */
+export function fuzzySubsequence(pattern: string, text: string): boolean {
+  if (!pattern) return true;
+  if (!text) return false;
+  let pi = 0;
+  for (let i = 0; i < text.length && pi < pattern.length; i++) {
+    if (text[i] === pattern[pi]) pi++;
   }
-  return qi === q.length;
+  return pi === pattern.length;
+}
+
+/**
+ * Calculates a match score for a single command against a search query.
+ * Returns null if the command does not match all tokens in query.
+ */
+export function scoreCommand(cmd: PaletteCommand, query: string): number | null {
+  const q = query.trim().toLowerCase();
+  if (!q) return 0;
+
+  const tokens = q.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return 0;
+
+  const label = cmd.label.toLowerCase();
+  const category = (cmd.category || "").toLowerCase();
+  const hint = (cmd.hint || "").toLowerCase();
+  const shortcut = (cmd.shortcut || "").toLowerCase();
+  const keywords = (cmd.keywords || []).map((k) => k.toLowerCase());
+
+  let totalScore = 0;
+
+  for (const token of tokens) {
+    let tokenMatched = false;
+    let tokenBestScore = -Infinity;
+
+    // 1. Exact match on label or keywords
+    if (label === token) {
+      tokenMatched = true;
+      tokenBestScore = Math.max(tokenBestScore, 1000);
+    } else if (keywords.some((k) => k === token)) {
+      tokenMatched = true;
+      tokenBestScore = Math.max(tokenBestScore, 900);
+    }
+
+    // 2. StartsWith match on label or keywords
+    if (label.startsWith(token)) {
+      tokenMatched = true;
+      tokenBestScore = Math.max(tokenBestScore, 650);
+    } else {
+      const words = label.split(/[\s:()/\-_.,]+/);
+      if (words.some((w) => w.startsWith(token))) {
+        tokenMatched = true;
+        tokenBestScore = Math.max(tokenBestScore, 550);
+      }
+    }
+
+    for (const kw of keywords) {
+      if (kw.startsWith(token)) {
+        tokenMatched = true;
+        tokenBestScore = Math.max(tokenBestScore, 500);
+      } else {
+        const words = kw.split(/[\s:()/\-_.,]+/);
+        if (words.some((w) => w.startsWith(token))) {
+          tokenMatched = true;
+          tokenBestScore = Math.max(tokenBestScore, 450);
+        }
+      }
+    }
+
+    // 3. Substring match on label or keywords
+    if (label.includes(token)) {
+      tokenMatched = true;
+      tokenBestScore = Math.max(tokenBestScore, 350);
+    }
+
+    if (keywords.some((k) => k.includes(token))) {
+      tokenMatched = true;
+      tokenBestScore = Math.max(tokenBestScore, 300);
+    }
+
+    // 4. Exact / startsWith / substring on shortcut or category or hint
+    if (shortcut === token) {
+      tokenMatched = true;
+      tokenBestScore = Math.max(tokenBestScore, 300);
+    } else if (shortcut.includes(token)) {
+      tokenMatched = true;
+      tokenBestScore = Math.max(tokenBestScore, 180);
+    }
+
+    if (category === token) {
+      tokenMatched = true;
+      tokenBestScore = Math.max(tokenBestScore, 200);
+    } else if (category.includes(token)) {
+      tokenMatched = true;
+      tokenBestScore = Math.max(tokenBestScore, 150);
+    }
+
+    if (hint === token) {
+      tokenMatched = true;
+      tokenBestScore = Math.max(tokenBestScore, 180);
+    } else if (hint.includes(token)) {
+      tokenMatched = true;
+      tokenBestScore = Math.max(tokenBestScore, 120);
+    }
+
+    // 5. Fallback subsequence match
+    if (!tokenMatched) {
+      if (fuzzySubsequence(token, label)) {
+        tokenMatched = true;
+        tokenBestScore = Math.max(tokenBestScore, 60);
+      } else if (keywords.some((k) => fuzzySubsequence(token, k))) {
+        tokenMatched = true;
+        tokenBestScore = Math.max(tokenBestScore, 50);
+      } else if (category && fuzzySubsequence(token, category)) {
+        tokenMatched = true;
+        tokenBestScore = Math.max(tokenBestScore, 40);
+      }
+    }
+
+    if (!tokenMatched) {
+      return null;
+    }
+
+    totalScore += tokenBestScore;
+  }
+
+  return totalScore;
+}
+
+export function filterCommands(commands: PaletteCommand[], query: string): PaletteCommand[] {
+  const trimmed = query.trim();
+  if (!trimmed) return commands;
+
+  const scored: { cmd: PaletteCommand; score: number; index: number }[] = [];
+
+  for (let i = 0; i < commands.length; i++) {
+    const cmd = commands[i];
+    const score = scoreCommand(cmd, trimmed);
+    if (score !== null) {
+      scored.push({ cmd, score, index: i });
+    }
+  }
+
+  scored.sort((a, b) => {
+    if (b.score !== a.score) {
+      return b.score - a.score;
+    }
+    return a.index - b.index;
+  });
+
+  return scored.map((s) => s.cmd);
 }
 
 export default function CommandPalette({
@@ -37,31 +179,24 @@ export default function CommandPalette({
   const listRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(() => {
-    return commands.filter((c) => {
-      const matchLabel = fuzzyMatch(query, c.label);
-      const matchCategory = c.category ? fuzzyMatch(query, c.category) : false;
-      const matchHint = c.hint ? fuzzyMatch(query, c.hint) : false;
-      const matchShortcut = c.shortcut ? fuzzyMatch(query, c.shortcut) : false;
-      return matchLabel || matchCategory || matchHint || matchShortcut;
-    });
+    return filterCommands(commands, query);
   }, [commands, query]);
-
-  useEffect(() => {
-    setIndex(0);
-  }, [query]);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
+  const activeIndex = filtered.length > 0 ? Math.min(index, filtered.length - 1) : 0;
+
   useEffect(() => {
     listRef.current
       ?.querySelector('[data-active="true"]')
       ?.scrollIntoView({ block: "nearest" });
-  }, [index, filtered.length]);
+  }, [activeIndex, filtered.length]);
 
   const runAt = (i: number) => {
-    const cmd = filtered[i];
+    const targetIdx = filtered.length > 0 ? Math.min(i, filtered.length - 1) : 0;
+    const cmd = filtered[targetIdx];
     if (!cmd) return;
     onClose();
     // Run after unmount so state settles first
@@ -105,7 +240,10 @@ export default function CommandPalette({
             ref={inputRef}
             className="cmd-palette__input"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setIndex(0);
+            }}
             onKeyDown={(e) => {
               if (e.key === "ArrowDown") {
                 e.preventDefault();
@@ -115,7 +253,7 @@ export default function CommandPalette({
                 setIndex((i) => Math.max(i - 1, 0));
               } else if (e.key === "Enter") {
                 e.preventDefault();
-                runAt(index);
+                runAt(activeIndex);
               } else if (e.key === "Escape") {
                 e.preventDefault();
                 onClose();
@@ -183,7 +321,7 @@ export default function CommandPalette({
             </div>
           )}
           {filtered.map((c, i) => {
-            const isSelected = i === index;
+            const isSelected = i === activeIndex;
             return (
               <button
                 key={c.id}

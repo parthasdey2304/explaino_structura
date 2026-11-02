@@ -33,7 +33,7 @@ import CanvasStructureControls, { type ViewportBox } from "./CanvasStructureCont
 import AITextSidebar from "./AITextSidebar";
 import ExplainoPanel from "./ExplainoPanel";
 import CommandPalette, { type PaletteCommand } from "./CommandPalette";
-import { chatStreamAuto, MistralError, getStoredModel, type ChatMessage } from "@/lib/ai/mistral";
+import { chatStreamAuto, MistralError, getStoredModel, setStoredModel, ALL_MODELS, type ChatMessage } from "@/lib/ai/mistral";
 import { createCodeCardSvg } from "@/lib/ai/highlight";
 import TodoPanel from "./TodoOverlay";
 import Stopwatch from "./Stopwatch";
@@ -41,6 +41,8 @@ import LaserOverlay from "./LaserOverlay";
 import ExtensionsPanel from "./ExtensionsPanel";
 import GoogleExtensionIcon from "./GoogleExtensionIcon";
 import RightCanvasToolbar from "./RightCanvasToolbar";
+import WebPreviewPanel, { loadSavedPreviewState, savePreviewState, DEFAULT_PREVIEW_PORT, DEFAULT_PREVIEW_PATH } from "./WebPreviewPanel";
+import { buildExternalTabUrl } from "@/lib/vpsProxy";
 import { getOptimalSaveDebounceMs, getDeviceProfile } from "@/lib/deviceOptimization";
 
 const TextToDiagramModal = dynamic(() => import("./TextToDiagramModal"), {
@@ -58,7 +60,7 @@ import {
   type DataStructureDef,
   type StructureId,
 } from "@/lib/dataStructures";
-import { Blocks, Moon, Sun, Code, Check, Clock, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic, ListTodo, Monitor, LogOut, Terminal, MessageSquare, Layers, GitBranch, MousePointer, Square, Circle, Diamond, ArrowRight, Minus, PenTool, Type, Eraser, ZoomIn, ZoomOut, Maximize2, RotateCcw, Trash2, Download, RefreshCw, Hand, Sliders } from "lucide-react";
+import { Blocks, Moon, Sun, Code, Check, Clock, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic, ListTodo, Monitor, LogOut, Terminal, MessageSquare, Layers, GitBranch, MousePointer, Square, Circle, Diamond, ArrowRight, Minus, PenTool, Type, Eraser, ZoomIn, ZoomOut, Maximize2, RotateCcw, Trash2, Download, RefreshCw, Hand, Sliders, FolderOpen, Image as ImageIcon, HelpCircle, Palette, Search, Globe, ExternalLink } from "lucide-react";
 import { performClientLogout } from "./AuthGate";
 
 /**
@@ -421,6 +423,41 @@ export default function ExcalidrawWrapper() {
     return null;
   });
 
+  const [showWebPreviewPanel, setShowWebPreviewPanel] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return Boolean(loadSavedPreviewState()?.isOpen);
+    } catch {
+      return false;
+    }
+  });
+  const [webPreviewRecenterTrigger, setWebPreviewRecenterTrigger] = useState(0);
+  const [isWebPreviewActive, setIsWebPreviewActive] = useState<boolean>(false);
+  const [webPreviewScenePos, setWebPreviewScenePos] = useState<{
+    sceneX: number;
+    sceneY: number;
+    sceneWidth: number;
+    sceneHeight: number;
+  } | null>(() => {
+    if (typeof window === "undefined") return null;
+    const saved = loadSavedPreviewState();
+    if (saved?.isOpen && saved.sceneX !== undefined && saved.sceneY !== undefined && saved.sceneWidth && saved.sceneHeight) {
+      return {
+        sceneX: saved.sceneX,
+        sceneY: saved.sceneY,
+        sceneWidth: saved.sceneWidth,
+        sceneHeight: saved.sceneHeight,
+      };
+    }
+    return null;
+  });
+
+  const handleOpenWebPreview = useCallback(() => {
+    setShowWebPreviewPanel(true);
+    setWebPreviewRecenterTrigger((prev) => prev + 1);
+    savePreviewState({ isOpen: true, shouldRecenter: true });
+  }, []);
+
   const [showHandyToolbar, setShowHandyToolbar] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
     try {
@@ -599,138 +636,254 @@ export default function ExcalidrawWrapper() {
 
     const allElements = api.getSceneElements();
     const isScreenOpen = showIframePanel && screenScenePos !== null;
+    const isPreviewOpen = showWebPreviewPanel && webPreviewScenePos !== null;
 
-    // Filter out existing screen sync elements
-    const nonScreenElements = allElements.filter(
+    // Filter out existing screen and preview sync elements
+    const nonSyncElements = allElements.filter(
       (el) => !(el as { customData?: { isScreenSyncElement?: boolean } }).customData?.isScreenSyncElement
     );
 
-    if (!isScreenOpen || !screenScenePos) {
-      if (nonScreenElements.length !== allElements.length) {
-        api.updateScene({ elements: nonScreenElements });
+    if (!isScreenOpen && !isPreviewOpen) {
+      if (nonSyncElements.length !== allElements.length) {
+        api.updateScene({ elements: nonSyncElements });
       }
       return;
     }
 
-    const { sceneX, sceneY, sceneWidth, sceneHeight } = screenScenePos;
     const isDark = theme === "dark";
+    const syncElementsRaw: any[] = [];
 
-    const screenElementsRaw = [
-      // 1. Window Outer Frame
-      {
-        id: "explaino-screen-window-frame",
-        type: "rectangle",
-        x: Math.round(sceneX),
-        y: Math.round(sceneY),
-        width: Math.round(sceneWidth),
-        height: Math.round(sceneHeight),
-        backgroundColor: isDark ? "#16161a" : "#1e1e24",
-        strokeColor: "#6366f1",
-        strokeWidth: 2,
-        fillStyle: "solid",
-        roughness: 0,
-        roundness: { type: 3 },
-        locked: true,
-        customData: { isScreenSyncElement: true },
-      },
-      // 2. Window Header Bar
-      {
-        id: "explaino-screen-window-header",
-        type: "rectangle",
-        x: Math.round(sceneX),
-        y: Math.round(sceneY),
-        width: Math.round(sceneWidth),
-        height: 38,
-        backgroundColor: isDark ? "#1c1c21" : "#282830",
-        strokeColor: "transparent",
-        strokeWidth: 0,
-        fillStyle: "solid",
-        roughness: 0,
-        roundness: { type: 3 },
-        locked: true,
-        customData: { isScreenSyncElement: true },
-      },
-      // 3. Traffic Lights
-      {
-        id: "explaino-screen-dot-red",
-        type: "ellipse",
-        x: Math.round(sceneX + 14),
-        y: Math.round(sceneY + 13),
-        width: 12,
-        height: 12,
-        backgroundColor: "#ef4444",
-        strokeColor: "#dc2626",
-        strokeWidth: 1,
-        fillStyle: "solid",
-        roughness: 0,
-        locked: true,
-        customData: { isScreenSyncElement: true },
-      },
-      {
-        id: "explaino-screen-dot-yellow",
-        type: "ellipse",
-        x: Math.round(sceneX + 32),
-        y: Math.round(sceneY + 13),
-        width: 12,
-        height: 12,
-        backgroundColor: "#f59e0b",
-        strokeColor: "#d97706",
-        strokeWidth: 1,
-        fillStyle: "solid",
-        roughness: 0,
-        locked: true,
-        customData: { isScreenSyncElement: true },
-      },
-      {
-        id: "explaino-screen-dot-green",
-        type: "ellipse",
-        x: Math.round(sceneX + 50),
-        y: Math.round(sceneY + 13),
-        width: 12,
-        height: 12,
-        backgroundColor: "#22c55e",
-        strokeColor: "#16a34a",
-        strokeWidth: 1,
-        fillStyle: "solid",
-        roughness: 0,
-        locked: true,
-        customData: { isScreenSyncElement: true },
-      },
-      // 4. Header title text
-      {
-        id: "explaino-screen-title",
-        type: "text",
-        x: Math.round(sceneX + 74),
-        y: Math.round(sceneY + 11),
-        text: "code-server — Ubuntu Terminal & Editor",
-        fontSize: 14,
-        fontFamily: 3,
-        strokeColor: "#94a3b8",
-        locked: true,
-        customData: { isScreenSyncElement: true },
-      },
-      // 5. Header status text
-      {
-        id: "explaino-screen-status",
-        type: "text",
-        x: Math.max(Math.round(sceneX + 74), Math.round(sceneX + sceneWidth - 140)),
-        y: Math.round(sceneY + 11),
-        text: "● CODE SERVER",
-        fontSize: 12,
-        fontFamily: 3,
-        strokeColor: "#22c55e",
-        locked: true,
-        customData: { isScreenSyncElement: true },
-      },
-    ];
+    if (isScreenOpen && screenScenePos) {
+      const { sceneX, sceneY, sceneWidth, sceneHeight } = screenScenePos;
+      syncElementsRaw.push(
+        // 1. Screen Window Outer Frame
+        {
+          id: "explaino-screen-window-frame",
+          type: "rectangle",
+          x: Math.round(sceneX),
+          y: Math.round(sceneY),
+          width: Math.round(sceneWidth),
+          height: Math.round(sceneHeight),
+          backgroundColor: isDark ? "#16161a" : "#1e1e24",
+          strokeColor: "#6366f1",
+          strokeWidth: 2,
+          fillStyle: "solid",
+          roughness: 0,
+          roundness: { type: 3 },
+          locked: true,
+          customData: { isScreenSyncElement: true },
+        },
+        // 2. Screen Window Header Bar
+        {
+          id: "explaino-screen-window-header",
+          type: "rectangle",
+          x: Math.round(sceneX),
+          y: Math.round(sceneY),
+          width: Math.round(sceneWidth),
+          height: 38,
+          backgroundColor: isDark ? "#1c1c21" : "#282830",
+          strokeColor: "transparent",
+          strokeWidth: 0,
+          fillStyle: "solid",
+          roughness: 0,
+          roundness: { type: 3 },
+          locked: true,
+          customData: { isScreenSyncElement: true },
+        },
+        // 3. Traffic Lights
+        {
+          id: "explaino-screen-dot-red",
+          type: "ellipse",
+          x: Math.round(sceneX + 14),
+          y: Math.round(sceneY + 13),
+          width: 12,
+          height: 12,
+          backgroundColor: "#ef4444",
+          strokeColor: "#dc2626",
+          strokeWidth: 1,
+          fillStyle: "solid",
+          roughness: 0,
+          locked: true,
+          customData: { isScreenSyncElement: true },
+        },
+        {
+          id: "explaino-screen-dot-yellow",
+          type: "ellipse",
+          x: Math.round(sceneX + 32),
+          y: Math.round(sceneY + 13),
+          width: 12,
+          height: 12,
+          backgroundColor: "#f59e0b",
+          strokeColor: "#d97706",
+          strokeWidth: 1,
+          fillStyle: "solid",
+          roughness: 0,
+          locked: true,
+          customData: { isScreenSyncElement: true },
+        },
+        {
+          id: "explaino-screen-dot-green",
+          type: "ellipse",
+          x: Math.round(sceneX + 50),
+          y: Math.round(sceneY + 13),
+          width: 12,
+          height: 12,
+          backgroundColor: "#22c55e",
+          strokeColor: "#16a34a",
+          strokeWidth: 1,
+          fillStyle: "solid",
+          roughness: 0,
+          locked: true,
+          customData: { isScreenSyncElement: true },
+        },
+        // 4. Header title text
+        {
+          id: "explaino-screen-title",
+          type: "text",
+          x: Math.round(sceneX + 74),
+          y: Math.round(sceneY + 11),
+          text: "code-server — Ubuntu Terminal & Editor",
+          fontSize: 14,
+          fontFamily: 3,
+          strokeColor: "#94a3b8",
+          locked: true,
+          customData: { isScreenSyncElement: true },
+        },
+        // 5. Header status text
+        {
+          id: "explaino-screen-status",
+          type: "text",
+          x: Math.max(Math.round(sceneX + 74), Math.round(sceneX + sceneWidth - 140)),
+          y: Math.round(sceneY + 11),
+          text: "● CODE SERVER",
+          fontSize: 12,
+          fontFamily: 3,
+          strokeColor: "#22c55e",
+          locked: true,
+          customData: { isScreenSyncElement: true },
+        }
+      );
+    }
 
-    const screenElements = convertToExcalidrawElements(screenElementsRaw as any);
+    if (isPreviewOpen && webPreviewScenePos) {
+      const { sceneX, sceneY, sceneWidth, sceneHeight } = webPreviewScenePos;
+      syncElementsRaw.push(
+        // 1. Preview Window Outer Frame
+        {
+          id: "explaino-preview-window-frame",
+          type: "rectangle",
+          x: Math.round(sceneX),
+          y: Math.round(sceneY),
+          width: Math.round(sceneWidth),
+          height: Math.round(sceneHeight),
+          backgroundColor: isDark ? "#16161a" : "#1e1e24",
+          strokeColor: "#10b981",
+          strokeWidth: 2,
+          fillStyle: "solid",
+          roughness: 0,
+          roundness: { type: 3 },
+          locked: true,
+          customData: { isScreenSyncElement: true },
+        },
+        // 2. Preview Window Header Bar
+        {
+          id: "explaino-preview-window-header",
+          type: "rectangle",
+          x: Math.round(sceneX),
+          y: Math.round(sceneY),
+          width: Math.round(sceneWidth),
+          height: 38,
+          backgroundColor: isDark ? "#1c1c21" : "#282830",
+          strokeColor: "transparent",
+          strokeWidth: 0,
+          fillStyle: "solid",
+          roughness: 0,
+          roundness: { type: 3 },
+          locked: true,
+          customData: { isScreenSyncElement: true },
+        },
+        // 3. Traffic Lights
+        {
+          id: "explaino-preview-dot-red",
+          type: "ellipse",
+          x: Math.round(sceneX + 14),
+          y: Math.round(sceneY + 13),
+          width: 12,
+          height: 12,
+          backgroundColor: "#ef4444",
+          strokeColor: "#dc2626",
+          strokeWidth: 1,
+          fillStyle: "solid",
+          roughness: 0,
+          locked: true,
+          customData: { isScreenSyncElement: true },
+        },
+        {
+          id: "explaino-preview-dot-yellow",
+          type: "ellipse",
+          x: Math.round(sceneX + 32),
+          y: Math.round(sceneY + 13),
+          width: 12,
+          height: 12,
+          backgroundColor: "#f59e0b",
+          strokeColor: "#d97706",
+          strokeWidth: 1,
+          fillStyle: "solid",
+          roughness: 0,
+          locked: true,
+          customData: { isScreenSyncElement: true },
+        },
+        {
+          id: "explaino-preview-dot-green",
+          type: "ellipse",
+          x: Math.round(sceneX + 50),
+          y: Math.round(sceneY + 13),
+          width: 12,
+          height: 12,
+          backgroundColor: "#22c55e",
+          strokeColor: "#16a34a",
+          strokeWidth: 1,
+          fillStyle: "solid",
+          roughness: 0,
+          locked: true,
+          customData: { isScreenSyncElement: true },
+        },
+        // 4. Header title text
+        {
+          id: "explaino-preview-title",
+          type: "text",
+          x: Math.round(sceneX + 74),
+          y: Math.round(sceneY + 11),
+          text: "Web Preview — localhost:5500",
+          fontSize: 14,
+          fontFamily: 3,
+          strokeColor: "#94a3b8",
+          locked: true,
+          customData: { isScreenSyncElement: true },
+        },
+        // 5. Header status text
+        {
+          id: "explaino-preview-status",
+          type: "text",
+          x: Math.max(Math.round(sceneX + 74), Math.round(sceneX + sceneWidth - 140)),
+          y: Math.round(sceneY + 11),
+          text: "● LIVE PREVIEW",
+          fontSize: 12,
+          fontFamily: 3,
+          strokeColor: "#10b981",
+          locked: true,
+          customData: { isScreenSyncElement: true },
+        }
+      );
+    }
 
-    // Place screenElements at the bottom of the element stack so user whiteboard drawings stay visibly on top
+    const syncElements = convertToExcalidrawElements(syncElementsRaw as any);
+
+    // Place syncElements at the bottom of the element stack so user whiteboard drawings stay visibly on top
     api.updateScene({
-      elements: [...screenElements, ...nonScreenElements],
+      elements: [...syncElements, ...nonSyncElements],
     });
-  }, [showIframePanel, screenScenePos, apiReady, theme]);
+  }, [showIframePanel, screenScenePos, showWebPreviewPanel, webPreviewScenePos, apiReady, theme]);
 
   const drawingIdRef = useRef<string | null>(null);
   const nameRef = useRef<string>("Untitled");
@@ -1940,6 +2093,7 @@ export default function ExcalidrawWrapper() {
           label: "Toggle Canvas Screen (Code Server)",
           category: "Screen",
           shortcut: "Browser",
+          keywords: ["screen", "code server", "vps", "vscode", "terminal", "workspace"],
           icon: <Monitor size={15} />,
           run: () => {
             if (!showIframePanel) {
@@ -1951,7 +2105,38 @@ export default function ExcalidrawWrapper() {
           },
         },
         {
+          id: "toggle-web-preview",
+          label: `${showWebPreviewPanel ? "Close" : "Open"} Web Preview (VPS Live Server)`,
+          category: "Screen",
+          shortcut: "Live Server",
+          hint: "Responsive macOS window on canvas",
+          keywords: ["preview", "web preview", "live server", "localhost", "website", "vps", "browser"],
+          icon: <Globe size={15} />,
+          run: () => {
+            if (!showWebPreviewPanel) {
+              handleOpenWebPreview();
+            } else {
+              setShowWebPreviewPanel(false);
+              savePreviewState({ isOpen: false });
+            }
+          },
+        },
+        {
+          id: "web-preview-new-tab",
+          label: "Open Web Preview in External Browser Tab",
+          category: "Screen",
+          shortcut: "New Tab",
+          hint: "Launch on local device",
+          keywords: ["preview", "new tab", "external", "live server", "browser tab", "localhost"],
+          icon: <ExternalLink size={15} />,
+          run: () => {
+            const url = buildExternalTabUrl(DEFAULT_PREVIEW_PORT, DEFAULT_PREVIEW_PATH);
+            window.open(url, "_blank", "noopener,noreferrer");
+          },
+        },
+        {
           id: "focus-screen",
+          keywords: ["focus", "type", "screen", "terminal", "code server"],
           label: "Focus & Type in Code Server",
           category: "Screen",
           shortcut: "Enter",
@@ -2313,6 +2498,190 @@ export default function ExcalidrawWrapper() {
           run: () => api()?.resetScene(),
         },
 
+        // ─── File & Excalidraw Menu ───
+        {
+          id: "export-image",
+          label: "Export Image...",
+          category: "File",
+          shortcut: "Ctrl+Shift+E",
+          hint: "PNG, SVG, Clipboard",
+          keywords: ["image", "export", "export image", "download", "png", "svg", "clipboard", "save as image"],
+          icon: <ImageIcon size={15} />,
+          run: () => {
+            const a = api();
+            if (a) {
+              a.updateScene({
+                appState: {
+                  openDialog: { name: "imageExport" },
+                } as unknown as AppState,
+              });
+            }
+          },
+        },
+        {
+          id: "save-to-file",
+          label: "Save to...",
+          category: "File",
+          shortcut: "Save to...",
+          hint: "Export .excalidraw or JSON",
+          keywords: ["save", "save to", "export scene", "json", "download"],
+          icon: <Download size={15} />,
+          run: () => {
+            const a = api();
+            if (a) {
+              a.updateScene({
+                appState: {
+                  openDialog: { name: "jsonExport" },
+                } as unknown as AppState,
+              });
+            }
+          },
+        },
+        {
+          id: "open-scene",
+          label: "Open Drawing...",
+          category: "File",
+          shortcut: "Ctrl+O",
+          hint: "Open .excalidraw file",
+          keywords: ["open", "load", "import", "file", "scene"],
+          icon: <FolderOpen size={15} />,
+          run: () => {
+            const fileInput = document.querySelector<HTMLInputElement>(".excalidraw input[type='file']");
+            if (fileInput) fileInput.click();
+          },
+        },
+        {
+          id: "insert-image",
+          label: "Insert Image on Canvas",
+          category: "Tools",
+          shortcut: "Image",
+          hint: "Upload image file to whiteboard",
+          keywords: ["image", "insert image", "add image", "upload image", "picture", "photo"],
+          icon: <ImageIcon size={15} />,
+          run: () => {
+            api()?.setActiveTool({ type: "image" });
+          },
+        },
+        {
+          id: "find-on-canvas",
+          label: "Find on Canvas",
+          category: "Tools",
+          shortcut: "Ctrl+F",
+          hint: "Search text elements across canvas",
+          keywords: ["find", "search", "search canvas", "find text"],
+          icon: <Search size={15} />,
+          run: () => {
+            const a = api();
+            if (a) {
+              a.updateScene({
+                appState: {
+                  openSidebar: { name: "search" },
+                } as unknown as AppState,
+              });
+            }
+          },
+        },
+        {
+          id: "help-shortcuts",
+          label: "Help & Keyboard Shortcuts",
+          category: "Help",
+          shortcut: "?",
+          hint: "Shortcuts & documentation",
+          keywords: ["help", "shortcuts", "keyboard", "docs", "documentation"],
+          icon: <HelpCircle size={15} />,
+          run: () => {
+            const a = api();
+            if (a) {
+              a.updateScene({
+                appState: {
+                  openDialog: { name: "help" },
+                } as unknown as AppState,
+              });
+            }
+          },
+        },
+
+        // ─── Canvas Background Colors ───
+        {
+          id: "canvas-bg-dark",
+          label: "Canvas Background: Dark Slate (#121212)",
+          category: "Canvas Background",
+          keywords: ["background", "canvas background", "color", "dark", "slate", "theme"],
+          icon: <Palette size={15} />,
+          run: () => api()?.updateScene({ appState: { viewBackgroundColor: "#121212" } as unknown as AppState }),
+        },
+        {
+          id: "canvas-bg-light",
+          label: "Canvas Background: Pure White (#ffffff)",
+          category: "Canvas Background",
+          keywords: ["background", "canvas background", "color", "white", "light", "theme"],
+          icon: <Palette size={15} />,
+          run: () => api()?.updateScene({ appState: { viewBackgroundColor: "#ffffff" } as unknown as AppState }),
+        },
+        {
+          id: "canvas-bg-blueprint",
+          label: "Canvas Background: Navy Blueprint (#1b1e2e)",
+          category: "Canvas Background",
+          keywords: ["background", "canvas background", "color", "navy", "blueprint", "blue"],
+          icon: <Palette size={15} />,
+          run: () => api()?.updateScene({ appState: { viewBackgroundColor: "#1b1e2e" } as unknown as AppState }),
+        },
+        {
+          id: "canvas-bg-amber",
+          label: "Canvas Background: Warm Amber (#24201a)",
+          category: "Canvas Background",
+          keywords: ["background", "canvas background", "color", "amber", "sepia", "warm"],
+          icon: <Palette size={15} />,
+          run: () => api()?.updateScene({ appState: { viewBackgroundColor: "#24201a" } as unknown as AppState }),
+        },
+
+        // ─── Extensions & Controls ───
+        {
+          id: "toggle-handy-toolbar",
+          label: `${showHandyToolbar ? "Hide" : "Show"} Handy Toolbar`,
+          category: "Tools",
+          shortcut: "Handy",
+          keywords: ["handy", "handy toolbar", "toolbar", "quick tools", "floating toolbar"],
+          icon: <Sliders size={15} />,
+          run: () => handleToggleHandyToolbar(),
+        },
+        {
+          id: "toggle-extensions-panel",
+          label: `${showExtensionsPanel ? "Close" : "Open"} Extensions Panel`,
+          category: "Tools",
+          shortcut: "Extensions",
+          keywords: ["extensions", "plugins", "panel", "tools"],
+          icon: <Blocks size={15} />,
+          run: () => setShowExtensionsPanel((v) => !v),
+        },
+
+        // ─── AI Models ───
+        ...ALL_MODELS.map((m) => ({
+          id: `switch-model-${m.id}`,
+          label: `Switch AI Model: ${m.label}`,
+          category: "AI Models",
+          shortcut: m.provider === "gemini" ? "Gemini" : "Mistral",
+          hint: m.description,
+          keywords: ["model", "ai", "llm", m.label.toLowerCase(), m.id, m.provider, "change model", "switch model", "select model"],
+          icon: <Sparkles size={15} />,
+          run: () => {
+            setStoredModel(m.id);
+            window.dispatchEvent(new CustomEvent("explaino-model-changed", { detail: m.id }));
+          },
+        })),
+        {
+          id: "change-ai-model-settings",
+          label: "Change AI Model / Settings",
+          category: "AI Models",
+          shortcut: "Model",
+          hint: "Open model options",
+          keywords: ["model", "change model", "select model", "gemini", "mistral", "codestral", "nemo"],
+          icon: <Sparkles size={15} />,
+          run: () => {
+            setShowExtensionsPanel(true);
+          },
+        },
+
         // ─── Account ───
         {
           id: "sign-out",
@@ -2334,6 +2703,11 @@ export default function ExcalidrawWrapper() {
       handleInsertTable,
       handleInsertDataStructure,
       handleSaveClick,
+      showWebPreviewPanel,
+      showHandyToolbar,
+      showExtensionsPanel,
+      handleOpenWebPreview,
+      handleToggleHandyToolbar,
     ]
   );
 
@@ -2708,6 +3082,31 @@ export default function ExcalidrawWrapper() {
         />
       )}
 
+      {/* Web Preview Panel (Dedicated macOS Window for Live Server on VPS) */}
+      {showWebPreviewPanel && (
+        <WebPreviewPanel
+          isOpen={showWebPreviewPanel}
+          onClose={() => {
+            setShowWebPreviewPanel(false);
+            setIsWebPreviewActive(false);
+            savePreviewState({ isOpen: false });
+          }}
+          viewport={viewport}
+          siblingWindowPos={screenScenePos}
+          onCanvasScroll={handleScreenCanvasScroll}
+          isActive={isWebPreviewActive}
+          onActiveChange={(active) => {
+            setIsWebPreviewActive(active);
+            if (active) {
+              excalidrawAPI.current?.setActiveTool({ type: "selection" });
+            }
+          }}
+          activeToolType={activeToolType}
+          recenterTrigger={webPreviewRecenterTrigger}
+          onScenePosChange={setWebPreviewScenePos}
+        />
+      )}
+
       {/* Explaino voice notes panel */}
       {showExplaino && (
         <ExplainoPanel
@@ -2837,6 +3236,8 @@ export default function ExcalidrawWrapper() {
         onToggleLaser={() => setLaserActive((v) => !v)}
         showScreen={showIframePanel}
         onOpenScreen={handleOpenScreen}
+        showWebPreview={showWebPreviewPanel}
+        onOpenWebPreview={handleOpenWebPreview}
         onOpenDiagram={() => setShowTextToDiagramModal(true)}
         showDataStructures={showDataStructuresPanel}
         onOpenDataStructures={() => {

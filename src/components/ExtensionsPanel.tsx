@@ -15,6 +15,7 @@ import {
   PanelsRightBottom,
   X,
   ChevronRight,
+  Globe,
 } from "lucide-react";
 
 export interface ExtensionsPanelProps {
@@ -24,10 +25,12 @@ export interface ExtensionsPanelProps {
   laserActive: boolean;
   onToggleLaser: () => void;
   showScreen?: boolean;
+  showWebPreview?: boolean;
   showDataStructures?: boolean;
   showExplaino?: boolean;
   showAiText?: boolean;
   onOpenScreen: () => void;
+  onOpenWebPreview?: () => void;
   onOpenDiagram: () => void;
   onOpenDataStructures: () => void;
   onInsertTable: () => void;
@@ -60,7 +63,9 @@ export default function ExtensionsPanel({
   laserActive,
   onToggleLaser,
   showScreen = false,
+  showWebPreview = false,
   onOpenScreen,
+  onOpenWebPreview,
   onOpenDiagram,
   onOpenDataStructures,
   onInsertTable,
@@ -164,6 +169,24 @@ export default function ExtensionsPanel({
         : undefined,
       onClick: () => {
         onOpenScreen();
+        onClose();
+      },
+    },
+    {
+      id: "web-preview",
+      name: "Web Preview (VPS Live Server)",
+      description: "Responsive browser window previewing localhost on remote VPS",
+      icon: Globe,
+      iconBg: isDark ? "bg-indigo-500/20" : "bg-indigo-500/10",
+      iconColor: isDark ? "text-indigo-400" : "text-indigo-500",
+      badge: showWebPreview
+        ? {
+            text: "Active",
+            variant: "active" as const,
+          }
+        : undefined,
+      onClick: () => {
+        onOpenWebPreview?.();
         onClose();
       },
     },
