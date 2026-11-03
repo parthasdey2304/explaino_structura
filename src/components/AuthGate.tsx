@@ -43,9 +43,9 @@ export function performClientLogout(): void {
   } catch {}
 }
 
-export default function AuthGate({ children }: { children: React.ReactNode }) {
+export default function AuthGate({ children, initialCheckingAuth = true }: { children: React.ReactNode; initialCheckingAuth?: boolean }) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(initialCheckingAuth);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

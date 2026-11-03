@@ -1,73 +1,22 @@
-"use client";
-
-import "@/lib/suppressUnloadViolation";
-import { Suspense } from "react";
-import { useSearchParams } from "next/navigation";
-import dynamic from "next/dynamic";
-import { ExcalidrawErrorBoundary } from "@/components/ExcalidrawErrorBoundary";
-import AuthGate from "@/components/AuthGate";
+import { cookies } from "next/headers";
 import ReadOnlyCanvasView from "@/components/ReadOnlyCanvasView";
+import Workspace from "@/components/Workspace";
 
-const ExcalidrawWrapper = dynamic(
-  () => import("@/components/ExcalidrawWrapper"),
-  {
-    ssr: false,
-    loading: () => (
-      <div
-        style={{
-          width: "100%",
-          height: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#0c0c0e",
-        }}
-      >
-        <span style={{ color: "#a1a1aa", fontSize: 14 }}>Loading canvas…</span>
-      </div>
-    ),
-  }
-);
-
-function HomeContent() {
-  const searchParams = useSearchParams();
-  const viewId = searchParams.get("view");
-  const isReadOnly = searchParams.get("readonly") === "true";
-
-  // Dedicated Student Zero-Barrier Read-Only View (outside AuthGate)
-  if (viewId && isReadOnly) {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const [query, cookieStore] = await Promise.all([searchParams, cookies()]);
+  const viewId = typeof query.view === "string" ? query.view : undefined;
+  if (viewId && query.readonly === "true") {
     return <ReadOnlyCanvasView canvasId={viewId} />;
   }
-
-  // Teacher Protected Workspace (inside AuthGate)
   return (
-    <AuthGate>
-      <ExcalidrawErrorBoundary>
-        <ExcalidrawWrapper initialCanvasId={viewId || undefined} />
-      </ExcalidrawErrorBoundary>
-    </AuthGate>
-  );
-}
-
-export default function Home() {
-  return (
-    <Suspense
-      fallback={
-        <div
-          style={{
-            width: "100%",
-            height: "100vh",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "#0c0c0e",
-          }}
-        >
-          <span style={{ color: "#a1a1aa", fontSize: 14 }}>Loading workspace…</span>
-        </div>
-      }
-    >
-      <HomeContent />
-    </Suspense>
+    <Workspace
+      initialCanvasId={viewId}
+      // This is a rendering hint only; AuthGate still checks the session.
+      initialCheckingAuth={cookieStore.has("explaino-auth-session")}
+    />
   );
 }
