@@ -11,17 +11,21 @@ let initPromise: Promise<void> | null = null;
 export function getDb(): Client {
   if (dbInstance) return dbInstance;
 
-  const dbDir = path.join(process.cwd(), "data");
-  if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
+  const remoteUrl = process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL;
+  if (!remoteUrl && process.env.VERCEL === "1") {
+    throw new Error("Canvas storage is not configured. Connect a Turso database to this Vercel project.");
   }
-
-  const dbPath = path.resolve(dbDir, "explaino.db").replace(/\\/g, "/");
-  const dbUrl = process.env.DATABASE_URL || `file:${dbPath}`;
+  let dbUrl = remoteUrl;
+  if (!dbUrl) {
+    const dbDir = path.join(process.cwd(), "data");
+    if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
+    const dbPath = path.resolve(dbDir, "explaino.db").replace(/\\/g, "/");
+    dbUrl = `file:${dbPath}`;
+  }
 
   dbInstance = createClient({
     url: dbUrl,
-    authToken: process.env.DATABASE_AUTH_TOKEN,
+    authToken: process.env.TURSO_AUTH_TOKEN || process.env.DATABASE_AUTH_TOKEN,
   });
 
   return dbInstance;
@@ -29,10 +33,12 @@ export function getDb(): Client {
 
 export async function initDatabase(db: Client): Promise<void> {
   // SQLite safety pragmas must be executed outside a transaction
-  await db.execute("PRAGMA journal_mode = WAL;");
-  await db.execute("PRAGMA synchronous = NORMAL;");
-  await db.execute("PRAGMA foreign_keys = ON;");
-  await db.execute("PRAGMA busy_timeout = 5000;");
+  if (!process.env.TURSO_DATABASE_URL && !process.env.DATABASE_URL?.startsWith("libsql:")) {
+    await db.execute("PRAGMA journal_mode = WAL;");
+    await db.execute("PRAGMA synchronous = NORMAL;");
+    await db.execute("PRAGMA foreign_keys = ON;");
+    await db.execute("PRAGMA busy_timeout = 5000;");
+  }
 
   await db.batch(
     [
