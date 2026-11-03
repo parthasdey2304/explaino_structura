@@ -150,3 +150,6 @@ vite.config.ts.timestamp-*
 
 .vercel
 .agents/
+
+# Local canvas data and SQLite journal files
+data/

@@ -55,6 +55,20 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
 
   // Check initial authentication on mount
   useEffect(() => {
+    // Zero-barrier public read-only fallback check (/?view=[id]&readonly=true)
+    if (typeof window !== "undefined") {
+      try {
+        const url = new URL(window.location.href);
+        const isReadOnlyView = url.searchParams.get("readonly") === "true";
+        const hasView = url.searchParams.has("view");
+        if (isReadOnlyView && hasView) {
+          setIsAuthenticated(true);
+          setIsCheckingAuth(false);
+          return;
+        }
+      } catch {}
+    }
+
     const isAuth = checkIsAuthenticated();
     setIsAuthenticated(isAuth);
     setIsCheckingAuth(false);
