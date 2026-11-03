@@ -1,14 +1,15 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
-import "@excalidraw/excalidraw/index.css";
+import { Assistant, Orbitron } from "next/font/google";
 import "./globals.css";
+
+const assistant = Assistant({ subsets: ["latin"], variable: "--font-assistant", display: "swap" });
+const orbitron = Orbitron({ subsets: ["latin"], variable: "--font-orbitron", display: "swap", preload: false });
 
 export const viewport: Viewport = {
   themeColor: "#0b0b0e",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: "cover",
 };
 
@@ -37,7 +38,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" style={{ height: "100%" }} suppressHydrationWarning>
+    <html lang="en" className={`${assistant.variable} ${orbitron.variable}`} style={{ height: "100%" }} suppressHydrationWarning>
       <head>
         <Script
           id="suppress-unload-violation"
@@ -75,18 +76,12 @@ export default function RootLayout({
             `,
           }}
         />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700&family=Orbitron:wght@600;700;800;900&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
-          rel="stylesheet"
-        />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body style={{ height: "100%", overflow: "hidden" }} suppressHydrationWarning>
-        {children}
+        <main id="main-content" style={{ height: "100%" }}>{children}</main>
         <Script
           id="pwa-service-worker"
           strategy="afterInteractive"

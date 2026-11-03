@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&display=swap");
 @source "../components";
 @source "../app";
 
@@ -9,6 +8,7 @@
 
 /* â”€â”€ CSS Variables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 :root {
+  --ui-font: var(--font-assistant, "Assistant"), sans-serif;
   /* Brand / Primary */
   --color-primary: #6965db;
   --color-primary-darker: #5b57d1;
@@ -108,7 +108,7 @@ body {
   overscroll-behavior: none;
   overscroll-behavior-x: none;
   overscroll-behavior-y: none;
-  font-family: "Assistant", -apple-system, BlinkMacSystemFont, "Segoe UI",
+  font-family: var(--font-assistant, "Assistant"), -apple-system, BlinkMacSystemFont, "Segoe UI",
     Roboto, Helvetica, Arial, sans-serif;
   font-size: 14px;
   background-color: var(--default-bg-color);
@@ -4975,7 +4975,7 @@ canvas,
    ============================================================ */
 .font-orbitron,
 .stopwatch-digits {
-  font-family: "Orbitron", ui-monospace, monospace, sans-serif;
+  font-family: var(--font-orbitron, "Orbitron"), ui-monospace, monospace, sans-serif;
   font-optical-sizing: auto;
   font-weight: 700;
   font-style: normal;
