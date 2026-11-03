@@ -264,7 +264,7 @@ function GithubIcon() {
 
 // Dynamically import the heavy Excalidraw component client-side only
 const ExcalidrawComponent = dynamic(
-  () => import("@excalidraw/excalidraw").then((m) => m.Excalidraw),
+  () => import("./ExcalidrawCanvas"),
   {
     ssr: false,
     loading: () => (

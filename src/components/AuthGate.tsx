@@ -43,9 +43,9 @@ export function performClientLogout(): void {
   } catch {}
 }
 
-export default function AuthGate({ children }: { children: React.ReactNode }) {
+export default function AuthGate({ children, initialCheckingAuth = true }: { children: React.ReactNode; initialCheckingAuth?: boolean }) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(initialCheckingAuth);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -317,6 +317,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
         {/* Error Alert Message */}
         {errorMessage && (
           <div
+            role="alert"
             style={{
               display: "flex",
               alignItems: "center",
@@ -373,7 +374,6 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
                 id="auth-email"
                 type="email"
                 required
-                autoFocus
                 autoComplete="email"
                 autoCapitalize="none"
                 value={email}
@@ -465,10 +465,12 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
               />
               <button
                 type="button"
+                aria-pressed={showPassword}
+                aria-controls="auth-password"
                 onClick={() => setShowPassword((v) => !v)}
                 style={{
                   position: "absolute",
-                  right: "12px",
+                  right: "3px",
                   top: "50%",
                   transform: "translateY(-50%)",
                   background: "transparent",
@@ -477,7 +479,9 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
-                  padding: "4px",
+                  padding: "12px",
+                  minWidth: "44px",
+                  minHeight: "44px",
                 }}
                 title={showPassword ? "Hide password" : "Show password"}
                 aria-label={showPassword ? "Hide password" : "Show password"}

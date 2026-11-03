@@ -15,7 +15,7 @@ import { Lock, AlertCircle, RefreshCw } from "lucide-react";
 import { normalizeCanvasBackground } from "@/lib/canvasTheme";
 
 const Excalidraw = dynamic(
-  () => import("@excalidraw/excalidraw").then((mod) => mod.Excalidraw),
+  () => import("./ExcalidrawCanvas"),
   {
     ssr: false,
     loading: () => (
@@ -100,7 +100,7 @@ export default function ReadOnlyCanvasView({ canvasId }: ReadOnlyCanvasViewProps
     lastVersionRef.current = null;
     lastUpdatedAtRef.current = null;
     // Load the drawing code in parallel with the first network request.
-    void import("@excalidraw/excalidraw");
+    void import("./ExcalidrawCanvas");
 
     async function fetchCanvasData(isInitial = false) {
       requestController = new AbortController();

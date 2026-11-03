@@ -111,6 +111,12 @@ export default function ExtensionsPanel({
   const isDark = theme === "dark";
   const [copiedShare, setCopiedShare] = useState<boolean>(false);
   const [showCanvases, setShowCanvases] = useState(false);
+  useEffect(() => {
+    if (!isOpen) return;
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    panelRef.current?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
+    return () => { if (trigger?.isConnected) trigger.focus({ preventScroll: true }); };
+  }, [isOpen]);
   const [selectedModel, setSelectedModel] = useState<string>(() => {
     if (typeof window !== "undefined") return getStoredModel();
     return "gemini-3.8-flash";
@@ -409,7 +415,7 @@ export default function ExtensionsPanel({
 
           {/* Canvases List & Active Tab Switcher */}
           <div className="space-y-1">
-            <span className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? "text-zinc-500" : "text-zinc-400"}`}>
+            <span className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? "text-zinc-400" : "text-zinc-600"}`}>
               Open Canvases
             </span>
             <div className="space-y-1 max-h-[160px] overflow-y-auto pr-0.5">
@@ -420,18 +426,9 @@ export default function ExtensionsPanel({
                 return (
                   <div
                     key={tab.id}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`Switch to ${tab.name}`}
-                    aria-current={isActive ? "true" : undefined}
-                    onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onSelectTab?.(tab.id); } }}
                     data-tab-switch-item="true"
                     data-tab-id={tab.id}
                     data-active-tab={isActive ? "true" : "false"}
-                    onClick={() => {
-                      if (!isEditing) onSelectTab?.(tab.id);
-                    }}
-                    onDoubleClick={(e) => handleStartRename(tab, e)}
                     className={`group relative flex items-center justify-between p-2 rounded-lg cursor-pointer border text-xs transition-all ${
                       isActive
                         ? isDark
@@ -461,23 +458,28 @@ export default function ExtensionsPanel({
                           }`}
                         />
                       ) : (
-                        <span
+                        <button
+                          type="button"
+                          aria-label={`Switch to ${tab.name}`}
+                          aria-current={isActive ? "true" : undefined}
+                          onClick={() => onSelectTab?.(tab.id)}
+                          onDoubleClick={(e) => handleStartRename(tab, e)}
                           title={`${tab.name} (Double-click to rename)`}
-                          className="truncate font-medium"
+                          className="flex-1 min-w-0 min-h-8 truncate text-left font-medium rounded focus-visible:outline-2 focus-visible:outline-indigo-500"
                         >
                           {tab.name}
-                        </span>
+                        </button>
                       )}
                       {tab.isReadOnly && (
                         <span
                           title="Read-Only Canvas"
-                          className="text-[9px] px-1 py-0.2 rounded font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0"
+                          className={`text-[9px] px-1 py-0.2 rounded font-bold bg-amber-500/20 border border-amber-500/30 shrink-0 ${isDark ? "text-amber-300" : "text-amber-800"}`}
                         >
                           RO
                         </span>
                       )}
                       {isActive && !isEditing && (
-                        <span className="text-[10px] font-bold text-indigo-400 shrink-0">
+                        <span className={`text-[10px] font-bold shrink-0 ${isDark ? "text-indigo-300" : "text-indigo-700"}`}>
                           Active
                         </span>
                       )}
@@ -493,7 +495,7 @@ export default function ExtensionsPanel({
                             title="Rename Canvas"
                             aria-label="Rename Canvas"
                             onClick={(e) => handleStartRename(tab, e)}
-                            className={`p-1 rounded transition-colors ${
+                            className={`w-8 h-8 inline-flex items-center justify-center rounded transition-colors ${
                               isDark
                                 ? "hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200"
                                 : "hover:bg-zinc-200 text-zinc-500 hover:text-zinc-800"
@@ -513,7 +515,7 @@ export default function ExtensionsPanel({
                               e.stopPropagation();
                               onDuplicateTab(tab.id);
                             }}
-                            className={`p-1 rounded transition-colors ${
+                            className={`w-8 h-8 inline-flex items-center justify-center rounded transition-colors ${
                               isDark
                                 ? "hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200"
                                 : "hover:bg-zinc-200 text-zinc-500 hover:text-zinc-800"
@@ -533,7 +535,7 @@ export default function ExtensionsPanel({
                               e.stopPropagation();
                               onCloseTab(tab.id);
                             }}
-                            className={`p-1 rounded transition-colors ${
+                            className={`w-8 h-8 inline-flex items-center justify-center rounded transition-colors ${
                               isDark
                                 ? "hover:bg-rose-500/20 text-zinc-400 hover:text-rose-400"
                                 : "hover:bg-rose-100 text-zinc-500 hover:text-rose-600"
@@ -637,7 +639,7 @@ export default function ExtensionsPanel({
                 <Share2 size={13} className="text-indigo-400 shrink-0" />
                 <span>Student Read-Only Share</span>
               </span>
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider bg-indigo-500/10 border border-indigo-500/20 ${isDark ? "text-indigo-300" : "text-indigo-700"}`}>
                 Zero Login
               </span>
             </div>
@@ -701,7 +703,7 @@ export default function ExtensionsPanel({
                   <span>Open Student View</span>
                   <ExternalLink size={11} strokeWidth={2} />
                 </a>
-                <span className={`text-[10px] ${isDark ? "text-zinc-500" : "text-zinc-400"}`}>
+                <span className={`text-[10px] ${isDark ? "text-zinc-400" : "text-zinc-600"}`}>
                   Opens in new tab
                 </span>
               </div>
@@ -774,7 +776,7 @@ export default function ExtensionsPanel({
         )}
 
         {/* Tools & AI section */}
-        <div className={`px-2 pt-1 pb-1 text-[10px] font-bold tracking-wider uppercase ${isDark ? "text-zinc-500" : "text-zinc-400"}`}>
+        <div className={`px-2 pt-1 pb-1 text-[10px] font-bold tracking-wider uppercase ${isDark ? "text-zinc-400" : "text-zinc-600"}`}>
           Tools & AI
         </div>
 
