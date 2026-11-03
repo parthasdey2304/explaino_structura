@@ -1,5 +1,5 @@
 // Explaino Structura — Smart Board & Mobile PWA Service Worker
-const CACHE_NAME = "explaino-pwa-v1";
+const CACHE_NAME = "explaino-pwa-v2";
 
 const CORE_ASSETS = [
   "/",
@@ -26,7 +26,7 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
-          if (key !== CACHE_NAME) {
+          if (key.startsWith("explaino-pwa-") && key !== CACHE_NAME) {
             return caches.delete(key);
           }
         })
@@ -44,6 +44,8 @@ self.addEventListener("fetch", (event) => {
     request.method !== "GET" ||
     url.pathname.startsWith("/api/") ||
     url.pathname.startsWith("/code-server") ||
+    url.pathname.startsWith("/preview/") ||
+    url.pathname.startsWith("/proxy/") ||
     url.pathname.includes("socket.io") ||
     request.headers.get("upgrade") === "websocket"
   ) {
@@ -59,6 +61,9 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
         const cachedResponse = await cache.match(request);
+        // Content-hashed build chunks and drawing fonts never change at the
+        // same URL. Re-fetching them on every visit defeats the warm cache.
+        if (cachedResponse && (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/excalidraw-fonts/"))) return cachedResponse;
         const fetchPromise = fetch(request).then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             cache.put(request, networkResponse.clone());

@@ -2,6 +2,15 @@
 @source "../components";
 @source "../app";
 
+@font-face {
+  font-family: 'Excalifont';
+  src: url('/excalidraw-fonts/Excalifont/Excalifont-Regular-a88b72a24fb54c9f94e3b5fdaa7481c9.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+
 /* ============================================================
    EXPLAINO â€” Excalidraw-inspired Design System
    ============================================================ */
@@ -132,6 +141,11 @@ canvas,
   touch-action: none !important;
   -webkit-touch-callout: none !important;
   -webkit-tap-highlight-color: transparent !important;
+}
+
+/* PDF pages are scrollable on touch screens when an annotation tool is off. */
+[data-testid="pdf-pages"] canvas {
+  touch-action: pan-y !important;
 }
 
 /* Hardware GPU layer promotion for low-RAM Android smart boards & lag-free ink */
@@ -4830,7 +4844,7 @@ canvas,
 
 /* Ensure Excalidraw's main hamburger menu (3 bars) and UI layers always sit on top of the canvas screen */
 .excalidraw .layer-ui__wrapper {
-  z-index: 10 !important;
+  z-index: 100 !important;
 }
 
 .excalidraw .main-menu,

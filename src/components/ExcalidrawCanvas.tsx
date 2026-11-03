@@ -15,17 +15,41 @@ export default function ExcalidrawCanvas(props: ComponentProps<typeof Excalidraw
     // as a document footer. Supply the missing semantics at this boundary.
     const labelControls = () => {
       const menu = root.querySelector(".main-menu-trigger");
-      if (menu && !menu.hasAttribute("aria-label")) menu.setAttribute("aria-label", "Canvas menu");
+      let menuLabeled = false;
+      if (menu) {
+        if (!menu.hasAttribute("aria-label")) menu.setAttribute("aria-label", "Canvas menu");
+        menuLabeled = true;
+      }
       const footer = root.querySelector("footer.layer-ui__wrapper__footer");
+      let footerLabeled = false;
       if (footer) {
         footer.setAttribute("role", "group");
         footer.setAttribute("aria-label", "Canvas navigation");
+        footerLabeled = true;
       }
+      return menuLabeled && footerLabeled;
     };
-    labelControls();
-    const observer = new MutationObserver(labelControls);
+
+    if (labelControls()) return;
+
+    let pendingFrame: number | null = null;
+    const observer = new MutationObserver(() => {
+      if (pendingFrame !== null) return;
+      pendingFrame = requestAnimationFrame(() => {
+        pendingFrame = null;
+        if (labelControls()) {
+          observer.disconnect();
+        }
+      });
+    });
     observer.observe(root, { childList: true, subtree: true });
-    return () => observer.disconnect();
+    const safetyTimer = setTimeout(() => observer.disconnect(), 4000);
+
+    return () => {
+      observer.disconnect();
+      clearTimeout(safetyTimer);
+      if (pendingFrame !== null) cancelAnimationFrame(pendingFrame);
+    };
   }, []);
   return <div ref={container} style={{ width: "100%", height: "100%" }}><Excalidraw {...props} /></div>;
 }

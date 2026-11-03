@@ -89,6 +89,8 @@ export interface WebPreviewViewport {
 }
 
 export interface WebPreviewPanelProps {
+  zIndex?: number;
+  onFocusWindow?: () => void;
   isOpen: boolean;
   onClose: () => void;
   viewport: WebPreviewViewport;
@@ -106,6 +108,8 @@ export interface WebPreviewPanelProps {
   activeToolType?: string;
   recenterTrigger?: number;
   onScenePosChange?: (pos: { sceneX: number; sceneY: number; sceneWidth: number; sceneHeight: number } | null) => void;
+  persistState?: boolean;
+  windowOffset?: number;
 }
 
 export const BREAKPOINT_PRESETS = [
@@ -132,6 +136,8 @@ function getZoomValue(zoom: unknown): number {
 export default function WebPreviewPanel({
   isOpen,
   onClose,
+  zIndex = 40,
+  onFocusWindow,
   viewport,
   initialPort = DEFAULT_PREVIEW_PORT,
   initialPath = DEFAULT_PREVIEW_PATH,
@@ -142,9 +148,14 @@ export default function WebPreviewPanel({
   activeToolType,
   recenterTrigger,
   onScenePosChange,
+  persistState = true,
+  windowOffset = 0,
 }: WebPreviewPanelProps) {
   // 1. Initial State Loading from LocalStorage
-  const [saved] = useState(() => loadSavedPreviewState());
+  const [saved] = useState(() => persistState ? loadSavedPreviewState() : null);
+  const saveWindowState = useCallback((state: Partial<WebPreviewSavedState>) => {
+    if (persistState) savePreviewState(state);
+  }, [persistState]);
 
   const [port, setPort] = useState<number>(() => {
     return saved?.port ? parsePort(saved.port, initialPort) : initialPort;
@@ -155,8 +166,12 @@ export default function WebPreviewPanel({
   const [addressInput, setAddressInput] = useState<string>(() => {
     const p = saved?.port ?? initialPort;
     const sub = saved?.path ?? initialPath;
-    return sub === "/" ? `${p}` : `${p}${sub}`;
+    return `localhost:${p}${sub === "/" ? "" : sub}`;
   });
+  const [externalUrl, setExternalUrl] = useState<string | null>(null);
+  const [addressError, setAddressError] = useState<string | null>(null);
+  const [history, setHistory] = useState<string[]>(() => [`localhost:${saved?.port ?? initialPort}${(saved?.path ?? initialPath) === "/" ? "" : (saved?.path ?? initialPath)}`]);
+  const [historyIndex, setHistoryIndex] = useState(0);
 
   const [iframeKey, setIframeKey] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -177,6 +192,7 @@ export default function WebPreviewPanel({
 
   // 3. Traffic Lights Hover & Maximize State
   const [isHoveredTraffic, setIsHoveredTraffic] = useState(false);
+  const [hoveredTrafficButton, setHoveredTrafficButton] = useState<"close" | "recenter" | "maximize" | null>(null);
   const [preMaximizePos, setPreMaximizePos] = useState<{
     sceneX: number;
     sceneY: number;
@@ -211,8 +227,8 @@ export default function WebPreviewPanel({
     // Side-by-side positioning alongside sibling window without displacement
     if (siblingWindowPos) {
       return {
-        sceneX: siblingWindowPos.sceneX + siblingWindowPos.sceneWidth + 40,
-        sceneY: siblingWindowPos.sceneY,
+        sceneX: siblingWindowPos.sceneX + siblingWindowPos.sceneWidth + 40 + windowOffset * 40,
+        sceneY: siblingWindowPos.sceneY + windowOffset * 40,
         sceneWidth: 768,
         sceneHeight: 600,
       };
@@ -233,8 +249,8 @@ export default function WebPreviewPanel({
     const initialSceneY = (winH / 2 - offsetTop) / zoom - scrollY - defaultH / 2;
 
     return {
-      sceneX: Math.round(initialSceneX),
-      sceneY: Math.round(initialSceneY),
+      sceneX: Math.round(initialSceneX + windowOffset * 40),
+      sceneY: Math.round(initialSceneY + windowOffset * 40),
       sceneWidth: defaultW,
       sceneHeight: defaultH,
     };
@@ -373,8 +389,7 @@ export default function WebPreviewPanel({
     const preventHistoryNav = (e: WheelEvent) => {
       const target = e.target as HTMLElement | null;
       if (
-        target &&
-        (target.closest(".web-preview-window") || target.closest(".web-preview-scroll-overlay"))
+        target && panelRef.current?.contains(target)
       ) {
         e.preventDefault();
         e.stopPropagation();
@@ -526,13 +541,14 @@ export default function WebPreviewPanel({
       } catch {}
 
       const finalPos = latestScenePosRef.current || scenePos;
-      savePreviewState({
+      saveWindowState({
         sceneX: finalPos.sceneX,
         sceneY: finalPos.sceneY,
         sceneWidth: finalPos.sceneWidth,
         sceneHeight: finalPos.sceneHeight,
         port,
         path,
+        shouldRecenter: false,
       });
     }
   };
@@ -567,7 +583,7 @@ export default function WebPreviewPanel({
         sceneHeight: scenePos.sceneHeight,
       };
       setScenePos(next);
-      savePreviewState(next);
+      saveWindowState(next);
     } else {
       const zoom = getZoomValue(viewport?.zoom);
       const winW = window.innerWidth;
@@ -584,16 +600,16 @@ export default function WebPreviewPanel({
         sceneHeight: scenePos.sceneHeight,
       };
       setScenePos(next);
-      savePreviewState(next);
+      saveWindowState(next);
     }
-  }, [siblingWindowPos, scenePos, viewport]);
+  }, [siblingWindowPos, scenePos, viewport, saveWindowState]);
 
   const handleToggleMaximize = useCallback(() => {
     if (isMaximized && preMaximizePos) {
       setScenePos(preMaximizePos);
       setIsMaximized(false);
       setPreMaximizePos(null);
-      savePreviewState(preMaximizePos);
+      saveWindowState(preMaximizePos);
     } else {
       setPreMaximizePos({ ...scenePos });
       const zoom = getZoomValue(viewport?.zoom);
@@ -624,21 +640,9 @@ export default function WebPreviewPanel({
       };
       setScenePos(next);
       setIsMaximized(true);
-      savePreviewState(next);
+      saveWindowState(next);
     }
-  }, [isMaximized, preMaximizePos, scenePos, viewport]);
-
-  // 13. Preset Snapping Handler
-  const handleSelectPreset = useCallback((presetWidth: number) => {
-    setScenePos((prev) => {
-      const next = {
-        ...prev,
-        sceneWidth: presetWidth,
-      };
-      savePreviewState(next);
-      return next;
-    });
-  }, []);
+  }, [isMaximized, preMaximizePos, scenePos, viewport, saveWindowState]);
 
   // 14. Server Health & Reload Probing
   const probeServerHealth = useCallback(async () => {
@@ -658,22 +662,10 @@ export default function WebPreviewPanel({
   }, [port]);
 
   const handleReload = useCallback(() => {
-    setIsLoading(true);
-    probeServerHealth();
+    setIsLoading(!externalUrl || !/^https?:\/\/(?:www\.)?(?:google|instagram)\.com(?:[/:?#]|$)/i.test(externalUrl));
+    if (!externalUrl) probeServerHealth();
     setIframeKey((prev) => prev + 1);
-  }, [probeServerHealth]);
-
-  const handleGoBack = useCallback(() => {
-    try {
-      iframeRef.current?.contentWindow?.history.back();
-    } catch {}
-  }, []);
-
-  const handleGoForward = useCallback(() => {
-    try {
-      iframeRef.current?.contentWindow?.history.forward();
-    } catch {}
-  }, []);
+  }, [probeServerHealth, externalUrl]);
 
   const handleReloadOrStop = useCallback(() => {
     if (isLoading) {
@@ -686,45 +678,59 @@ export default function WebPreviewPanel({
     }
   }, [isLoading, handleReload]);
 
-  const handleAddressSubmit = (e: React.FormEvent | React.KeyboardEvent) => {
-    if ("key" in e && e.key !== "Enter") return;
-    e.preventDefault();
-
-    let clean = addressInput.trim();
-    if (!clean) {
-      clean = "5500";
-    }
-
-    const match = clean.match(/^:?(\d{1,5})(\/.*)?$/);
-    if (match) {
-      const newPort = parsePort(match[1], DEFAULT_PREVIEW_PORT);
-      const newPath = normalizePath(match[2] || "/");
+  const navigate = useCallback((input: string, addHistory: boolean) => {
+    const clean = input.trim();
+    const local = clean.match(/^(?:(?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0):|:)?(\d{1,5})([/?#].*)?$/i);
+    let display: string;
+    if (local || clean.startsWith("/")) {
+      const newPort = local ? Number(local[1]) : port;
+      if (newPort < 1 || newPort > 65535) { setAddressError("Enter a valid port from 1 to 65535."); return; }
+      const newPath = normalizePath(local ? local[2] || "/" : clean);
+      display = `localhost:${newPort}${newPath === "/" ? "" : newPath}`;
       setPort(newPort);
       setPath(newPath);
-      setAddressInput(newPath === "/" ? `${newPort}` : `${newPort}${newPath}`);
-      savePreviewState({ port: newPort, path: newPath });
-      setIframeKey((prev) => prev + 1);
-      return;
+      setExternalUrl(null);
+      saveWindowState({ port: newPort, path: newPath });
+    } else {
+      try {
+        const candidate = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(clean) ? clean : `https://${clean}`);
+        if (!["http:", "https:"].includes(candidate.protocol) || candidate.username || candidate.password) throw new Error("Invalid address");
+        display = candidate.href;
+        setExternalUrl(display);
+      } catch {
+        setAddressError("Enter an http or https website address, or a localhost port.");
+        return;
+      }
     }
+    setAddressError(null);
+    setIsServerOffline(false);
+    setIsLoading(!/^https?:\/\/(?:www\.)?(?:google|instagram)\.com(?:[/:?#]|$)/i.test(display));
+    setAddressInput(display);
+    setIframeKey((previous) => previous + 1);
+    if (addHistory) {
+      const next = [...history.slice(0, historyIndex + 1), display];
+      setHistory(next);
+      setHistoryIndex(next.length - 1);
+    }
+  }, [history, historyIndex, port, saveWindowState]);
 
-    const newPort = parsePort(clean, DEFAULT_PREVIEW_PORT);
-    const newPath = normalizePath(clean);
-    setPort(newPort);
-    setPath(newPath);
-    setAddressInput(newPath === "/" ? `${newPort}` : `${newPort}${newPath}`);
-    savePreviewState({ port: newPort, path: newPath });
-    setIframeKey((prev) => prev + 1);
+  const handleAddressSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    navigate(addressInput, true);
   };
+  const handleGoBack = () => { if (historyIndex > 0) { navigate(history[historyIndex - 1], false); setHistoryIndex(historyIndex - 1); } };
+  const handleGoForward = () => { if (historyIndex < history.length - 1) { navigate(history[historyIndex + 1], false); setHistoryIndex(historyIndex + 1); } };
 
   const handleExternalLaunch = useCallback(() => {
-    const url = buildExternalTabUrl(port, path);
+    const url = externalUrl || buildExternalTabUrl(port, path);
     window.open(url, "_blank", "noopener,noreferrer");
-  }, [port, path]);
+  }, [port, path, externalUrl]);
 
   if (!isOpen) return null;
 
-  const currentCategory = classifyBreakpoint(scenePos.sceneWidth);
-  const iframeUrl = buildDirectVpsUrl(port, path);
+  const iframeUrl = externalUrl || buildDirectVpsUrl(port, path);
+  const blockedHost = externalUrl ? new URL(externalUrl).hostname.toLowerCase() : "";
+  const blockedSite = ["google.com", "www.google.com"].includes(blockedHost) ? "Google Search" : ["instagram.com", "www.instagram.com"].includes(blockedHost) ? "Instagram" : null;
 
   return (
     <>
@@ -747,6 +753,8 @@ export default function WebPreviewPanel({
         ref={panelRef}
         data-testid="web-preview-panel"
         className="web-preview-window"
+        onPointerDownCapture={onFocusWindow}
+        onFocusCapture={onFocusWindow}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
@@ -758,12 +766,12 @@ export default function WebPreviewPanel({
           height: `${viewportCoords.height}px`,
           background: "#16161a",
           borderRadius: 16,
-          border: "1.5px solid rgba(255, 255, 255, 0.14)",
-          boxShadow: "0 24px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08)",
+          border: "1px solid #3b3b41",
+          boxShadow: "0 24px 60px rgba(0, 0, 0, 0.6)",
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
-          zIndex: 40,
+          zIndex,
           userSelect: isDragging || isResizing ? "none" : "auto",
           transition: isDragging || isResizing ? "none" : "box-shadow 0.2s ease",
         }}
@@ -785,88 +793,17 @@ export default function WebPreviewPanel({
             userSelect: "none",
           }}
         >
-          {/* Left: Traffic Lights */}
-          <div
-            className="flex items-center gap-2"
-            onMouseEnter={() => setIsHoveredTraffic(true)}
-            onMouseLeave={() => setIsHoveredTraffic(false)}
-            style={{ minWidth: 64 }}
-          >
-            {/* Close Button (Red) */}
-            <button
-              type="button"
-              onClick={onClose}
-              title="Close"
-              aria-label="Close Web Preview"
-              style={{
-                width: 12,
-                height: 12,
-                borderRadius: "50%",
-                background: "#ff5f56",
-                border: "1px solid rgba(0, 0, 0, 0.15)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: 0,
-                cursor: "pointer",
-                color: "#4c0000",
-                fontSize: 9,
-                fontWeight: "bold",
-                lineHeight: 1,
-              }}
-            >
-              {isHoveredTraffic && "×"}
-            </button>
-
-            {/* Recenter Button (Yellow) */}
-            <button
-              type="button"
-              onClick={handleRecenter}
-              title="Recenter"
-              aria-label="Recenter Preview Window"
-              style={{
-                width: 12,
-                height: 12,
-                borderRadius: "50%",
-                background: "#ffbd2e",
-                border: "1px solid rgba(0, 0, 0, 0.15)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: 0,
-                cursor: "pointer",
-                color: "#5c4000",
-                fontSize: 8,
-                lineHeight: 1,
-              }}
-            >
-              {isHoveredTraffic && "–"}
-            </button>
-
-            {/* Maximize Button (Green) */}
-            <button
-              type="button"
-              onClick={handleToggleMaximize}
-              title="Maximize"
-              aria-label="Maximize Preview Window"
-              style={{
-                width: 12,
-                height: 12,
-                borderRadius: "50%",
-                background: "#27c93f",
-                border: "1px solid rgba(0, 0, 0, 0.15)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: 0,
-                cursor: "pointer",
-                color: "#004d00",
-                fontSize: 8,
-                lineHeight: 1,
-              }}
-            >
-              {isHoveredTraffic && "+"}
-            </button>
+          <div className="flex items-center" style={{ gap: isHoveredTraffic ? 6 : 8, transition: "gap .18s ease" }} onMouseEnter={() => setIsHoveredTraffic(true)} onMouseLeave={() => { setIsHoveredTraffic(false); setHoveredTrafficButton(null); }}>
+            {([
+              { id: "close", label: "Close Web Preview", color: "#ff5f56", glow: "255,95,86", symbol: "×", action: onClose },
+              { id: "recenter", label: "Recenter Preview Window", color: "#ffbd2e", glow: "255,189,46", symbol: "−", action: handleRecenter },
+              { id: "maximize", label: isMaximized ? "Restore Preview Window" : "Maximize Preview Window", color: "#27c93f", glow: "39,201,63", symbol: isMaximized ? "↙" : "+", action: handleToggleMaximize },
+            ] as const).map((button) => (
+              <button key={button.id} type="button" className="traffic-light-btn" aria-label={button.label} title={button.label} onClick={button.action} onMouseEnter={() => setHoveredTrafficButton(button.id)} onMouseLeave={() => setHoveredTrafficButton(null)} style={{ width: isHoveredTraffic ? 22 : 12, height: 24, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: 0, padding: 0, cursor: "pointer", transition: "width .18s ease" }}>
+                <span style={{ width: isHoveredTraffic ? (hoveredTrafficButton === button.id ? 18 : 16) : 12, height: isHoveredTraffic ? (hoveredTrafficButton === button.id ? 18 : 16) : 12, borderRadius: "50%", background: button.color, border: "0.5px solid rgba(0,0,0,.3)", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(0,0,0,.75)", fontSize: 10, fontWeight: 700, lineHeight: 1, boxShadow: hoveredTrafficButton === button.id ? `0 0 10px rgba(${button.glow}, .75), inset 0 1px 1px rgba(255,255,255,.4)` : "inset 0 1px 1px rgba(255,255,255,.25)", transform: hoveredTrafficButton === button.id ? "scale(1.08)" : "scale(1)", transition: "width .18s ease, height .18s ease, transform .18s ease, box-shadow .18s ease" }}>{isHoveredTraffic && button.symbol}</span>
+              </button>
+            ))}
+            {isHoveredTraffic && <span style={{ whiteSpace: "nowrap", color: "#d4d4d8", fontSize: 10, padding: "2px 8px", border: "1px solid #52525b", borderRadius: 6 }}>{hoveredTrafficButton === "close" ? "Close Window" : hoveredTrafficButton === "recenter" ? "Recenter in Canvas" : hoveredTrafficButton === "maximize" ? (isMaximized ? "Restore Size" : "Maximize Canvas") : "Window Controls"}</span>}
           </div>
 
           {/* Center: Address Bar & Navigation Controls */}
@@ -930,14 +867,12 @@ export default function WebPreviewPanel({
                   color: "#d4d4d8",
                 }}
               >
-                <span style={{ color: "#71717a", marginRight: 4, userSelect: "none" }}>localhost:</span>
                 <input
                   type="text"
                   data-testid="preview-address-bar"
                   value={addressInput}
                   onChange={(e) => setAddressInput(e.target.value)}
-                  onBlur={handleAddressSubmit}
-                  placeholder="5500"
+                  placeholder="localhost:5500 or https://example.com"
                   style={{
                     background: "transparent",
                     border: "none",
@@ -947,97 +882,14 @@ export default function WebPreviewPanel({
                     fontSize: 11,
                     fontFamily: "monospace",
                   }}
-                  title="Configure Port & Path (e.g. 5500, 3000/app)"
+                  title="Enter a website URL or localhost port"
                 />
               </div>
             </form>
 
-            {/* Breakpoint Quick-Presets */}
-            <div className="no-drag flex items-center gap-1">
-              {BREAKPOINT_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => handleSelectPreset(preset.width)}
-                  title={`Snap width to ${preset.width}px (${preset.category})`}
-                  style={{
-                    background:
-                      Math.round(scenePos.sceneWidth) === preset.width
-                        ? "rgba(255, 255, 255, 0.14)"
-                        : "rgba(255, 255, 255, 0.05)",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
-                    color: Math.round(scenePos.sceneWidth) === preset.width ? "#ffffff" : "#a1a1aa",
-                    borderRadius: 4,
-                    padding: "2px 6px",
-                    fontSize: 10,
-                    fontWeight: 500,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 3,
-                    transition: "all 0.15s ease",
-                  }}
-                >
-                  <span>{preset.label}</span>
-                </button>
-              ))}
-            </div>
           </div>
 
-          {/* Right: Dimension Readout, Active Breakpoint Badge, and External Launch */}
           <div className="flex items-center gap-2">
-            {/* Live Viewport Dimension Pill */}
-            <span
-              id="dimension-pill"
-              data-testid="preview-dimension-pill"
-              style={{
-                fontFamily: "monospace",
-                fontSize: 10,
-                color: "#a1a1aa",
-                background: "rgba(0, 0, 0, 0.3)",
-                padding: "2px 6px",
-                borderRadius: 4,
-                border: "1px solid rgba(255, 255, 255, 0.06)",
-              }}
-              title="Current scene viewport dimensions"
-            >
-              {Math.round(scenePos.sceneWidth)} × {Math.round(scenePos.sceneHeight)} px
-            </span>
-
-            {/* Active Breakpoint Category Badge */}
-            <span
-              data-testid="preview-breakpoint-badge"
-              style={{
-                fontSize: 10,
-                fontWeight: 600,
-                padding: "2px 6px",
-                borderRadius: 4,
-                textTransform: "uppercase",
-                letterSpacing: "0.5px",
-                background:
-                  currentCategory === "Mobile"
-                    ? "rgba(239, 68, 68, 0.2)"
-                    : currentCategory === "Tablet"
-                    ? "rgba(245, 158, 11, 0.2)"
-                    : "rgba(34, 197, 94, 0.2)",
-                color:
-                  currentCategory === "Mobile"
-                    ? "#fca5a5"
-                    : currentCategory === "Tablet"
-                    ? "#fcd34d"
-                    : "#86efac",
-                border: `1px solid ${
-                  currentCategory === "Mobile"
-                    ? "rgba(239, 68, 68, 0.3)"
-                    : currentCategory === "Tablet"
-                    ? "rgba(245, 158, 11, 0.3)"
-                    : "rgba(34, 197, 94, 0.3)"
-                }`,
-              }}
-            >
-              {currentCategory}
-            </span>
-
             {/* External Browser Tab Launch Button */}
             <button
               type="button"
@@ -1063,8 +915,17 @@ export default function WebPreviewPanel({
             background: "#09090b",
           }}
         >
+          {addressError && <div role="alert" style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 30, padding: 8, color: "#fecaca", background: "#451a1a", fontSize: 12 }}>{addressError}</div>}
+          {externalUrl && !blockedSite && <div style={{ position: "absolute", right: 8, bottom: 8, zIndex: 26 }}><button type="button" onClick={handleExternalLaunch} title="If this site refuses to load, open it in a browser tab" style={{ border: "1px solid #52525b", borderRadius: 6, padding: "5px 8px", background: "#1c1c21", color: "#e4e4e7", fontSize: 11, cursor: "pointer" }}>Site blocked? Open in browser ↗</button></div>}
+          {blockedSite && (
+            <div role="status" style={{ position: "absolute", inset: 0, zIndex: 25, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: 24, background: "#16161a", color: "#e4e4e7", textAlign: "center" }}>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>{blockedSite} cannot be displayed inside this window</span>
+              <span style={{ maxWidth: 360, color: "#a1a1aa", fontSize: 12 }}>{blockedSite} blocks other websites from embedding this page. Open it in a browser tab to continue.</span>
+              <button type="button" onClick={handleExternalLaunch} style={{ border: "1px solid #52525b", borderRadius: 6, padding: "7px 12px", background: "#27272a", color: "#f4f4f5", cursor: "pointer" }}>Open {blockedSite} in browser ↗</button>
+            </div>
+          )}
           {/* Offline Standby Overlay if Server is Refused */}
-          {isServerOffline && (
+          {!externalUrl && isServerOffline && (
             <div
               style={{
                 position: "absolute",
@@ -1112,7 +973,7 @@ export default function WebPreviewPanel({
           )}
 
           {/* Embedded Web Preview Iframe */}
-          <iframe
+          {!blockedSite && <iframe
             key={iframeKey}
             ref={iframeRef}
             src={iframeUrl}
@@ -1127,11 +988,12 @@ export default function WebPreviewPanel({
               display: "block",
               pointerEvents: isDragging || isResizing || !isActive ? "none" : "auto",
             }}
-            allow="clipboard-read; clipboard-write; fullscreen; camera; microphone; geolocation"
-          />
+            sandbox="allow-scripts allow-forms allow-popups allow-downloads"
+            referrerPolicy="no-referrer"
+          />}
 
           {/* Dual-Mode Canvas Mode Wheel & Click-to-Interact Overlay */}
-          {!isActive && !isServerOffline && (
+          {!isActive && (!isServerOffline || externalUrl !== null) && !blockedSite && (
             <div
               className="web-preview-scroll-overlay"
               onWheel={forwardWheelToCanvas}

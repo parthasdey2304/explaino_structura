@@ -245,7 +245,7 @@ export default function ExtensionsPanel({
           {
             id: "web-preview",
             name: "Live Web Preview",
-            description: "Localhost browser window running on port 3000",
+            description: "Open a new browser window on the canvas",
             icon: Globe,
             iconBg: isDark ? "bg-emerald-500/20" : "bg-emerald-500/10",
             iconColor: isDark ? "text-emerald-400" : "text-emerald-500",

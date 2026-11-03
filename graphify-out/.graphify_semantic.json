@@ -1,0 +1,81 @@
+{
+  "nodes": [
+    {
+      "id": "concept_architecture_overview",
+      "name": "Architecture Overview",
+      "type": "Architecture",
+      "source_file": "PROJECT.md",
+      "description": "Next.js 16 App Router, React 19, Excalidraw canvas, LibSQL/Turso SQLite multi-canvas whiteboard."
+    },
+    {
+      "id": "concept_web_preview_panel",
+      "name": "Web Preview System",
+      "type": "Component",
+      "source_file": "PROJECT.md",
+      "description": "macOS-style iframe container anchored in Excalidraw virtual scene space with live viewport responsiveness."
+    },
+    {
+      "id": "concept_multi_canvas_tabs",
+      "name": "Multi-Canvas Tab Management",
+      "type": "Feature",
+      "source_file": "src/components/CanvasTabBar.tsx",
+      "description": "Browser-style canvas tabs with dynamic switching, undo-history isolation, inline rename, and persistence."
+    },
+    {
+      "id": "concept_turso_db_storage",
+      "name": "Turso LibSQL Local SQLite DB",
+      "type": "Storage",
+      "source_file": "src/lib/db/index.ts",
+      "description": "SQLite relational storage using @libsql/client with WAL mode, foreign keys, canvases and history schema."
+    },
+    {
+      "id": "concept_readonly_sharing",
+      "name": "Read-Only Zero-Barrier Sharing",
+      "type": "Security",
+      "source_file": "src/components/ReadOnlyCanvasView.tsx",
+      "description": "Four-layer enforcement for public read-only canvas links without authentication or mutation."
+    },
+    {
+      "id": "concept_command_palette_spotlight",
+      "name": "Spotlight Command Palette",
+      "type": "Feature",
+      "source_file": "src/components/CommandPalette.tsx",
+      "description": "Keyboard-triggered spotlight search (Cmd/Ctrl+K) covering Excalidraw tools, export, todos, and AI models."
+    }
+  ],
+  "edges": [
+    {
+      "source": "concept_architecture_overview",
+      "target": "concept_multi_canvas_tabs",
+      "relation": "includes"
+    },
+    {
+      "source": "concept_architecture_overview",
+      "target": "concept_turso_db_storage",
+      "relation": "persists_to"
+    },
+    {
+      "source": "concept_architecture_overview",
+      "target": "concept_web_preview_panel",
+      "relation": "hosts"
+    },
+    {
+      "source": "concept_multi_canvas_tabs",
+      "target": "concept_turso_db_storage",
+      "relation": "persisted_in"
+    },
+    {
+      "source": "concept_multi_canvas_tabs",
+      "target": "concept_readonly_sharing",
+      "relation": "provides_link_to"
+    },
+    {
+      "source": "concept_command_palette_spotlight",
+      "target": "concept_architecture_overview",
+      "relation": "discovers_actions_in"
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 1250,
+  "output_tokens": 420
+}

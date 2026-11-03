@@ -17,7 +17,10 @@ export function createSession(): string {
 }
 
 export function hasTeacherSession(request: NextRequest): boolean {
-  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  return isValidTeacherSession(request.cookies.get(SESSION_COOKIE)?.value);
+}
+
+export function isValidTeacherSession(token: string | undefined): boolean {
   if (!token) return false;
   const [payload, macText, extra] = token.split(".");
   if (!payload || !macText || extra) return false;

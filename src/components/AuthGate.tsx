@@ -24,8 +24,8 @@ export function performClientLogout(): void {
   } catch {}
 }
 
-export default function AuthGate({ children, initialCheckingAuth = true }: { children: React.ReactNode; initialCheckingAuth?: boolean }) {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+export default function AuthGate({ children, initialCheckingAuth = true, initialAuthenticated = false }: { children: React.ReactNode; initialCheckingAuth?: boolean; initialAuthenticated?: boolean }) {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(initialAuthenticated);
   const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(initialCheckingAuth);
 
   const [email, setEmail] = useState("");
@@ -39,7 +39,7 @@ export default function AuthGate({ children, initialCheckingAuth = true }: { chi
   useEffect(() => {
     localStorage.removeItem(EXPLAINO_AUTH_STORAGE_KEY);
     let cancelled = false;
-    fetch("/api/auth/session", { cache: "no-store" })
+    if (!initialAuthenticated) fetch("/api/auth/session", { cache: "no-store" })
       .then((response) => response.json())
       .then((session) => { if (!cancelled) setIsAuthenticated(session.authenticated === true); })
       .catch(() => { if (!cancelled) setIsAuthenticated(false); })
@@ -54,7 +54,7 @@ export default function AuthGate({ children, initialCheckingAuth = true }: { chi
 
     window.addEventListener("explaino:logout", handleLogout);
     return () => { cancelled = true; window.removeEventListener("explaino:logout", handleLogout); };
-  }, []);
+  }, [initialAuthenticated]);
 
   const handleLogin = useCallback(
     async (e?: React.FormEvent) => {

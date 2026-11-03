@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import ReadOnlyCanvasView from "@/components/ReadOnlyCanvasView";
 import Workspace from "@/components/Workspace";
+import { isValidTeacherSession, SESSION_COOKIE } from "@/lib/authSession";
 
 export default async function Home({
   searchParams,
@@ -15,8 +16,8 @@ export default async function Home({
   return (
     <Workspace
       initialCanvasId={viewId}
-      // This is a rendering hint only; AuthGate still checks the session.
-      initialCheckingAuth={cookieStore.has("explaino-auth-session")}
+      initialCheckingAuth={false}
+      initialAuthenticated={isValidTeacherSession(cookieStore.get(SESSION_COOKIE)?.value)}
     />
   );
 }

@@ -1,16 +1,16 @@
 "use client";
 
 import "@/lib/suppressUnloadViolation";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
-  Excalidraw,
   MainMenu,
   serializeAsJSON,
   convertToExcalidrawElements,
   viewportCoordsToSceneCoords,
   sceneCoordsToViewportCoords,
   CaptureUpdateAction,
+  getSceneVersion,
 } from "@excalidraw/excalidraw";
 import type {
   ExcalidrawImperativeAPI,
@@ -23,33 +23,37 @@ import type {
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { saveDrawing, loadDrawing } from "@/lib/firestore";
 import { normalizeCanvasBackground } from "@/lib/canvasTheme";
-import CodeEditorPanel from "./CodeEditorPanel";
+import ExcalidrawComponent from "./ExcalidrawCanvas";
 import IframePanel, {
   type IframePanelLayout,
   loadSavedScreenState,
   saveScreenState,
 } from "./IframePanel";
-import DataStructuresPanel from "./DataStructuresPanel";
 import CanvasStructureControls, { type ViewportBox } from "./CanvasStructureControls";
-import AITextSidebar from "./AITextSidebar";
-import ExplainoPanel from "./ExplainoPanel";
-import CommandPalette, { type PaletteCommand } from "./CommandPalette";
+import type { PaletteCommand } from "./CommandPalette";
 import { chatStreamAuto, MistralError, getStoredModel, setStoredModel, ALL_MODELS, type ChatMessage } from "@/lib/ai/mistral";
-import { createCodeCardSvg } from "@/lib/ai/highlight";
-import TodoPanel from "./TodoOverlay";
-import Stopwatch from "./Stopwatch";
-import LaserOverlay from "./LaserOverlay";
-import ExtensionsPanel from "./ExtensionsPanel";
 import GoogleExtensionIcon from "./GoogleExtensionIcon";
 import RightCanvasToolbar from "./RightCanvasToolbar";
 import { useCanvasTabs } from "@/hooks/useCanvasTabs";
 import WebPreviewPanel, { loadSavedPreviewState, savePreviewState, DEFAULT_PREVIEW_PORT, DEFAULT_PREVIEW_PATH } from "./WebPreviewPanel";
+import type { PdfWindowItem } from "./PdfCanvasWindow";
 import { buildExternalTabUrl } from "@/lib/vpsProxy";
 import { getOptimalSaveDebounceMs, getDeviceProfile } from "@/lib/deviceOptimization";
 
 const TextToDiagramModal = dynamic(() => import("./TextToDiagramModal"), {
   ssr: false,
 });
+const CodeEditorPanel = dynamic(() => import("./CodeEditorPanel"), { ssr: false });
+const DataStructuresPanel = dynamic(() => import("./DataStructuresPanel"), { ssr: false });
+const AITextSidebar = dynamic(() => import("./AITextSidebar"), { ssr: false });
+const ExplainoPanel = dynamic(() => import("./ExplainoPanel"), { ssr: false });
+const TodoPanel = dynamic(() => import("./TodoOverlay"), { ssr: false });
+const PdfCanvasWindow = dynamic(() => import("./PdfCanvasWindow"), { ssr: false });
+const CommandPalette = dynamic(() => import("./CommandPalette"), { ssr: false });
+const ExtensionsPanel = dynamic(() => import("./ExtensionsPanel"), { ssr: false });
+const Stopwatch = dynamic(() => import("./Stopwatch"), { ssr: false });
+const LaserOverlay = dynamic(() => import("./LaserOverlay"), { ssr: false });
+
 import { useQuickShape, useListMode, useCanvasShortcuts } from "@/hooks";
 import {
   DATA_STRUCTURES,
@@ -186,7 +190,7 @@ function stripMarkdown(md: string): string {
   s = s.replace(/~~([^~]+)~~/g, "$1");
   s = s.replace(/`([^`]*)`/g, "$1");
   s = s.replace(/^\s{0,3}>\s?/gm, "");
-  s = s.replace(/^\s*[*+]\s/gm, "• ");
+  s = s.replace(/^\s*[*+]\s/gm, "â€¢ ");
   return s.replace(/\n{3,}/g, "\n\n").trim();
 }
 
@@ -262,19 +266,6 @@ function GithubIcon() {
   );
 }
 
-// Dynamically import the heavy Excalidraw component client-side only
-const ExcalidrawComponent = dynamic(
-  () => import("./ExcalidrawCanvas"),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="w-full h-screen flex items-center justify-center bg-white">
-        <div className="text-sm text-gray-400">Loading canvas…</div>
-      </div>
-    ),
-  }
-);
-
 export const getCanvasStorageKey = (canvasId?: string) =>
   canvasId ? `explaino_autosave_${canvasId}` : "explaino_autosave";
 
@@ -304,6 +295,9 @@ function sanitizeElements(elements: unknown[]): ExcalidrawElement[] {
   for (const raw of elements) {
     if (!raw || typeof raw !== "object") continue;
     const item = raw as Record<string, unknown>;
+    // Live DOM windows regenerate their export placeholders. Restoring old
+    // placeholders as drawings renders invisible, stale window copies first.
+    if ((item.customData as { isScreenSyncElement?: boolean } | undefined)?.isScreenSyncElement) continue;
     if (typeof item.type !== "string" || typeof item.id !== "string") continue;
 
     const el = { ...item };
@@ -503,16 +497,25 @@ export default function ExcalidrawWrapper({
     return null;
   });
 
-  const [showWebPreviewPanel, setShowWebPreviewPanel] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
+  const [previewWindowIds, setPreviewWindowIds] = useState<number[]>(() => {
+    if (typeof window === "undefined") return [];
     try {
-      return Boolean(loadSavedPreviewState()?.isOpen);
+      return loadSavedPreviewState()?.isOpen ? [0] : [];
     } catch {
-      return false;
+      return [];
     }
   });
-  const [webPreviewRecenterTrigger, setWebPreviewRecenterTrigger] = useState(0);
-  const [isWebPreviewActive, setIsWebPreviewActive] = useState<boolean>(false);
+  const nextPreviewId = useRef(1);
+  const showWebPreviewPanel = previewWindowIds.length > 0;
+  const [activePreviewId, setActivePreviewId] = useState<number | null>(null);
+  const [canvasWindowOrder, setCanvasWindowOrder] = useState<string[]>([]);
+  const focusCanvasWindow = useCallback((id: string) => {
+    setCanvasWindowOrder((previous) => previous[previous.length - 1] === id ? previous : [...previous.filter((entry) => entry !== id), id]);
+  }, []);
+  const canvasWindowZIndex = (id: string) => {
+    const index = canvasWindowOrder.indexOf(id);
+    return 12 + (index < 0 ? canvasWindowOrder.length : index);
+  };
   const [webPreviewScenePos, setWebPreviewScenePos] = useState<{
     sceneX: number;
     sceneY: number;
@@ -533,10 +536,11 @@ export default function ExcalidrawWrapper({
   });
 
   const handleOpenWebPreview = useCallback(() => {
-    setShowWebPreviewPanel(true);
-    setWebPreviewRecenterTrigger((prev) => prev + 1);
-    savePreviewState({ isOpen: true, shouldRecenter: true });
-  }, []);
+    const id = previewWindowIds.length === 0 ? 0 : nextPreviewId.current++;
+    if (id === 0) savePreviewState({ isOpen: true, shouldRecenter: true });
+    setPreviewWindowIds((previous) => [...previous, id]);
+    focusCanvasWindow(`preview-${id}`);
+  }, [previewWindowIds.length, focusCanvasWindow]);
 
   const [showHandyToolbar, setShowHandyToolbar] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
@@ -560,12 +564,13 @@ export default function ExcalidrawWrapper({
 
   const handleOpenScreen = useCallback(() => {
     setShowIframePanel(true);
+    focusCanvasWindow("code-server");
     setIframePanelLayout("center");
     setIsScreenActive(true);
     setScreenRecenterTrigger((v) => v + 1);
     saveScreenState({ isOpen: true, shouldRecenter: true });
     window.dispatchEvent(new CustomEvent("explaino-recenter-screen"));
-  }, []);
+  }, [focusCanvasWindow]);
     const [deferredPrompt, setDeferredPrompt] = useState<{
     prompt: () => Promise<void>;
     userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
@@ -602,7 +607,7 @@ export default function ExcalidrawWrapper({
 
   const handleInstallPwa = useCallback(async () => {
     if (!deferredPrompt) {
-      alert("To install Explaino as a Web App on this device, tap your browser menu (⋮ or Share) and select 'Install app' or 'Add to Home screen'.");
+      alert("To install Explaino as a Web App on this device, tap your browser menu (â‹® or Share) and select 'Install app' or 'Add to Home screen'.");
       return;
     }
     try {
@@ -675,6 +680,9 @@ export default function ExcalidrawWrapper({
   const [drawingId, setDrawingId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<string>("");
   const [initialData, setInitialData] = useState<ExcalidrawInitialDataState | null>(null);
+  const commitInitialScene = useCallback((scene: ExcalidrawInitialDataState) => {
+    startTransition(() => setInitialData(scene));
+  }, []);
   const [loaded, setLoaded] = useState(false);
   const loadedRef = useRef(false);
   useEffect(() => {
@@ -691,6 +699,7 @@ export default function ExcalidrawWrapper({
     scrollY: 0,
   });
   const viewportRef = useRef(viewport);
+  const [pdfWindows, setPdfWindows] = useState<PdfWindowItem[]>([]);
   useEffect(() => {
     const rememberCell = (event: PointerEvent) => {
       const api = excalidrawAPI.current;
@@ -784,7 +793,7 @@ export default function ExcalidrawWrapper({
 
     const allElements = api.getSceneElements();
     const isScreenOpen = showIframePanel && screenScenePos !== null;
-    const isPreviewOpen = showWebPreviewPanel && webPreviewScenePos !== null;
+    const isPreviewOpen = previewWindowIds.includes(0) && webPreviewScenePos !== null;
 
     // Filter out existing screen and preview sync elements
     const nonSyncElements = allElements.filter(
@@ -813,8 +822,8 @@ export default function ExcalidrawWrapper({
           width: Math.round(sceneWidth),
           height: Math.round(sceneHeight),
           backgroundColor: isDark ? "#16161a" : "#1e1e24",
-          strokeColor: "#6366f1",
-          strokeWidth: 2,
+          strokeColor: "transparent",
+          strokeWidth: 0,
           fillStyle: "solid",
           roughness: 0,
           roundness: { type: 3 },
@@ -890,7 +899,7 @@ export default function ExcalidrawWrapper({
           type: "text",
           x: Math.round(sceneX + 74),
           y: Math.round(sceneY + 11),
-          text: "code-server — Ubuntu Terminal & Editor",
+          text: "code-server â€” Ubuntu Terminal & Editor",
           fontSize: 14,
           fontFamily: 3,
           strokeColor: "#94a3b8",
@@ -903,7 +912,7 @@ export default function ExcalidrawWrapper({
           type: "text",
           x: Math.max(Math.round(sceneX + 74), Math.round(sceneX + sceneWidth - 140)),
           y: Math.round(sceneY + 11),
-          text: "● CODE SERVER",
+          text: "â— CODE SERVER",
           fontSize: 12,
           fontFamily: 3,
           strokeColor: "#22c55e",
@@ -925,8 +934,8 @@ export default function ExcalidrawWrapper({
           width: Math.round(sceneWidth),
           height: Math.round(sceneHeight),
           backgroundColor: isDark ? "#16161a" : "#1e1e24",
-          strokeColor: "#10b981",
-          strokeWidth: 2,
+          strokeColor: "transparent",
+          strokeWidth: 0,
           fillStyle: "solid",
           roughness: 0,
           roundness: { type: 3 },
@@ -1002,7 +1011,7 @@ export default function ExcalidrawWrapper({
           type: "text",
           x: Math.round(sceneX + 74),
           y: Math.round(sceneY + 11),
-          text: "Web Preview — localhost:5500",
+          text: "Web Preview â€” localhost:5500",
           fontSize: 14,
           fontFamily: 3,
           strokeColor: "#94a3b8",
@@ -1015,7 +1024,7 @@ export default function ExcalidrawWrapper({
           type: "text",
           x: Math.max(Math.round(sceneX + 74), Math.round(sceneX + sceneWidth - 140)),
           y: Math.round(sceneY + 11),
-          text: "● LIVE PREVIEW",
+          text: "â— LIVE PREVIEW",
           fontSize: 12,
           fontFamily: 3,
           strokeColor: "#10b981",
@@ -1025,13 +1034,30 @@ export default function ExcalidrawWrapper({
       );
     }
 
-    const syncElements = convertToExcalidrawElements(syncElementsRaw as any);
+    // Keep the export placeholders inside the HTML windows. Excalidraw's
+    // corner radius and dark-mode colors differ from the DOM, so matching
+    // the outer bounds exactly lets the placeholder show through at the edges.
+    const syncElements = convertToExcalidrawElements(syncElementsRaw.map((element) => {
+      const bounds = element.id.startsWith("explaino-screen-") ? screenScenePos : webPreviewScenePos;
+      if (!bounds) return element;
+      const inset = Math.min(24 / viewport.zoom.value, bounds.sceneWidth * 0.15, bounds.sceneHeight * 0.15);
+      const scaleX = (bounds.sceneWidth - inset * 2) / bounds.sceneWidth;
+      const scaleY = (bounds.sceneHeight - inset * 2) / bounds.sceneHeight;
+      return {
+        ...element,
+        x: bounds.sceneX + inset + (element.x - bounds.sceneX) * scaleX,
+        y: bounds.sceneY + inset + (element.y - bounds.sceneY) * scaleY,
+        ...(element.width !== undefined ? { width: element.width * scaleX } : {}),
+        ...(element.height !== undefined ? { height: element.height * scaleY } : {}),
+        ...(element.fontSize !== undefined ? { fontSize: element.fontSize * Math.min(scaleX, scaleY) } : {}),
+      };
+    }) as any);
 
     // Place syncElements at the bottom of the element stack so user whiteboard drawings stay visibly on top
     api.updateScene({
       elements: [...syncElements, ...nonSyncElements],
     });
-  }, [showIframePanel, screenScenePos, showWebPreviewPanel, webPreviewScenePos, apiReady, theme]);
+  }, [showIframePanel, screenScenePos, previewWindowIds, webPreviewScenePos, apiReady, theme, viewport.zoom.value]);
 
   const drawingIdRef = useRef<string | null>(null);
   const nameRef = useRef<string>("Untitled");
@@ -1128,6 +1154,7 @@ export default function ExcalidrawWrapper({
     appState: AppState;
     files: BinaryFiles;
   } | null>(null);
+  const lastPersistenceRef = useRef<{ id: string; elements: readonly ExcalidrawElement[]; version: number; files: BinaryFiles; state: string } | null>(null);
 
   // --- Handle scene changes: auto-save to localStorage immediately, Firestore debounced
   const handleOnChange = useCallback(
@@ -1308,6 +1335,15 @@ export default function ExcalidrawWrapper({
         !canvasTabsRef.current.isLoading &&
         Boolean(canvasTabsRef.current.activeTabId);
 
+      if (!isHydrated) return;
+      const persistedState = JSON.stringify(Object.fromEntries(Object.entries(appState).filter(([key]) =>
+        key.startsWith("currentItem") || key.startsWith("export") || ["viewBackgroundColor", "theme", "zoom", "scrollX", "scrollY", "gridSize", "gridStep", "gridModeEnabled", "activeTool", "penMode", "objectsSnapModeEnabled"].includes(key)
+      )));
+      const capture = { id: canvasTabsRef.current.activeTabId, elements, version: getSceneVersion(elements), files, state: persistedState };
+      const previous = lastPersistenceRef.current;
+      if (previous && previous.id === capture.id && previous.elements === elements && previous.version === capture.version && previous.files === files && previous.state === persistedState) return;
+      lastPersistenceRef.current = capture;
+
       if (isHydrated) {
         // Debounced local backup (optimized for low-RAM 1GB Android smart boards)
         if (localSaveTimerRef.current) clearTimeout(localSaveTimerRef.current);
@@ -1396,7 +1432,7 @@ export default function ExcalidrawWrapper({
           nameRef.current = saved.name;
           setDrawingId(saved.id);
           setDrawingName(saved.name);
-          setInitialData({
+          commitInitialScene({
             elements: sanitizeElements(saved.elements as unknown[]),
             appState: {
               ...saved.appState,
@@ -1450,7 +1486,7 @@ export default function ExcalidrawWrapper({
 
       if (!cancelled) {
         lastHydratedCanvasIdRef.current = activeId || null;
-        setInitialData({
+        commitInitialScene({
           elements: sanitizeElements(elements),
           appState: {
             ...appState,
@@ -1489,7 +1525,7 @@ export default function ExcalidrawWrapper({
       }
     }
     try {
-      setSaveStatus("Saving…");
+      setSaveStatus("Savingâ€¦");
       const id = await saveDrawing(
         drawingIdRef.current,
         {
@@ -1503,7 +1539,7 @@ export default function ExcalidrawWrapper({
       );
       drawingIdRef.current = id;
       setDrawingId(id);
-      setSaveStatus("Saved to Firestore ✓");
+      setSaveStatus("Saved to Firestore âœ“");
       setTimeout(() => setSaveStatus(""), 2000);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Save failed";
@@ -1530,17 +1566,6 @@ export default function ExcalidrawWrapper({
   }, [theme]);
 
   // Mobile responsive listener removed (handled by CSS now)
-
-  // Firebase connectivity self-test (logs to console once).
-  useEffect(() => {
-    let cancelled = false;
-    void import("@/lib/firebase").then(({ checkFirebaseConnection }) => {
-      if (!cancelled) void checkFirebaseConnection();
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   // Keep ref in sync with showCodePanel state
   useEffect(() => {
@@ -1644,7 +1669,7 @@ export default function ExcalidrawWrapper({
         : (meta.data as AnyStructureData);
 
       // The resize handles change the live cell geometry. Keep those sizes
-      // when adding or removing rows and columns instead of reverting to 120×40.
+      // when adding or removing rows and columns instead of reverting to 120Ã—40.
       const firstCell = meta.type === "table" ? mine.find((el) => el.type === "rectangle") : undefined;
       if (firstCell && meta.type === "table") {
         currentData = { ...currentData, cellWidth: firstCell.width, cellHeight: firstCell.height } as AnyStructureData;
@@ -1833,7 +1858,8 @@ export default function ExcalidrawWrapper({
 
   // --- Insert syntax-highlighted code card from AI Text panel onto canvas
   const handleInsertCodeToCanvas = useCallback(
-    (code: string, lang: string) => {
+    async (code: string, lang: string) => {
+      const { createCodeCardSvg } = await import("@/lib/ai/highlight");
       const api = excalidrawAPI.current;
       if (!api) return;
       const appState = api.getAppState();
@@ -2023,36 +2049,42 @@ export default function ExcalidrawWrapper({
   useEffect(() => {
     const api = excalidrawAPI.current;
     if (!api) return;
-    const elements = api.getSceneElements();
-    const isDark = theme === "dark";
-    const filesToAdd: any[] = [];
-    let hasChanges = false;
+    if (!api.getSceneElements().some((element) => !element.isDeleted && element.type === "image" && element.customData?.isCodeCard)) return;
+    let cancelled = false;
+    void import("@/lib/ai/highlight").then(({ createCodeCardSvg }) => {
+      if (cancelled) return;
+      const elements = api.getSceneElements();
+      const isDark = theme === "dark";
+      const filesToAdd: any[] = [];
+      let hasChanges = false;
 
-    const nextElements = elements.map((el) => {
-      if (!el.isDeleted && el.type === "image" && (el.customData as any)?.isCodeCard) {
-        const data = el.customData as { isCodeCard: boolean; code: string; lang: string };
-        if (!data?.code) return el;
-        const newFileId = `code-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-        const { dataUrl } = createCodeCardSvg(data.code, data.lang, isDark);
-        filesToAdd.push({
-          id: newFileId,
-          dataURL: dataUrl,
-          mimeType: "image/svg+xml",
-          created: Date.now(),
-        });
-        hasChanges = true;
-        return {
-          ...el,
-          fileId: newFileId,
-        };
+      const nextElements = elements.map((el) => {
+        if (!el.isDeleted && el.type === "image" && (el.customData as any)?.isCodeCard) {
+          const data = el.customData as { isCodeCard: boolean; code: string; lang: string };
+          if (!data?.code) return el;
+          const newFileId = `code-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+          const { dataUrl } = createCodeCardSvg(data.code, data.lang, isDark);
+          filesToAdd.push({
+            id: newFileId,
+            dataURL: dataUrl,
+            mimeType: "image/svg+xml",
+            created: Date.now(),
+          });
+          hasChanges = true;
+          return {
+            ...el,
+            fileId: newFileId,
+          };
+        }
+        return el;
+      });
+
+      if (hasChanges && filesToAdd.length > 0) {
+        api.updateScene({ elements: nextElements as any });
+        api.addFiles(filesToAdd);
       }
-      return el;
-    });
-
-    if (hasChanges && filesToAdd.length > 0) {
-      api.updateScene({ elements: nextElements as any });
-      api.addFiles(filesToAdd);
-    }
+    }).catch((error) => console.warn("Code card theme update failed:", error));
+    return () => { cancelled = true; };
   }, [theme]);
 
   // --- Insert plain text from AI Text panel onto canvas (Excalidraw Text tool T / 8)
@@ -2113,6 +2145,27 @@ export default function ExcalidrawWrapper({
       e.dataTransfer.dropEffect = "copy";
     }
   }, []);
+
+  const handlePdfDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!isUrlReadOnly && !canvasTabs.isReadOnly && Array.from(e.dataTransfer.items).some((item) => item.kind === "file" && (item.type === "application/pdf" || item.type === ""))) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    }
+  }, [isUrlReadOnly, canvasTabs.isReadOnly]);
+
+  const handlePdfDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (isUrlReadOnly || canvasTabs.isReadOnly || !canvasTabs.activeCanvas) return;
+    const files = Array.from(e.dataTransfer.files).filter((file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"));
+    const api = excalidrawAPI.current;
+    if (!files.length || !api) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const point = viewportCoordsToSceneCoords({ clientX: e.clientX, clientY: e.clientY }, api.getAppState());
+    const canvasId = canvasTabs.activeCanvas.id;
+    const nextWindows = files.map((file, index) => ({ id: crypto.randomUUID(), canvasId, file, x: point.x + index * 30, y: point.y + index * 30 }));
+    setPdfWindows((previous) => [...previous, ...nextWindows]);
+    focusCanvasWindow(`pdf-${nextWindows[nextWindows.length - 1].id}`);
+  }, [isUrlReadOnly, canvasTabs.isReadOnly, canvasTabs.activeCanvas, focusCanvasWindow]);
 
   const handleCanvasDrop = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
@@ -2272,7 +2325,7 @@ export default function ExcalidrawWrapper({
       };
 
       return [
-        // ─── Screen & Code Server (Workspace) ───
+        // â”€â”€â”€ Screen & Code Server (Workspace) â”€â”€â”€
         {
           id: "toggle-screen",
           label: "Toggle Canvas Screen (Code Server)",
@@ -2291,20 +2344,13 @@ export default function ExcalidrawWrapper({
         },
         {
           id: "toggle-web-preview",
-          label: `${showWebPreviewPanel ? "Close" : "Open"} Web Preview (VPS Live Server)`,
+          label: "Open Web Preview Window",
           category: "Screen",
           shortcut: "Live Server",
           hint: "Responsive macOS window on canvas",
           keywords: ["preview", "web preview", "live server", "localhost", "website", "vps", "browser"],
           icon: <Globe size={15} />,
-          run: () => {
-            if (!showWebPreviewPanel) {
-              handleOpenWebPreview();
-            } else {
-              setShowWebPreviewPanel(false);
-              savePreviewState({ isOpen: false });
-            }
-          },
+          run: handleOpenWebPreview,
         },
         {
           id: "web-preview-new-tab",
@@ -2368,7 +2414,7 @@ export default function ExcalidrawWrapper({
           },
         },
 
-        // ─── Drawing & Canvas Tools ───
+        // â”€â”€â”€ Drawing & Canvas Tools â”€â”€â”€
         {
           id: "tool-selection",
           label: "Tool: Selection",
@@ -2482,7 +2528,7 @@ export default function ExcalidrawWrapper({
           run: () => setLaserActive((v) => !v),
         },
 
-        // ─── Data Structures & Tables ───
+        // â”€â”€â”€ Data Structures & Tables â”€â”€â”€
         {
           id: "toggle-data-structures",
           label: "Toggle Data Structures Panel",
@@ -2558,7 +2604,7 @@ export default function ExcalidrawWrapper({
           run: () => handleInsertTable(),
         },
 
-        // ─── AI & Diagram Generation ───
+        // â”€â”€â”€ AI & Diagram Generation â”€â”€â”€
         {
           id: "text-to-diagram",
           label: "Text to Diagram (Mermaid & AI)",
@@ -2590,7 +2636,7 @@ export default function ExcalidrawWrapper({
           },
         },
 
-        // ─── View & Zoom ───
+        // â”€â”€â”€ View & Zoom â”€â”€â”€
         {
           id: "zoom-in",
           label: "Zoom In Canvas",
@@ -2647,7 +2693,7 @@ export default function ExcalidrawWrapper({
           run: () => setTheme(theme === "dark" ? "light" : "dark"),
         },
 
-        // ─── Productivity & Tasks ───
+        // â”€â”€â”€ Productivity & Tasks â”€â”€â”€
         {
           id: "toggle-todos",
           label: "Toggle Todo List & Notes",
@@ -2665,7 +2711,7 @@ export default function ExcalidrawWrapper({
           run: () => setShowStopwatch((v) => !v),
         },
 
-        // ─── Cloud & File ───
+        // â”€â”€â”€ Cloud & File â”€â”€â”€
         {
           id: "save-cloud",
           label: "Save Drawing to Cloud (Firebase)",
@@ -2683,7 +2729,7 @@ export default function ExcalidrawWrapper({
           run: () => api()?.resetScene(),
         },
 
-        // ─── File & Excalidraw Menu ───
+        // â”€â”€â”€ File & Excalidraw Menu â”€â”€â”€
         {
           id: "export-image",
           label: "Export Image...",
@@ -2786,7 +2832,7 @@ export default function ExcalidrawWrapper({
           },
         },
 
-        // ─── Canvas Background Colors ───
+        // â”€â”€â”€ Canvas Background Colors â”€â”€â”€
         {
           id: "canvas-bg-dark",
           label: "Canvas Background: Dark Slate (#121212)",
@@ -2820,7 +2866,7 @@ export default function ExcalidrawWrapper({
           run: () => api()?.updateScene({ appState: { viewBackgroundColor: "#24201a" } as unknown as AppState }),
         },
 
-        // ─── Extensions & Controls ───
+        // â”€â”€â”€ Extensions & Controls â”€â”€â”€
         {
           id: "toggle-handy-toolbar",
           label: `${showHandyToolbar ? "Hide" : "Show"} Handy Toolbar`,
@@ -2840,7 +2886,7 @@ export default function ExcalidrawWrapper({
           run: () => setShowExtensionsPanel((v) => !v),
         },
 
-        // ─── AI Models ───
+        // â”€â”€â”€ AI Models â”€â”€â”€
         ...ALL_MODELS.map((m) => ({
           id: `switch-model-${m.id}`,
           label: `Switch AI Model: ${m.label}`,
@@ -2867,7 +2913,7 @@ export default function ExcalidrawWrapper({
           },
         },
 
-        // ─── Account ───
+        // â”€â”€â”€ Account â”€â”€â”€
         {
           id: "sign-out",
           label: "Sign Out of Workspace",
@@ -3048,7 +3094,7 @@ export default function ExcalidrawWrapper({
                   border: "none",
                 }),
           }}
-          title="Extensions — canvas tools, AI, screen, diagrams, and stopwatch"
+          title="Extensions â€” canvas tools, AI, screen, diagrams, and stopwatch"
           aria-pressed={showExtensionsPanel}
         >
           <GoogleExtensionIcon size={16} />
@@ -3081,7 +3127,7 @@ export default function ExcalidrawWrapper({
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
           </span>
           <span className="font-semibold text-white">Student View</span>
-          <span className="text-zinc-500">•</span>
+          <span className="text-zinc-500">â€¢</span>
           <span className="flex items-center text-amber-400 font-medium space-x-1">
             <Lock size={12} />
             <span>Read-Only Mode</span>
@@ -3092,11 +3138,13 @@ export default function ExcalidrawWrapper({
       <div className="flex-1 w-full min-h-0 relative">
       {!loaded || initialData === null || canvasTabs.isLoading ? (
         <div className="w-full h-full flex items-center justify-center" style={{ background: "var(--default-bg-color)" }}>
-          <div className="text-sm text-gray-400">Loading canvas…</div>
+          <div className="text-sm text-gray-400">Loading canvasâ€¦</div>
         </div>
       ) : (
       <div
         className="w-full h-full"
+        onDragOverCapture={handlePdfDragOver}
+        onDropCapture={handlePdfDrop}
         onDragOver={handleCanvasDragOver}
         onDrop={handleCanvasDrop}
       >
@@ -3113,8 +3161,8 @@ export default function ExcalidrawWrapper({
       </ExcalidrawComponent>
       {/* Transient laser-pointer layer: screen-space only, never touches the
           scene or the undo/redo history. */}
-      <LaserOverlay active={laserActive} onExit={() => setLaserActive(false)} />
-      {/* Stopwatch & Timer — responsive position:
+      {laserActive && <LaserOverlay active={laserActive} onExit={() => setLaserActive(false)} />}
+      {/* Stopwatch & Timer â€” responsive position:
           Desktop (>=1024px): anchored to top-left next to hamburger menu (3 slashes)
           Narrow screen (<1024px): anchored to bottom-center of the page below drawing/canvas tools */}
       {showStopwatch && (
@@ -3161,7 +3209,7 @@ export default function ExcalidrawWrapper({
         </div>
       )}
 
-      {/* Todo overlay — toggled by the top-left corner button */}
+      {/* Todo overlay â€” toggled by the top-left corner button */}
       {showTodos && <TodoPanel onClose={() => setShowTodos(false)} />}
 
       {/* VS Code-style command palette (Ctrl/Cmd+Shift+P) */}
@@ -3169,7 +3217,7 @@ export default function ExcalidrawWrapper({
         <CommandPalette commands={paletteCommands} onClose={() => setShowPalette(false)} />
       )}
 
-      {/* In-canvas text toolbar — anchored to the selected/editing text box */}
+      {/* In-canvas text toolbar â€” anchored to the selected/editing text box */}
       {textAnchor && textToolbarPos && (
         <div
           className="canvas-text-dock excalidraw-island"
@@ -3240,7 +3288,7 @@ export default function ExcalidrawWrapper({
                       sendTextAi();
                     }
                   }}
-                  placeholder="Ask Gemini 3.8 Flash…"
+                  placeholder="Ask Gemini 3.8 Flashâ€¦"
                   aria-label="AI instruction"
                   autoFocus
                 />
@@ -3267,11 +3315,17 @@ export default function ExcalidrawWrapper({
       )}
 
       {/* Iframe / Screen Panel */}
+      {!isUrlReadOnly && pdfWindows.map((item) => (
+        <PdfCanvasWindow key={item.id} item={item} viewport={viewport} visible={item.canvasId === canvasTabs.activeCanvas?.id} zIndex={canvasWindowZIndex(`pdf-${item.id}`)} onFocusWindow={() => focusCanvasWindow(`pdf-${item.id}`)} onClose={() => { setPdfWindows((previous) => previous.filter((window) => window.id !== item.id)); setCanvasWindowOrder((previous) => previous.filter((entry) => entry !== `pdf-${item.id}`)); }} />
+      ))}
       {showIframePanel && !isUrlReadOnly && (
         <IframePanel
+          zIndex={canvasWindowZIndex("code-server")}
+          onFocusWindow={() => focusCanvasWindow("code-server")}
           onClose={() => {
             setShowIframePanel(false);
             setIsScreenActive(false);
+            setCanvasWindowOrder((previous) => previous.filter((entry) => entry !== "code-server"));
             saveScreenState({ isOpen: false });
           }}
           viewport={viewport}
@@ -3292,29 +3346,34 @@ export default function ExcalidrawWrapper({
       )}
 
       {/* Web Preview Panel (Dedicated macOS Window for Live Server on VPS) */}
-      {showWebPreviewPanel && !isUrlReadOnly && (
+      {!isUrlReadOnly && previewWindowIds.map((id, index) => (
         <WebPreviewPanel
-          isOpen={showWebPreviewPanel}
+          key={id}
+          zIndex={canvasWindowZIndex(`preview-${id}`)}
+          onFocusWindow={() => focusCanvasWindow(`preview-${id}`)}
+          isOpen
           onClose={() => {
-            setShowWebPreviewPanel(false);
-            setIsWebPreviewActive(false);
-            savePreviewState({ isOpen: false });
+            setPreviewWindowIds((previous) => previous.filter((windowId) => windowId !== id));
+            setActivePreviewId((active) => active === id ? null : active);
+            setCanvasWindowOrder((previous) => previous.filter((entry) => entry !== `preview-${id}`));
+            if (id === 0) { setWebPreviewScenePos(null); savePreviewState({ isOpen: false }); }
           }}
           viewport={viewport}
           siblingWindowPos={screenScenePos}
           onCanvasScroll={handleScreenCanvasScroll}
-          isActive={isWebPreviewActive}
+          isActive={activePreviewId === id}
           onActiveChange={(active) => {
-            setIsWebPreviewActive(active);
+            setActivePreviewId((current) => active ? id : current === id ? null : current);
             if (active) {
               excalidrawAPI.current?.setActiveTool({ type: "selection" });
             }
           }}
           activeToolType={activeToolType}
-          recenterTrigger={webPreviewRecenterTrigger}
-          onScenePosChange={setWebPreviewScenePos}
+          persistState={id === 0}
+          windowOffset={index}
+          onScenePosChange={id === 0 ? setWebPreviewScenePos : undefined}
         />
-      )}
+      ))}
 
       {/* Explaino voice notes panel */}
       {showExplaino && !isUrlReadOnly && (
@@ -3326,7 +3385,7 @@ export default function ExcalidrawWrapper({
         />
       )}
 
-      {/* AI Text sidebar — slides in from the right at half the Code width */}
+      {/* AI Text sidebar â€” slides in from the right at half the Code width */}
       {showAiTextPanel && !isUrlReadOnly && (
         <AITextSidebar
           onClose={() => setShowAiTextPanel(false)}

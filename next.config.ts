@@ -6,8 +6,15 @@ const REMOTE_VPS_TOKEN = "explaino_sec_8b41915d25547e2edd553bab03ea4cbd";
 const nextConfig: NextConfig = {
   transpilePackages: ["@excalidraw/excalidraw"],
   skipTrailingSlashRedirect: true,
+  experimental: {
+    optimizePackageImports: ["lucide-react"],
+  },
   async headers() {
     return [
+      {
+        source: "/excalidraw-fonts/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
       {
         source: "/:path*",
         headers: [

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { ExcalidrawImperativeAPI, BinaryFiles } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
+import { getSceneVersion } from "@excalidraw/excalidraw";
 import type { CanvasTabItem, CanvasDetail, CanvasSnapshot } from "@/types/canvas";
 import { normalizeCanvasBackground } from "@/lib/canvasTheme";
 
@@ -34,6 +35,8 @@ export function useCanvasTabs(options?: UseCanvasTabsOptions) {
 
   // Per-canvas debounced autosave timers (prevents rapid tab switching from cancelling previous tab saves)
   const saveTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const lastSaveCaptureRef = useRef(new Map<string, { elements: readonly ExcalidrawElement[]; version: number; files: BinaryFiles; state: string }>());
+  const mountedRef = useRef(true);
 
   // Ref tracking current activeTabId synchronously
   const activeTabIdRef = useRef<string>(activeTabId);
@@ -54,8 +57,10 @@ export function useCanvasTabs(options?: UseCanvasTabsOptions) {
 
   // Clear all pending save timers on unmount
   useEffect(() => {
+    mountedRef.current = true;
     const timeouts = saveTimeoutsRef.current;
     return () => {
+      mountedRef.current = false;
       timeouts.forEach((timer) => clearTimeout(timer));
       timeouts.clear();
     };
@@ -270,19 +275,34 @@ export function useCanvasTabs(options?: UseCanvasTabsOptions) {
           },
           files,
         };
+        const capture = { elements, version: getSceneVersion(elements), files, state: JSON.stringify([name, savePayload.appState]) };
+        const previous = lastSaveCaptureRef.current.get(currentId);
+        if (!options?.immediate && previous && previous.elements === elements && previous.version === capture.version && previous.files === files && previous.state === capture.state) return;
+        lastSaveCaptureRef.current.set(currentId, capture);
 
-        const executePut = async () => {
-          if (deletedTabIdsRef.current.has(currentId)) return;
+        const executePut = async (attempt = 0) => {
+          if (!mountedRef.current || deletedTabIdsRef.current.has(currentId) || lastSaveCaptureRef.current.get(currentId) !== capture) return;
+          let retryScheduled = false;
           try {
-            await fetch(`/api/canvases/${currentId}`, {
+            const response = await fetch(`/api/canvases/${currentId}`, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(savePayload),
             });
+            if (!response.ok) throw new Error(`Canvas save failed (${response.status}).`);
           } catch (e) {
+            if (mountedRef.current && lastSaveCaptureRef.current.get(currentId) === capture) {
+              if (attempt < 3 && !deletedTabIdsRef.current.has(currentId)) {
+                const timer = setTimeout(() => void executePut(attempt + 1), 1000 * 2 ** attempt);
+                saveTimeoutsRef.current.set(currentId, timer);
+                retryScheduled = true;
+              } else {
+                lastSaveCaptureRef.current.delete(currentId);
+              }
+            }
             console.warn(`Background tab save error for ${currentId}:`, e);
           } finally {
-            saveTimeoutsRef.current.delete(currentId);
+            if (!retryScheduled && lastSaveCaptureRef.current.get(currentId) === capture) saveTimeoutsRef.current.delete(currentId);
           }
         };
 
@@ -296,7 +316,7 @@ export function useCanvasTabs(options?: UseCanvasTabsOptions) {
         if (options?.immediate) {
           executePut();
         } else {
-          const timer = setTimeout(executePut, 500);
+          const timer = setTimeout(() => void executePut(), 500);
           saveTimeoutsRef.current.set(currentId, timer);
         }
       } catch (err) {

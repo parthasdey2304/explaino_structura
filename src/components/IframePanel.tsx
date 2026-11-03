@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 import {
   viewportCoordsToSceneCoords,
@@ -8,7 +9,7 @@ import {
 } from "@excalidraw/excalidraw";
 import type { Zoom } from "@excalidraw/excalidraw/types";
 import { getHealthCheckIntervalMs } from "@/lib/deviceOptimization";
-import VSCodeScreenView from "./VSCodeScreenView";
+const VSCodeScreenView = dynamic(() => import("./VSCodeScreenView"), { ssr: false });
 
 export type CanvasScreenMode = "interact" | "annotate";
 export type IframePanelLayout = "center" | "left" | "right" | "top" | "bottom";
@@ -22,6 +23,8 @@ export interface CanvasViewport {
 }
 
 export interface IframePanelProps {
+  zIndex?: number;
+  onFocusWindow?: () => void;
   /** Callback fired when the user clicks the close (red macOS button). */
   onClose: () => void;
   /** Current canvas viewport state (for panning and zooming in sync with Excalidraw). */
@@ -89,6 +92,8 @@ export function saveScreenState(partial: Partial<CanvasScreenSavedState>): void 
 
 export default function IframePanel({
   onClose,
+  zIndex = 3,
+  onFocusWindow,
   viewport,
   onCanvasScroll,
   isActive: controlledIsActive,
@@ -600,6 +605,8 @@ export default function IframePanel({
       ref={panelRef}
       className="canvas-screen-panel"
       data-testid="canvas-screen-panel"
+      onPointerDownCapture={onFocusWindow}
+      onFocusCapture={onFocusWindow}
       onWheel={forwardWheelToCanvas}
       style={{
         position: "fixed",
@@ -607,21 +614,13 @@ export default function IframePanel({
         top: `${viewportCoords.y}px`,
         width: `${viewportCoords.width}px`,
         height: `${viewportCoords.height}px`,
-        zIndex: 3,
+        zIndex,
         display: "flex",
         flexDirection: "column",
         background: "#16161a",
         borderRadius: 16,
-        border: isActive
-          ? "1.5px solid rgba(99, 102, 241, 0.75)"
-          : serverHealth === "offline"
-          ? "1.5px solid rgba(239, 68, 68, 0.45)"
-          : "1.5px solid rgba(255, 255, 255, 0.14)",
-        boxShadow: isActive
-          ? "0 0 0 2px rgba(99, 102, 241, 0.25), 0 24px 60px -12px rgba(0, 0, 0, 0.85)"
-          : serverHealth === "offline"
-          ? "0 0 0 1px rgba(239, 68, 68, 0.2), 0 24px 60px -12px rgba(0, 0, 0, 0.8)"
-          : "0 24px 60px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08)",
+        border: "1px solid #3b3b41",
+        boxShadow: "0 24px 60px -12px rgba(0, 0, 0, 0.8)",
         overflow: "hidden",
         overscrollBehavior: "none",
         overscrollBehaviorX: "none",
