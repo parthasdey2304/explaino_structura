@@ -465,7 +465,7 @@ export default function ExtensionsPanel({
                           onClick={() => onSelectTab?.(tab.id)}
                           onDoubleClick={(e) => handleStartRename(tab, e)}
                           title={`${tab.name} (Double-click to rename)`}
-                          className="flex-1 min-w-0 truncate text-left font-medium rounded focus-visible:outline-2 focus-visible:outline-indigo-500"
+                          className="flex-1 min-w-0 min-h-8 truncate text-left font-medium rounded focus-visible:outline-2 focus-visible:outline-indigo-500"
                         >
                           {tab.name}
                         </button>
@@ -495,7 +495,7 @@ export default function ExtensionsPanel({
                             title="Rename Canvas"
                             aria-label="Rename Canvas"
                             onClick={(e) => handleStartRename(tab, e)}
-                            className={`p-1 rounded transition-colors ${
+                            className={`w-8 h-8 inline-flex items-center justify-center rounded transition-colors ${
                               isDark
                                 ? "hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200"
                                 : "hover:bg-zinc-200 text-zinc-500 hover:text-zinc-800"
@@ -515,7 +515,7 @@ export default function ExtensionsPanel({
                               e.stopPropagation();
                               onDuplicateTab(tab.id);
                             }}
-                            className={`p-1 rounded transition-colors ${
+                            className={`w-8 h-8 inline-flex items-center justify-center rounded transition-colors ${
                               isDark
                                 ? "hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200"
                                 : "hover:bg-zinc-200 text-zinc-500 hover:text-zinc-800"
@@ -535,7 +535,7 @@ export default function ExtensionsPanel({
                               e.stopPropagation();
                               onCloseTab(tab.id);
                             }}
-                            className={`p-1 rounded transition-colors ${
+                            className={`w-8 h-8 inline-flex items-center justify-center rounded transition-colors ${
                               isDark
                                 ? "hover:bg-rose-500/20 text-zinc-400 hover:text-rose-400"
                                 : "hover:bg-rose-100 text-zinc-500 hover:text-rose-600"
