@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Plus, Minus, Trash2 } from "lucide-react";
 import {
   actionsFor,
@@ -45,6 +45,48 @@ export default function CanvasStructureControls({
   const [value, setValue] = useState("");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const controlsRef = useRef<HTMLDivElement>(null);
+  const [placement, setPlacement] = useState<{ left: number; top: number; width: number; quickLeft: number; quickTop: number; quickVisible: boolean; visible: boolean } | null>(null);
+
+  useLayoutEffect(() => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+    let frame = 0;
+    const update = () => {
+      const margin = 12;
+      const screenWidth = window.innerWidth;
+      const screenHeight = window.innerHeight;
+      const sidebar = document.querySelector<HTMLElement>(".selected-shape-actions .App-menu__left")?.getBoundingClientRect();
+      const sidebarRight = sidebar && sidebar.width > 0 ? sidebar.right + margin : margin;
+      const width = Math.max(0, Math.min(420, screenWidth - sidebarRight - margin));
+      const actualWidth = Math.min(controls.offsetWidth, width);
+      const height = controls.offsetHeight;
+      const left = Math.max(sidebarRight, Math.min(box.left, screenWidth - actualWidth - margin));
+      const preferredTop = box.bottom + 14;
+      const top = preferredTop + height <= screenHeight - margin
+        ? preferredTop
+        : Math.max(margin, Math.min(box.top - height - 14, screenHeight - height - margin));
+      const quickTop = Math.max(margin, Math.min((box.top + box.bottom) / 2 - 16, screenHeight - 32 - margin));
+      const leftCandidate = box.left - 46;
+      const rightCandidate = box.right + 14;
+      const quickLeft = leftCandidate >= sidebarRight ? leftCandidate : rightCandidate;
+      const quickVisible = quickLeft >= sidebarRight && quickLeft + 32 <= screenWidth - margin;
+      const visible = box.right > 0 && box.left < screenWidth && box.bottom > 0 && box.top < screenHeight && width >= 120;
+      setPlacement((old) => {
+        const next = { left, top, width, quickLeft, quickTop, quickVisible, visible };
+        return old && Object.keys(next).every((key) => old[key as keyof typeof next] === next[key as keyof typeof next]) ? old : next;
+      });
+    };
+    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(update); };
+    const observer = new ResizeObserver(schedule);
+    observer.observe(controls);
+    const sidebar = document.querySelector<HTMLElement>(".selected-shape-actions .App-menu__left");
+    if (sidebar) observer.observe(sidebar);
+    window.addEventListener("resize", schedule);
+    update();
+    schedule();
+    return () => { cancelAnimationFrame(frame); observer.disconnect(); window.removeEventListener("resize", schedule); };
+  }, [box.left, box.top, box.right, box.bottom]);
 
   const def = findStructureDef(type);
   const actions = useMemo(() => actionsFor(type), [type]);
@@ -99,13 +141,13 @@ export default function CanvasStructureControls({
   return (
     <>
       {/* Quick-add button, centred on the shape's left edge. */}
-      {primary && (
+      {primary && placement?.visible && placement.quickVisible && (
         <button
           type="button"
           className="ds-canvas-quickadd"
           style={{
-            left: box.left - 46,
-            top: (box.top + box.bottom) / 2 - 16,
+            left: placement.quickLeft,
+            top: placement.quickTop,
           }}
           onPointerDown={swallow}
           onClick={(e) => {
@@ -120,8 +162,9 @@ export default function CanvasStructureControls({
 
       {/* Full control bar, just below the shape. */}
       <div
+        ref={controlsRef}
         className="ds-canvas-controls"
-        style={{ left: box.left, top: box.bottom + 14 }}
+        style={{ left: placement?.left ?? box.left, top: placement?.top ?? box.bottom + 14, minWidth: Math.min(210, placement?.width ?? 210), maxWidth: placement?.width, visibility: placement?.visible ? "visible" : "hidden" }}
         onPointerDown={swallow}
         onPointerUp={swallow}
         onClick={swallow}
