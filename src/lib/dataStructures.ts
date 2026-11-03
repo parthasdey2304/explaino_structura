@@ -205,7 +205,7 @@ export interface StructureData {
   "linked-list": { values: string[] };
   "binary-tree": { root: TreeNode | null };
   graph: { labels: string[] };
-  table: { rows: number; cols: number; cells: string[][] };
+  table: { rows: number; cols: number; cells: string[][]; cellWidth?: number; cellHeight?: number };
 }
 
 /**
@@ -534,6 +534,8 @@ const TABLE_CELL_H = 40;
 function generateTable(x: number, y: number, data: StructureData["table"]): ExcalidrawElementSkeleton[] {
   const elements: ExcalidrawElementSkeleton[] = [];
   const { rows, cols, cells } = data;
+  const cellWidth = data.cellWidth ?? TABLE_CELL_W;
+  const cellHeight = data.cellHeight ?? TABLE_CELL_H;
 
   elements.push(txt(x, y, "TABLE", { fontSize: 18 }));
 
@@ -543,12 +545,11 @@ function generateTable(x: number, y: number, data: StructureData["table"]): Exca
     for (let c = 0; c < cols; c++) {
       const text = cells[r]?.[c] ?? "";
       elements.push(
-        rect(x + c * TABLE_CELL_W, gridY + r * TABLE_CELL_H, TABLE_CELL_W, TABLE_CELL_H, {
+        rect(x + c * cellWidth, gridY + r * cellHeight, cellWidth, cellHeight, {
           backgroundColor: r === 0 ? BG_GRAY : BG_TRANSPARENT,
           strokeWidth: r === 0 ? 2.5 : 2,
-          // An empty label would create a stray empty text element;
-          // double-clicking the cell adds one natively instead.
-          ...(text ? { label: { text, fontSize: 14 } } : {}),
+          // A bound label also gives empty cells their own medium text style.
+          label: { text: text || " ", fontSize: 20 },
         })
       );
     }
@@ -761,19 +762,19 @@ export function applyAction(
       const d = data as StructureData["table"];
       if (actionId === "add-row") {
         const rows = d.rows + 1;
-        return { rows, cols: d.cols, cells: resizeCells(d.cells, rows, d.cols) };
+        return { ...d, rows, cells: resizeCells(d.cells, rows, d.cols) };
       }
       if (actionId === "add-col") {
         const cols = d.cols + 1;
-        return { rows: d.rows, cols, cells: resizeCells(d.cells, d.rows, cols) };
+        return { ...d, cols, cells: resizeCells(d.cells, d.rows, cols) };
       }
       if (actionId === "remove-row" && d.rows > 1) {
         const rows = d.rows - 1;
-        return { rows, cols: d.cols, cells: resizeCells(d.cells, rows, d.cols) };
+        return { ...d, rows, cells: resizeCells(d.cells, rows, d.cols) };
       }
       if (actionId === "remove-col" && d.cols > 1) {
         const cols = d.cols - 1;
-        return { rows: d.rows, cols, cells: resizeCells(d.cells, d.rows, cols) };
+        return { ...d, cols, cells: resizeCells(d.cells, d.rows, cols) };
       }
       return data;
     }
@@ -867,7 +868,7 @@ export function writeSlots(
       );
       const unchanged = cells.every((row, r) => row.every((v, c) => v === (d.cells[r]?.[c] ?? "")));
       if (unchanged) return data;
-      return { rows: d.rows, cols: d.cols, cells };
+      return { ...d, cells };
     }
     default:
       return data;
