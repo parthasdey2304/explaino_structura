@@ -22,6 +22,7 @@ import type {
 } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { saveDrawing, loadDrawing } from "@/lib/firestore";
+import { normalizeCanvasBackground } from "@/lib/canvasTheme";
 import CodeEditorPanel from "./CodeEditorPanel";
 import IframePanel, {
   type IframePanelLayout,
@@ -41,6 +42,7 @@ import LaserOverlay from "./LaserOverlay";
 import ExtensionsPanel from "./ExtensionsPanel";
 import GoogleExtensionIcon from "./GoogleExtensionIcon";
 import RightCanvasToolbar from "./RightCanvasToolbar";
+import { useCanvasTabs } from "@/hooks/useCanvasTabs";
 import WebPreviewPanel, { loadSavedPreviewState, savePreviewState, DEFAULT_PREVIEW_PORT, DEFAULT_PREVIEW_PATH } from "./WebPreviewPanel";
 import { buildExternalTabUrl } from "@/lib/vpsProxy";
 import { getOptimalSaveDebounceMs, getDeviceProfile } from "@/lib/deviceOptimization";
@@ -60,7 +62,7 @@ import {
   type DataStructureDef,
   type StructureId,
 } from "@/lib/dataStructures";
-import { Blocks, Moon, Sun, Code, Check, Clock, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic, ListTodo, Monitor, LogOut, Terminal, MessageSquare, Layers, GitBranch, MousePointer, Square, Circle, Diamond, ArrowRight, Minus, PenTool, Type, Eraser, ZoomIn, ZoomOut, Maximize2, RotateCcw, Trash2, Download, RefreshCw, Hand, Sliders, FolderOpen, Image as ImageIcon, HelpCircle, Palette, Search, Globe, ExternalLink } from "lucide-react";
+import { Blocks, Moon, Sun, Code, Check, Clock, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic, ListTodo, Monitor, LogOut, Terminal, MessageSquare, Layers, GitBranch, MousePointer, Square, Circle, Diamond, ArrowRight, Minus, PenTool, Type, Eraser, ZoomIn, ZoomOut, Maximize2, RotateCcw, Trash2, Download, RefreshCw, Hand, Sliders, FolderOpen, Image as ImageIcon, HelpCircle, Palette, Search, Globe, ExternalLink, Lock } from "lucide-react";
 import { performClientLogout } from "./AuthGate";
 
 /**
@@ -273,7 +275,8 @@ const ExcalidrawComponent = dynamic(
   }
 );
 
-const STORAGE_KEY = "explaino-autosave";
+export const getCanvasStorageKey = (canvasId?: string) =>
+  canvasId ? `explaino_autosave_${canvasId}` : "explaino_autosave";
 
 const LINEAR_TYPES = new Set(["line", "arrow", "freedraw"]);
 
@@ -388,11 +391,88 @@ function sanitizeForFirestore(value: unknown): unknown {
   return value;
 }
 
-export default function ExcalidrawWrapper() {
+export interface ExcalidrawWrapperProps {
+  initialCanvasId?: string;
+  isReadOnly?: boolean;
+}
+
+export default function ExcalidrawWrapper({
+  initialCanvasId,
+  isReadOnly: propReadOnly = false,
+}: ExcalidrawWrapperProps = {}) {
   const excalidrawAPI = useRef<ExcalidrawImperativeAPI | null>(null);
   const [apiReady, setApiReady] = useState(false);
   const [showCodePanel, setShowCodePanel] = useState(false);
   const showCodePanelRef = useRef(false);
+  const [isUrlReadOnly] = useState<boolean>(() => {
+    if (propReadOnly) return true;
+    if (typeof window === "undefined") return false;
+    try {
+      const url = new URL(window.location.href);
+      return url.searchParams.get("readonly") === "true";
+    } catch {
+      return false;
+    }
+  });
+  const canvasTabs = useCanvasTabs({
+    initialCanvasId,
+    isReadOnly: propReadOnly || isUrlReadOnly,
+    excalidrawAPI: excalidrawAPI.current,
+  });
+  const canvasTabsRef = useRef(canvasTabs);
+  useEffect(() => {
+    canvasTabsRef.current = canvasTabs;
+  }, [canvasTabs]);
+
+  const lastHydratedCanvasIdRef = useRef<string | null>(null);
+
+  // Synchronize initial/active canvas data into Excalidraw when loaded from SQLite
+  useEffect(() => {
+    const api = excalidrawAPI.current;
+    const activeCanvas = canvasTabs.activeCanvas;
+    if (!api || !activeCanvas || canvasTabs.isLoading) return;
+
+    if (lastHydratedCanvasIdRef.current !== activeCanvas.id) {
+      lastHydratedCanvasIdRef.current = activeCanvas.id;
+      const cached = canvasTabs.cacheRef.current.get(activeCanvas.id);
+      let elements = (cached?.elements || activeCanvas.elements || []) as unknown[];
+      let appState = (cached?.appState || activeCanvas.appState || {}) as Record<string, unknown>;
+      let files = (cached?.files || activeCanvas.files || {}) as BinaryFiles;
+
+      // Check scoped localStorage backup if elements are empty
+      const scopedKey = getCanvasStorageKey(activeCanvas.id);
+      if (scopedKey && (!elements || (elements as any[]).length === 0)) {
+        try {
+          const backup = localStorage.getItem(scopedKey);
+          if (backup) {
+            const parsed = JSON.parse(backup);
+            if (parsed && Array.isArray(parsed.elements) && parsed.elements.length > 0) {
+              elements = parsed.elements;
+              if (parsed.appState) appState = parsed.appState;
+              if (parsed.files) files = parsed.files;
+            }
+          }
+        } catch {}
+      }
+
+      if (elements && (elements as any[]).length > 0) {
+        (api.updateScene as any)({
+          elements: sanitizeElements(elements),
+          appState: {
+            ...appState,
+            viewBackgroundColor: normalizeCanvasBackground(appState.viewBackgroundColor as string | undefined),
+            theme: api.getAppState().theme,
+            viewModeEnabled: canvasTabs.isReadOnly,
+          } as any,
+          commitToHistory: false,
+        });
+        if (files && Object.keys(files).length > 0) {
+          api.addFiles(Object.values(files) as any);
+        }
+        api.history.clear();
+      }
+    }
+  }, [canvasTabs.activeCanvas, canvasTabs.isLoading, canvasTabs.isReadOnly, apiReady]);
   const [showIframePanel, setShowIframePanel] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -596,8 +676,13 @@ export default function ExcalidrawWrapper() {
   const [saveStatus, setSaveStatus] = useState<string>("");
   const [initialData, setInitialData] = useState<ExcalidrawInitialDataState | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const loadedRef = useRef(false);
+  useEffect(() => {
+    loadedRef.current = loaded;
+  }, [loaded]);
   const [selectedInstance, setSelectedInstance] = useState<SelectedInstance | null>(null);
   const selectedInstanceRef = useRef<SelectedInstance | null>(null);
+  const tableCellRef = useRef<string | null>(null);
   const [viewport, setViewport] = useState<{ zoom: Zoom; offsetLeft: number; offsetTop: number; scrollX: number; scrollY: number }>({
     zoom: { value: 1 as unknown as Zoom["value"] },
     offsetLeft: 0,
@@ -606,6 +691,69 @@ export default function ExcalidrawWrapper() {
     scrollY: 0,
   });
   const viewportRef = useRef(viewport);
+  useEffect(() => {
+    const rememberCell = (event: PointerEvent) => {
+      const api = excalidrawAPI.current;
+      if (!api || !(event.target instanceof Element) || !event.target.closest(".excalidraw__canvas")) return;
+      const state = api.getAppState();
+      const point = viewportCoordsToSceneCoords({ clientX: event.clientX, clientY: event.clientY }, state);
+      const cell = [...api.getSceneElements()].reverse().find((el) =>
+        el.type === "rectangle" && readMeta(el)?.type === "table" && !el.isDeleted &&
+        point.x >= el.x && point.x <= el.x + el.width && point.y >= el.y && point.y <= el.y + el.height
+      );
+      tableCellRef.current = cell?.id ?? null;
+    };
+    const navigateCell = (event: KeyboardEvent) => {
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      const api = excalidrawAPI.current;
+      if (!api) return;
+      const state = api.getAppState();
+      if (state.viewModeEnabled) return;
+      const target = event.target;
+      const editing = target instanceof HTMLTextAreaElement && target.classList.contains('excalidraw-wysiwyg');
+      if (!editing && target instanceof Element && target.closest('input, textarea, button, [contenteditable="true"]')) return;
+      const elements = api.getSceneElements();
+      const editingText = state.editingTextElement;
+      const cellId = editing
+        ? (editingText?.type === 'text' ? editingText.containerId : null)
+        : tableCellRef.current;
+      const cell = elements.find((el) => el.id === cellId && el.type === 'rectangle');
+      const meta = cell && readMeta(cell);
+      if (!cell || !meta || meta.type !== 'table') return;
+      if (!editing && !state.selectedElementIds[cell.id] && !state.selectedGroupIds[meta.instanceId]) return;
+      const cells = elements.filter((el) => el.type === 'rectangle' && readMeta(el)?.instanceId === meta.instanceId);
+      const { rows, cols } = meta.data as { rows: number; cols: number };
+      if (cells.length !== rows * cols) return;
+      const index = cells.findIndex((el) => el.id === cell.id);
+      const row = Math.floor(index / cols), col = index % cols;
+      const nextRow = row + (event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0);
+      const nextCol = col + (event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0);
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (nextRow < 0 || nextRow >= rows || nextCol < 0 || nextCol >= cols) return;
+      const next = cells[nextRow * cols + nextCol];
+      tableCellRef.current = next.id;
+      if (editing) target.blur();
+      requestAnimationFrame(() => {
+        api.updateScene({ appState: { selectedElementIds: { [next.id]: true }, selectedGroupIds: {} } as unknown as AppState });
+        requestAnimationFrame(() => {
+          const canvas = document.querySelector<HTMLElement>('.excalidraw.excalidraw-container');
+          canvas?.focus();
+          canvas?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }));
+          requestAnimationFrame(() => {
+            const editor = document.querySelector<HTMLTextAreaElement>('textarea.excalidraw-wysiwyg');
+            if (editor) { editor.focus(); editor.setSelectionRange(editor.value.length, editor.value.length); }
+          });
+        });
+      });
+    };
+    document.addEventListener('pointerdown', rememberCell, true);
+    window.addEventListener('keydown', navigateCell, true);
+    return () => {
+      document.removeEventListener('pointerdown', rememberCell, true);
+      window.removeEventListener('keydown', navigateCell, true);
+    };
+  }, []);
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined") {
       return (localStorage.getItem("explaino-theme") as "light" | "dark") || "light";
@@ -1154,21 +1302,34 @@ export default function ExcalidrawWrapper() {
         setTextAnchor((prev) => (prev === null ? prev : null));
       }
 
-      // Debounced local backup (optimized for low-RAM 1GB Android smart boards)
-      if (localSaveTimerRef.current) clearTimeout(localSaveTimerRef.current);
-      localSaveTimerRef.current = setTimeout(() => {
-        try {
-          const s = latestSceneRef.current;
-          if (s) {
-            localStorage.setItem(
-              STORAGE_KEY,
-              serializeAsJSON(s.elements, s.appState, s.files, "local")
-            );
+      // Only perform autosave / backups if canvas is fully loaded and hydrated
+      const isHydrated =
+        loadedRef.current &&
+        !canvasTabsRef.current.isLoading &&
+        Boolean(canvasTabsRef.current.activeTabId);
+
+      if (isHydrated) {
+        // Debounced local backup (optimized for low-RAM 1GB Android smart boards)
+        if (localSaveTimerRef.current) clearTimeout(localSaveTimerRef.current);
+        localSaveTimerRef.current = setTimeout(() => {
+          try {
+            const s = latestSceneRef.current;
+            if (s) {
+              localStorage.setItem(
+                (canvasTabsRef.current.activeTabId && getCanvasStorageKey(canvasTabsRef.current.activeTabId)) || "explaino_autosave",
+                serializeAsJSON(s.elements, s.appState, s.files, "local")
+              );
+            }
+          } catch {
+            // ignore quota errors
           }
-        } catch {
-          // ignore quota errors
+        }, getOptimalSaveDebounceMs());
+
+        // Debounced SQLite persistence for active tab while drawing
+        if (excalidrawAPI.current) {
+          canvasTabsRef.current.persistCurrentSceneToCache(excalidrawAPI.current);
         }
-      }, getOptimalSaveDebounceMs());
+      }
 
       // Debounced Firestore save
       if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
@@ -1213,26 +1374,35 @@ export default function ExcalidrawWrapper() {
     []
   );
 
-  // --- Restore scene from Firestore on mount
+  // --- Restore scene from SQLite/Firestore on mount
   useEffect(() => {
+    if (canvasTabs.isLoading || initialData !== null) return;
     let cancelled = false;
 
     async function load() {
-      // First try the last auto-saved drawing from localStorage
-      const localScene = localStorage.getItem(STORAGE_KEY);
+      // First clean up legacy keys
+      try {
+        localStorage.removeItem("explaino-autosave");
+        localStorage.removeItem("explaino_autosave");
+      } catch {}
       const url = new URL(window.location.href);
       const docId = url.searchParams.get("doc");
 
       if (docId) {
         const saved = await loadDrawing(docId).catch(() => null);
         if (saved && !cancelled) {
+          lastHydratedCanvasIdRef.current = canvasTabs.activeTabId || canvasTabs.activeCanvas?.id || null;
           drawingIdRef.current = saved.id;
           nameRef.current = saved.name;
           setDrawingId(saved.id);
           setDrawingName(saved.name);
           setInitialData({
             elements: sanitizeElements(saved.elements as unknown[]),
-            appState: saved.appState as Partial<AppState>,
+            appState: {
+              ...saved.appState,
+              viewBackgroundColor: normalizeCanvasBackground(saved.appState?.viewBackgroundColor as string | undefined),
+              theme,
+            } as Partial<AppState>,
             files: Object.fromEntries(
               Object.entries(saved.files || {}).map(([id, f]) => {
                 const isSvg =
@@ -1250,55 +1420,56 @@ export default function ExcalidrawWrapper() {
               })
             ) as unknown as BinaryFiles,
           });
+          setLoaded(true);
           return;
         }
       }
 
-      if (localScene && !cancelled) {
+      const activeCanvas = canvasTabs.activeCanvas;
+      const activeId = canvasTabs.activeTabId || activeCanvas?.id;
+      let elements = (activeCanvas?.elements || []) as unknown[];
+      let appState = (activeCanvas?.appState || {}) as Partial<AppState>;
+      let files = (activeCanvas?.files || {}) as BinaryFiles;
+
+      const scopedKey = getCanvasStorageKey(activeId || undefined);
+      if (scopedKey && (!elements || elements.length === 0)) {
         try {
-          const parsed = JSON.parse(localScene);
-          if (!parsed || !Array.isArray(parsed.elements)) throw new Error("Invalid scene");
-          // Sanitize elements to avoid Excalidraw normalization crashes
-          const validElements = sanitizeElements(parsed.elements);
-          const restoredFiles: Record<string, any> = {};
-          if (parsed.files) {
-            for (const [id, f] of Object.entries(parsed.files as Record<string, any>)) {
-              if (f && f.dataURL) {
-                const isSvg =
-                  f.mimeType === "image/svg+xml" ||
-                  f.dataURL.startsWith("data:image/svg");
-                restoredFiles[id] = {
-                  ...f,
-                  mimeType: isSvg ? "image/svg+xml" : (f.mimeType || "image/png"),
-                };
-              }
+          const backup = localStorage.getItem(scopedKey);
+          if (backup) {
+            const parsed = JSON.parse(backup);
+            if (parsed && Array.isArray(parsed.elements) && parsed.elements.length > 0) {
+              elements = parsed.elements;
+              if (parsed.appState) appState = parsed.appState;
+              if (parsed.files) files = parsed.files;
             }
           }
-          setInitialData({
-            elements: validElements,
-            appState: parsed.appState as Partial<AppState>,
-            files: restoredFiles as BinaryFiles,
-          });
-          return;
         } catch {
-          // Corrupted scene — clear it
-          localStorage.removeItem(STORAGE_KEY);
+          if (scopedKey) localStorage.removeItem(scopedKey);
         }
       }
 
       if (!cancelled) {
-        setInitialData({});
+        lastHydratedCanvasIdRef.current = activeId || null;
+        setInitialData({
+          elements: sanitizeElements(elements),
+          appState: {
+            ...appState,
+            viewBackgroundColor: normalizeCanvasBackground(appState.viewBackgroundColor),
+            theme,
+            viewModeEnabled: propReadOnly || isUrlReadOnly || canvasTabs.isReadOnly,
+          } as Partial<AppState>,
+          files: files as BinaryFiles,
+        });
+        setLoaded(true);
       }
     }
 
-    load().finally(() => {
-      if (!cancelled) setLoaded(true);
-    });
+    load();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [canvasTabs.isLoading, canvasTabs.activeCanvas, canvasTabs.activeTabId, canvasTabs.isReadOnly, initialData, propReadOnly, isUrlReadOnly, theme]);
 
   // --- Manual save with a name (called from menu or button)
   const handleSaveToCloud = useCallback(async () => {
@@ -1468,9 +1639,16 @@ export default function ExcalidrawWrapper() {
       // redrawing, otherwise the redraw would throw those edits away.
       const byId = new Map(all.map((el) => [el.id, el] as const));
       const labels = harvestLabels(meta.type, mine, byId);
-      const currentData = labels
+      let currentData = labels
         ? writeSlots(meta.type, meta.data as AnyStructureData, labels)
         : (meta.data as AnyStructureData);
+
+      // The resize handles change the live cell geometry. Keep those sizes
+      // when adding or removing rows and columns instead of reverting to 120×40.
+      const firstCell = meta.type === "table" ? mine.find((el) => el.type === "rectangle") : undefined;
+      if (firstCell && meta.type === "table") {
+        currentData = { ...currentData, cellWidth: firstCell.width, cellHeight: firstCell.height } as AnyStructureData;
+      }
 
       const nextData = applyAction(meta.type, currentData, actionId, opts);
       // `applyAction` hands back the same object when the edit can't apply
@@ -1486,6 +1664,10 @@ export default function ExcalidrawWrapper() {
 
         let anchorX = meta.anchor.x + (liveBox.minX - baseBox.minX);
         let anchorY = meta.anchor.y + (liveBox.minY - baseBox.minY);
+        if (firstCell) {
+          anchorX = firstCell.x;
+          anchorY = firstCell.y - 32;
+        }
 
         let fresh = normalizeLinearElements(
           convertToExcalidrawElements(def.generate(anchorX, anchorY, nextData))
@@ -1513,6 +1695,9 @@ export default function ExcalidrawWrapper() {
         stampInstance(fresh, nextMeta);
 
         const replacedIds = new Set(mine.map((el) => el.id));
+        for (const el of all) {
+          if (el.type === "text" && el.containerId && replacedIds.has(el.containerId)) replacedIds.add(el.id);
+        }
         const selectedElementIds: Record<string, true> = {};
         for (const el of fresh) {
           if (!(el as { containerId?: string | null }).containerId) {
@@ -1544,10 +1729,10 @@ export default function ExcalidrawWrapper() {
     const selected = selectedInstanceRef.current;
     if (!api || !selected) return;
     const { instanceId } = selected.meta;
+    const elements = api.getSceneElements();
+    const memberIds = new Set(elements.filter((el) => readMeta(el)?.instanceId === instanceId).map((el) => el.id));
     api.updateScene({
-      elements: api
-        .getSceneElements()
-        .filter((el) => readMeta(el)?.instanceId !== instanceId),
+      elements: elements.filter((el) => !memberIds.has(el.id) && !(el.type === "text" && el.containerId && memberIds.has(el.containerId))),
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     });
     selectedInstanceRef.current = null;
@@ -2713,6 +2898,9 @@ export default function ExcalidrawWrapper() {
 
   const handleExcalidrawAPI = useCallback((api: ExcalidrawImperativeAPI) => {
     excalidrawAPI.current = api;
+    if (typeof window !== "undefined") {
+      (window as any).__testExcalidrawAPI = api;
+    }
     setApiReady(true);
   }, []);
 
@@ -2881,9 +3069,29 @@ export default function ExcalidrawWrapper() {
   useQuickShape(excalidrawAPI, apiReady);
 
   return (
-    <div className={`w-full h-screen overflow-hidden relative${laserActive ? " explaino-laser-active" : ""}`} style={{ fontFamily: "var(--ui-font, 'Assistant', sans-serif)" }}>
-      {!loaded || initialData === null ? (
-        <div className="w-full h-screen flex items-center justify-center" style={{ background: "var(--default-bg-color)" }}>
+    <div className={`w-full h-screen overflow-hidden relative flex flex-col${laserActive ? " explaino-laser-active" : ""}`} style={{ fontFamily: "var(--ui-font, 'Assistant', sans-serif)" }}>
+      {/* If student read-only fallback via ?view=...&readonly=true, show top banner */}
+      {isUrlReadOnly && (
+        <div
+          data-readonly-banner="true"
+          className="absolute top-3 left-1/2 -translate-x-1/2 z-50 flex items-center space-x-2.5 px-4 py-1.5 rounded-full bg-zinc-900/95 border border-zinc-700/80 shadow-xl backdrop-blur-md text-xs select-none pointer-events-auto"
+        >
+          <span className="flex h-2 w-2 relative">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+          </span>
+          <span className="font-semibold text-white">Student View</span>
+          <span className="text-zinc-500">•</span>
+          <span className="flex items-center text-amber-400 font-medium space-x-1">
+            <Lock size={12} />
+            <span>Read-Only Mode</span>
+          </span>
+        </div>
+      )}
+
+      <div className="flex-1 w-full min-h-0 relative">
+      {!loaded || initialData === null || canvasTabs.isLoading ? (
+        <div className="w-full h-full flex items-center justify-center" style={{ background: "var(--default-bg-color)" }}>
           <div className="text-sm text-gray-400">Loading canvas…</div>
         </div>
       ) : (
@@ -2898,9 +3106,10 @@ export default function ExcalidrawWrapper() {
         initialData={initialData}
         name={drawingName}
         theme={theme}
-        renderTopRightUI={renderTopRightUI}
+        viewModeEnabled={isUrlReadOnly || canvasTabs.isReadOnly}
+        renderTopRightUI={isUrlReadOnly ? undefined : renderTopRightUI}
       >
-        {mainMenuContent}
+        {isUrlReadOnly ? null : mainMenuContent}
       </ExcalidrawComponent>
       {/* Transient laser-pointer layer: screen-space only, never touches the
           scene or the undo/redo history. */}
@@ -2919,7 +3128,7 @@ export default function ExcalidrawWrapper() {
       )}
 
       {/* Floating right canvas toolbar for tablets and laptops (hidden on phones) */}
-      {showHandyToolbar && (
+      {showHandyToolbar && !isUrlReadOnly && (
         <div className="flex">
         <RightCanvasToolbar
           laserActive={laserActive}
@@ -3053,12 +3262,12 @@ export default function ExcalidrawWrapper() {
       )}
 
       {/* Code Editor Panel */}
-      {showCodePanel && (
+      {showCodePanel && !isUrlReadOnly && (
         <CodeEditorPanel onClose={() => setShowCodePanel(false)} />
       )}
 
       {/* Iframe / Screen Panel */}
-      {showIframePanel && (
+      {showIframePanel && !isUrlReadOnly && (
         <IframePanel
           onClose={() => {
             setShowIframePanel(false);
@@ -3083,7 +3292,7 @@ export default function ExcalidrawWrapper() {
       )}
 
       {/* Web Preview Panel (Dedicated macOS Window for Live Server on VPS) */}
-      {showWebPreviewPanel && (
+      {showWebPreviewPanel && !isUrlReadOnly && (
         <WebPreviewPanel
           isOpen={showWebPreviewPanel}
           onClose={() => {
@@ -3108,7 +3317,7 @@ export default function ExcalidrawWrapper() {
       )}
 
       {/* Explaino voice notes panel */}
-      {showExplaino && (
+      {showExplaino && !isUrlReadOnly && (
         <ExplainoPanel
           onClose={() => setShowExplaino(false)}
           getSceneSnapshot={getSceneSnapshotForNote}
@@ -3118,7 +3327,7 @@ export default function ExcalidrawWrapper() {
       )}
 
       {/* AI Text sidebar — slides in from the right at half the Code width */}
-      {showAiTextPanel && (
+      {showAiTextPanel && !isUrlReadOnly && (
         <AITextSidebar
           onClose={() => setShowAiTextPanel(false)}
           onInsertCode={handleInsertCodeToCanvas}
@@ -3180,7 +3389,8 @@ export default function ExcalidrawWrapper() {
         </div>
       )}
 
-            {/* Phone-only Floating Extensions Button (Excalidraw signature light purple / lavender circle in bottom right) */}
+      {/* Phone-only Floating Extensions Button (Excalidraw signature light purple / lavender circle in bottom right) */}
+      {!isUrlReadOnly && (
       <button
         type="button"
         data-phone-extensions-fab="true"
@@ -3226,10 +3436,11 @@ export default function ExcalidrawWrapper() {
           />
         )}
       </button>
+      )}
 
       {/* Extensions Side Panel */}
       <ExtensionsPanel
-        isOpen={showExtensionsPanel}
+        isOpen={showExtensionsPanel && !isUrlReadOnly}
         onClose={() => setShowExtensionsPanel(false)}
         theme={theme}
         laserActive={laserActive}
@@ -3256,6 +3467,17 @@ export default function ExcalidrawWrapper() {
         onToggleStopwatch={() => setShowStopwatch((v) => !v)}
         showHandyToolbar={showHandyToolbar}
         onToggleHandyToolbar={handleToggleHandyToolbar}
+        tabs={canvasTabs.tabs}
+        activeTabId={canvasTabs.activeTabId}
+        onSelectTab={(id) => canvasTabs.selectTab(id, excalidrawAPI.current)}
+        onNewTab={(name) => canvasTabs.addTab(name, excalidrawAPI.current)}
+        onCloseTab={(id) => canvasTabs.closeTab(id, excalidrawAPI.current)}
+        onRenameTab={canvasTabs.renameTab}
+        onDuplicateTab={(id) => canvasTabs.duplicateTab(id, excalidrawAPI.current)}
+        isReadOnly={canvasTabs.isReadOnly}
+        onToggleReadOnly={() => canvasTabs.toggleReadOnly(excalidrawAPI.current)}
+        shareUrl={canvasTabs.shareUrl}
+        onCopyShareUrl={canvasTabs.copyShareUrl}
       />
 
       {/* Text to Diagram / Mermaid Modal */}
@@ -3267,6 +3489,7 @@ export default function ExcalidrawWrapper() {
           theme={theme}
         />
       )}
+      </div>
     </div>
   );
 }

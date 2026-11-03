@@ -4,25 +4,31 @@
   "meta": { "title": "Explaino Structura", "output": "archify-out/architecture.html", "quality_profile": "showcase" },
   "components": [
     { "id": "user", "type": "external", "label": "User", "sublabel": "Browser / PWA", "pos": [40, 300], "size": [120, 60] },
-    { "id": "next", "type": "frontend", "label": "Next.js App", "sublabel": "src/app (Turbopack)", "pos": [250, 300], "size": [140, 64] },
-    { "id": "components", "type": "frontend", "label": "Components", "sublabel": "canvas, chat, editor, screen, stopwatch", "pos": [250, 150], "size": [140, 64] },
-    { "id": "hooks", "type": "frontend", "label": "Custom Hooks", "sublabel": "src/hooks (canvas, shortcuts, persistence)", "pos": [250, 460], "size": [140, 64] },
-    { "id": "api-ai", "type": "backend", "label": "AI Chat & Mermaid", "sublabel": "/api/ai/chat & /mermaid", "pos": [500, 140], "size": [140, 64] },
-    { "id": "api-exec", "type": "backend", "label": "Execute API", "sublabel": "/api/execute", "pos": [500, 300], "size": [140, 64] },
-    { "id": "api-term", "type": "backend", "label": "Terminal API", "sublabel": "/api/terminal/*", "pos": [500, 460], "size": [140, 64] },
-    { "id": "lib-ai", "type": "backend", "label": "AI Models", "sublabel": "src/lib/ai", "pos": [720, 140], "size": [140, 64] },
-    { "id": "lib-exec", "type": "backend", "label": "Executors", "sublabel": "src/lib/executors (WASM/Pyodide)", "pos": [720, 300], "size": [140, 64] },
-    { "id": "terminal", "type": "backend", "label": "Terminal Svc", "sublabel": "src/lib/terminal", "pos": [720, 460], "size": [140, 64] },
-    { "id": "firestore", "type": "database", "label": "Firestore", "sublabel": "persistence", "pos": [900, 300], "size": [130, 64] },
-    { "id": "codeserver", "type": "external", "label": "Code-Server", "sublabel": "Remote VS Code container", "pos": [900, 140], "size": [130, 64] }
+    { "id": "student-viewer", "type": "external", "label": "Student Viewer", "sublabel": "Public Read-Only", "pos": [40, 460], "size": [120, 60] },
+    { "id": "next", "type": "frontend", "label": "Next.js App", "sublabel": "src/app (App Router)", "pos": [230, 300], "size": [140, 64] },
+    { "id": "components", "type": "frontend", "label": "UI Components", "sublabel": "CanvasTabBar, WebPreview, ExtensionsPanel, Spotlight", "pos": [230, 140], "size": [150, 64] },
+    { "id": "hooks", "type": "frontend", "label": "Custom Hooks", "sublabel": "useCanvasTabs, usePersistence, shortcuts", "pos": [230, 460], "size": [150, 64] },
+    { "id": "api-canvases", "type": "backend", "label": "Canvases API", "sublabel": "/api/canvases/* (CRUD, share, history)", "pos": [480, 220], "size": [150, 64] },
+    { "id": "api-ai", "type": "backend", "label": "AI Chat & Mermaid", "sublabel": "/api/ai/chat & /mermaid", "pos": [480, 100], "size": [150, 64] },
+    { "id": "api-exec", "type": "backend", "label": "Execute API", "sublabel": "/api/execute", "pos": [480, 340], "size": [150, 64] },
+    { "id": "api-term", "type": "backend", "label": "Terminal API", "sublabel": "/api/terminal/*", "pos": [480, 460], "size": [150, 64] },
+    { "id": "turso-sqlite", "type": "database", "label": "Turso SQLite", "sublabel": "@libsql/client WAL & canvases schema", "pos": [720, 220], "size": [150, 64] },
+    { "id": "lib-ai", "type": "backend", "label": "AI Models", "sublabel": "src/lib/ai (Gemini, Mistral)", "pos": [720, 100], "size": [150, 64] },
+    { "id": "lib-exec", "type": "backend", "label": "Executors", "sublabel": "src/lib/executors (WASM/Pyodide)", "pos": [720, 340], "size": [150, 64] },
+    { "id": "terminal", "type": "backend", "label": "Terminal Svc", "sublabel": "src/lib/terminal", "pos": [720, 460], "size": [150, 64] },
+    { "id": "firestore", "type": "database", "label": "Firestore", "sublabel": "Cloud persistence", "pos": [920, 340], "size": [130, 64] },
+    { "id": "codeserver", "type": "external", "label": "Code-Server", "sublabel": "Remote VPS VS Code container", "pos": [920, 100], "size": [130, 64] }
   ],
   "boundaries": [
-    { "kind": "region", "label": "explaino_structura", "wraps": ["next", "components", "hooks", "api-ai", "api-exec", "api-term", "lib-ai", "lib-exec", "terminal", "firestore", "codeserver"] }
+    { "kind": "region", "label": "explaino_structura", "wraps": ["next", "components", "hooks", "api-canvases", "api-ai", "api-exec", "api-term", "turso-sqlite", "lib-ai", "lib-exec", "terminal", "firestore", "codeserver"] }
   ],
   "connections": [
     { "id": "user-next", "from": "user", "to": "next", "label": "HTTPS" },
+    { "id": "student-next", "from": "student-viewer", "to": "next", "label": "GET /share/:id" },
     { "id": "next-components", "from": "next", "to": "components", "label": "renders" },
     { "id": "components-hooks", "from": "components", "to": "hooks", "label": "consumes" },
+    { "id": "next-api-canvases", "from": "next", "to": "api-canvases" },
+    { "id": "api-canvases-turso", "from": "api-canvases", "to": "turso-sqlite", "label": "SQL Queries" },
     { "id": "next-api-ai", "from": "next", "to": "api-ai" },
     { "id": "next-api-exec", "from": "next", "to": "api-exec" },
     { "id": "next-api-term", "from": "next", "to": "api-term" },
@@ -33,8 +39,8 @@
     { "id": "components-codeserver", "from": "components", "to": "codeserver", "label": "WebSocket/HTTPS", "variant": "dashed" }
   ],
   "cards": [
-    { "dot": "cyan", "title": "Frontend", "items": ["Next.js 16 App Router (Turbopack)", "Excalidraw canvas + sequence lifeline segmentation", "macOS window code-server & VSCodeScreenView", "Canvas Stopwatch / Timer (Orbitron font, MainMenu checkbox)", "custom hooks: persistence, quickshape, shortcuts, list-mode"] },
-    { "dot": "emerald", "title": "Backend", "items": ["AI chat (Mistral BYOK) & Mermaid conversion APIs", "WebAssembly executors (Pyodide, Clang WASM) & terminal", "Code-server health check heartbeat & auth proxy"] },
-    { "dot": "rose", "title": "Data", "items": ["Google Cloud Firestore cloud persistence", "Browser localStorage workspace, drawing and stopwatch state cache"] }
+    { "dot": "cyan", "title": "Frontend", "items": ["Next.js 16 App Router & Excalidraw Canvas", "Browser-like multi-canvas tabs bar (CanvasTabBar) with isolated undo history", "macOS-style WebPreview panel with responsive breakpoint resizing", "Spotlight search & CommandPalette discovering tools, export, todos, models", "Zero-barrier ReadOnlyCanvasView (/share/:id) for public student inspection"] },
+    { "dot": "emerald", "title": "Backend", "items": ["Canvases API (/api/canvases/*) for tab management, cloning, reordering, sharing", "Turso LibSQL Local SQLite DB with WAL mode & foreign keys", "AI Chat & Mermaid generation APIs with BYOK provider integration", "WebAssembly executors (Pyodide, Clang WASM) & terminal session proxy"] },
+    { "dot": "rose", "title": "Data & Persistence", "items": ["Local Turso SQLite database (whiteboard.db) for canvases, tabs, and revision history", "Google Cloud Firestore cloud persistence for real-time collaborative state", "Browser localStorage workspace, drawing and stopwatch state cache"] }
   ]
 }

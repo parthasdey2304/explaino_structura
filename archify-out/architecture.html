@@ -5400,11 +5400,11 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <h3>Frontend</h3>
         </div>
         <ul>
-          <li>Next.js 16 App Router (Turbopack)</li>
-          <li>Excalidraw canvas + sequence lifeline segmentation</li>
-          <li>macOS window code-server &amp; VSCodeScreenView</li>
-          <li>Canvas Stopwatch / Timer (Orbitron digital display, MainMenu checkbox)</li>
-          <li>Custom hooks: persistence, quickshape, shortcuts, list-mode</li>
+          <li>Next.js 16 App Router &amp; Excalidraw Canvas</li>
+          <li>Browser-like multi-canvas tabs bar (CanvasTabBar) with isolated undo history</li>
+          <li>macOS-style WebPreview panel with responsive breakpoint resizing</li>
+          <li>Spotlight search &amp; CommandPalette discovering tools, export, todos, models</li>
+          <li>Zero-barrier ReadOnlyCanvasView (/share/:id) for public student inspection</li>
         </ul>
       </div>
 
@@ -5414,20 +5414,22 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <h3>Backend</h3>
         </div>
         <ul>
-          <li>AI chat (Mistral BYOK) &amp; Mermaid conversion APIs</li>
-          <li>WebAssembly executors (Pyodide, Clang WASM) &amp; terminal</li>
-          <li>Code-server health check heartbeat &amp; auth proxy</li>
+          <li>Canvases API (/api/canvases/*) for tab management, cloning, reordering, sharing</li>
+          <li>Turso LibSQL Local SQLite DB with WAL mode &amp; foreign keys</li>
+          <li>AI chat &amp; Mermaid conversion APIs with BYOK provider integration</li>
+          <li>WebAssembly executors (Pyodide, Clang WASM) &amp; terminal session proxy</li>
         </ul>
       </div>
 
       <div class="card">
         <div class="card-header">
           <div class="card-dot rose"></div>
-          <h3>Data</h3>
+          <h3>Data &amp; Persistence</h3>
         </div>
         <ul>
-          <li>Google Cloud Firestore cloud persistence</li>
-          <li>Browser localStorage workspace and drawing cache</li>
+          <li>Local Turso SQLite database (whiteboard.db) for canvases, tabs, and revision history</li>
+          <li>Google Cloud Firestore cloud persistence for real-time collaborative state</li>
+          <li>Browser localStorage workspace, drawing and stopwatch state cache</li>
         </ul>
       </div>
     </div>
