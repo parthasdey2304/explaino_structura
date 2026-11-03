@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { Assistant, Orbitron } from "next/font/google";
 import "./globals.css";
+import canvasFonts from "@/lib/canvasFontAssets.json";
 
 const assistant = Assistant({ subsets: ["latin"], variable: "--font-assistant", display: "swap" });
 const orbitron = Orbitron({ subsets: ["latin"], variable: "--font-orbitron", display: "swap", preload: false });
@@ -40,40 +41,17 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${assistant.variable} ${orbitron.variable}`} style={{ height: "100%" }} suppressHydrationWarning>
       <head>
-        <Script
-          id="suppress-unload-violation"
-          strategy="beforeInteractive"
+        <link rel="preload" href={`${canvasFonts.basePath}${canvasFonts.defaultFont}`} as="font" type="font/woff2" crossOrigin="anonymous" />
+        <script
+          id="canvas-font-assets"
           dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                try {
-                  var origAdd = EventTarget.prototype.addEventListener;
-                  var origRemove = EventTarget.prototype.removeEventListener;
-                  EventTarget.prototype.addEventListener = function(type, listener, options) {
-                    if (type === 'unload') {
-                      return origAdd.call(this, 'pagehide', listener, options);
-                    }
-                    return origAdd.call(this, type, listener, options);
-                  };
-                  EventTarget.prototype.removeEventListener = function(type, listener, options) {
-                    if (type === 'unload') {
-                      return origRemove.call(this, 'pagehide', listener, options);
-                    }
-                    return origRemove.call(this, type, listener, options);
-                  };
-                  Object.defineProperty(window, 'onunload', {
-                    configurable: true,
-                    enumerable: true,
-                    get: function() { return null; },
-                    set: function(fn) {
-                      if (typeof fn === 'function') {
-                        window.addEventListener('pagehide', fn);
-                      }
-                    }
-                  });
-                } catch (e) {}
-              })();
-            `,
+            __html: `window.EXCALIDRAW_ASSET_PATH = ${JSON.stringify(canvasFonts.basePath)};`,
+          }}
+        />
+        <script
+          id="suppress-unload-violation"
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var oA=EventTarget.prototype.addEventListener,oR=EventTarget.prototype.removeEventListener;EventTarget.prototype.addEventListener=function(t,l,o){return t==='unload'?oA.call(this,'pagehide',l,o):oA.call(this,t,l,o);};EventTarget.prototype.removeEventListener=function(t,l,o){return t==='unload'?oR.call(this,'pagehide',l,o):oR.call(this,t,l,o);};Object.defineProperty(window,'onunload',{configurable:true,enumerable:true,get:function(){return null;},set:function(f){if(typeof f==='function')window.addEventListener('pagehide',f);}});}catch(e){}})();`,
           }}
         />
         <meta name="mobile-web-app-capable" content="yes" />
@@ -84,9 +62,9 @@ export default function RootLayout({
         <main id="main-content" style={{ height: "100%" }}>{children}</main>
         <Script
           id="pwa-service-worker"
-          strategy="afterInteractive"
+          strategy="lazyOnload"
           dangerouslySetInnerHTML={{
-            __html: `
+            __html: process.env.NODE_ENV === "production" ? `
               if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
                 window.addEventListener('load', function() {
                   navigator.serviceWorker.register('/sw.js').then(function(reg) {
@@ -94,6 +72,18 @@ export default function RootLayout({
                   }).catch(function(err) {
                     console.warn('[PWA] Service Worker registration failed:', err);
                   });
+                });
+              }
+            ` : `
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                  registrations.forEach(function(registration) {
+                    var worker = registration.active || registration.waiting || registration.installing;
+                    if (worker && worker.scriptURL === location.origin + '/sw.js') registration.unregister();
+                  });
+                });
+                if ('caches' in window) caches.keys().then(function(keys) {
+                  keys.filter(function(key) { return key.startsWith('explaino-pwa-'); }).forEach(function(key) { caches.delete(key); });
                 });
               }
             `,

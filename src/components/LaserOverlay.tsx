@@ -51,6 +51,7 @@ export default function LaserOverlay({ active, onExit }: { active: boolean; onEx
 
   // Keep the canvas matched to its parent box at device pixel ratio.
   useEffect(() => {
+    if (!active) return;
     const canvas = canvasRef.current;
     const parent = canvas?.parentElement;
     if (!canvas || !parent) return;
@@ -63,7 +64,7 @@ export default function LaserOverlay({ active, onExit }: { active: boolean; onEx
     const observer = new ResizeObserver(resize);
     observer.observe(parent);
     return () => observer.disconnect();
-  }, []);
+  }, [active]);
 
   // Frame loop (an effect, never render): every animation frame repaints all
   // live/fading trails until none remain. Stopped on unmount.

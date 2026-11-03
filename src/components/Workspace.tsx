@@ -13,9 +13,9 @@ const Canvas = dynamic(() => import("./ExcalidrawWrapper"), {
   ),
 });
 
-export default function Workspace({ initialCanvasId, initialCheckingAuth }: { initialCanvasId?: string; initialCheckingAuth: boolean }) {
+export default function Workspace({ initialCanvasId, initialCheckingAuth, initialAuthenticated = false }: { initialCanvasId?: string; initialCheckingAuth: boolean; initialAuthenticated?: boolean }) {
   return (
-    <AuthGate initialCheckingAuth={initialCheckingAuth}>
+    <AuthGate initialCheckingAuth={initialCheckingAuth} initialAuthenticated={initialAuthenticated}>
       <ExcalidrawErrorBoundary>
         <Canvas initialCanvasId={initialCanvasId} />
       </ExcalidrawErrorBoundary>

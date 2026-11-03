@@ -153,3 +153,6 @@ vite.config.ts.timestamp-*
 
 # Local canvas data and SQLite journal files
 data/
+
+# Copied from the installed, locked Excalidraw package before dev/build.
+public/excalidraw-fonts/

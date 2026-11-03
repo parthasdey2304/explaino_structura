@@ -14,19 +14,22 @@ export async function GET(
 
     // Polling clients first check a small version record so unchanged scenes
     // do not repeatedly download every element and embedded image.
-    const versionResult = await db.execute({
-      sql: `SELECT c.updated_at, d.version FROM canvases c
-            LEFT JOIN canvas_data d ON c.id = d.canvas_id
-            WHERE c.id = ? OR c.share_slug = ?`,
-      args: [id, id],
-    });
-    if (versionResult.rows.length === 0) {
-      return NextResponse.json({ success: false, error: "Canvas not found" }, { status: 404 });
-    }
-    const versionRow = versionResult.rows[0];
-    const etag = `"${versionRow.version ?? 0}-${versionRow.updated_at}"`;
-    if (req.headers.get("if-none-match") === etag) {
-      return new Response(null, { status: 304, headers: { ETag: etag, "Cache-Control": "private, no-cache" } });
+    const requestedEtag = req.headers.get("if-none-match");
+    if (requestedEtag) {
+      const versionResult = await db.execute({
+        sql: `SELECT c.updated_at, d.version FROM canvases c
+              LEFT JOIN canvas_data d ON c.id = d.canvas_id
+              WHERE c.id = ? OR c.share_slug = ?`,
+        args: [id, id],
+      });
+      if (versionResult.rows.length === 0) {
+        return NextResponse.json({ success: false, error: "Canvas not found" }, { status: 404 });
+      }
+      const versionRow = versionResult.rows[0];
+      const etag = `"${versionRow.version ?? 0}-${versionRow.updated_at}"`;
+      if (requestedEtag === etag) {
+        return new Response(null, { status: 304, headers: { ETag: etag, "Cache-Control": "private, no-cache" } });
+      }
     }
 
     const result = await db.execute({

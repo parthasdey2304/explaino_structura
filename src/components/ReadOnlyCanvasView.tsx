@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useCallback } from "react";
-import Link from "next/link";
+import React, { startTransition, useEffect, useState, useRef, useCallback, type ComponentProps } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import type {
   ExcalidrawImperativeAPI,
   AppState,
@@ -13,19 +13,6 @@ import type {
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { Lock, AlertCircle, RefreshCw } from "lucide-react";
 import { normalizeCanvasBackground } from "@/lib/canvasTheme";
-
-const Excalidraw = dynamic(
-  () => import("./ExcalidrawCanvas"),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-[#0c0c0e] text-zinc-400">
-        <RefreshCw className="w-8 h-8 animate-spin mb-3 text-indigo-500" />
-        <span className="text-sm font-medium">Loading student canvas…</span>
-      </div>
-    ),
-  }
-);
 
 export interface ReadOnlyCanvasViewProps {
   canvasId: string;
@@ -51,6 +38,12 @@ interface SharedCanvasResponse {
 
 type UpdateSceneParams = Parameters<ExcalidrawImperativeAPI["updateScene"]>[0];
 type UpdateSceneAppState = NonNullable<UpdateSceneParams["appState"]>;
+
+import type ExcalidrawComponent from "./ExcalidrawCanvas";
+const CanvasRenderer = dynamic<ComponentProps<typeof ExcalidrawComponent>>(
+  () => import("./ExcalidrawCanvas"),
+  { ssr: false }
+);
 
 const handTool: AppState["activeTool"] = {
   type: "hand",
@@ -99,8 +92,6 @@ export default function ReadOnlyCanvasView({ canvasId }: ReadOnlyCanvasViewProps
     setInitialData(null);
     lastVersionRef.current = null;
     lastUpdatedAtRef.current = null;
-    // Load the drawing code in parallel with the first network request.
-    void import("./ExcalidrawCanvas");
 
     async function fetchCanvasData(isInitial = false) {
       requestController = new AbortController();
@@ -160,12 +151,12 @@ export default function ReadOnlyCanvasView({ canvasId }: ReadOnlyCanvasViewProps
             initialAppState.zoom = canvas.appState.zoom as unknown as AppState["zoom"];
           }
 
-          setInitialData({
+          startTransition(() => setInitialData({
             elements: locked,
             appState: initialAppState,
             files: (canvas.files || {}) as unknown as BinaryFiles,
             scrollToContent: false,
-          });
+          }));
           return true;
         }
 
@@ -229,14 +220,27 @@ export default function ReadOnlyCanvasView({ canvasId }: ReadOnlyCanvasViewProps
 
     // Schedule after each response, so slow requests cannot pile up.
     const poll = async (isInitial: boolean) => {
+      pollTimer = undefined;
+      if (!isInitial && document.hidden) {
+        pollTimer = setTimeout(() => poll(false), 30000);
+        return;
+      }
       const shouldContinue = await fetchCanvasData(isInitial);
       if (!cancelled && shouldContinue) pollTimer = setTimeout(() => poll(false), 3000);
     };
+    const handleVisibilityChange = () => {
+      if (!document.hidden && pollTimer) {
+        clearTimeout(pollTimer);
+        pollTimer = setTimeout(() => poll(false), 0);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     void poll(true);
 
     return () => {
       cancelled = true;
       if (pollTimer) clearTimeout(pollTimer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       requestController?.abort();
       if (typeof window !== "undefined") {
         (window as unknown as { __EXCALIDRAW_API__?: ExcalidrawImperativeAPI | null }).__EXCALIDRAW_API__ = null;
@@ -302,7 +306,7 @@ export default function ReadOnlyCanvasView({ canvasId }: ReadOnlyCanvasViewProps
 
       {/* Excalidraw Canvas in Strict View Mode mounted with initialData */}
       <div className="w-full h-full">
-        <Excalidraw
+        <CanvasRenderer
           excalidrawAPI={handleExcalidrawAPI}
           viewModeEnabled={true}
           zenModeEnabled={false}
