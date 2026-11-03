@@ -196,6 +196,14 @@ NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
 
 # Cloud Execution Sandboxes (Optional)
 E2B_API_KEY=your_e2b_api_key
+
+# Teacher login (server-only, required)
+EXPLAINO_ADMIN_PASSWORD=your_new_private_password
+EXPLAINO_SESSION_SECRET=your_long_random_signing_secret
+
+# Shared canvas storage (provided by the Turso Vercel integration)
+# TURSO_DATABASE_URL=libsql://your-database.turso.io
+# TURSO_AUTH_TOKEN=your_database_token
 ```
 
 ### 3. Run Development Server
@@ -204,6 +212,18 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+Local canvases use `data/explaino.db` unless Turso is configured. On Vercel,
+connect a persistent Turso database to the project and set its
+`TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` variables for Production. The
+serverless deployment cannot write a SQLite file inside `/var/task`. Without
+the database, the canvas list and student share link cannot load. When the
+database is connected, a link copied from the production site uses the current
+domain, including `explaino.vastaviklearning.online`.
+
+To copy existing local canvases into an empty Turso database, run
+`node scripts/migrate-canvases-to-turso.mjs` with both Turso variables in the
+environment. The migration leaves existing remote canvas IDs untouched.
 
 ### 4. Build for Production
 ```bash

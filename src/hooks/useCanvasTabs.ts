@@ -20,6 +20,8 @@ export function useCanvasTabs(options?: UseCanvasTabsOptions) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isReadOnly, setIsReadOnly] = useState<boolean>(false);
   const [copiedShare, setCopiedShare] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   // In-memory cache for sub-10ms instant tab switching with zero flicker
   const cacheRef = useRef<Map<string, CanvasSnapshot>>(new Map());
@@ -66,8 +68,10 @@ export function useCanvasTabs(options?: UseCanvasTabsOptions) {
     async function loadInitialTabs() {
       try {
         setIsLoading(true);
+        setLoadError(null);
         const res = await fetch("/api/canvases?include_data=true");
         const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Could not load canvases.");
 
         if (cancelled) return;
 
@@ -123,6 +127,7 @@ export function useCanvasTabs(options?: UseCanvasTabsOptions) {
             }),
           });
           const createJson = await createRes.json();
+          if (!createRes.ok || !createJson.canvas) throw new Error(createJson.error || "Could not create the first canvas.");
           const created = createJson.canvas;
 
           if (!cancelled && created) {
@@ -149,6 +154,7 @@ export function useCanvasTabs(options?: UseCanvasTabsOptions) {
         }
       } catch (err) {
         console.error("Failed to load initial canvases:", err);
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : "Canvas storage is unavailable.");
       } finally {
         if (!cancelled) {
           setIsLoading(false);
@@ -162,7 +168,7 @@ export function useCanvasTabs(options?: UseCanvasTabsOptions) {
     return () => {
       cancelled = true;
     };
-  }, [options?.initialCanvasId, options?.isReadOnly]);
+  }, [options?.initialCanvasId, options?.isReadOnly, retryCount]);
 
   // Fetch active canvas data when activeTabId changes (if not already cached)
   useEffect(() => {
@@ -755,6 +761,8 @@ export function useCanvasTabs(options?: UseCanvasTabsOptions) {
     isLoading,
     isReadOnly,
     copiedShare,
+    loadError,
+    retryLoad: () => setRetryCount((count) => count + 1),
     shareUrl,
     cacheRef,
     selectTab,

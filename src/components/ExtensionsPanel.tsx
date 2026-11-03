@@ -54,7 +54,7 @@ export interface ExtensionsPanelProps {
   tabs?: CanvasTabItem[];
   activeTabId?: string;
   onSelectTab?: (id: string) => void;
-  onNewTab?: (name?: string) => void;
+  onNewTab?: (name?: string) => Promise<CanvasTabItem | null> | CanvasTabItem | null | void;
   onCloseTab?: (id: string) => void;
   onRenameTab?: (id: string, newName: string) => void;
   onDuplicateTab?: (id: string) => void;
@@ -62,6 +62,8 @@ export interface ExtensionsPanelProps {
   onToggleReadOnly?: () => void;
   shareUrl?: string;
   onCopyShareUrl?: () => void;
+  canvasError?: string | null;
+  onRetryCanvases?: () => void;
 }
 
 interface ExtensionItem {
@@ -106,11 +108,16 @@ export default function ExtensionsPanel({
   onToggleReadOnly,
   shareUrl = "",
   onCopyShareUrl,
+  canvasError,
+  onRetryCanvases,
 }: ExtensionsPanelProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const isDark = theme === "dark";
   const [copiedShare, setCopiedShare] = useState<boolean>(false);
-  const [showCanvases, setShowCanvases] = useState(false);
+  const [showCanvases, setShowCanvases] = useState(true);
+  const [newCanvasName, setNewCanvasName] = useState("");
+  const [creatingCanvas, setCreatingCanvas] = useState(false);
+  const [canvasActionError, setCanvasActionError] = useState<string | null>(null);
   useEffect(() => {
     if (!isOpen) return;
     const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -183,27 +190,22 @@ export default function ExtensionsPanel({
       : "");
 
   const handleCopyShare = async () => {
-    if (effectiveShareUrl) {
-      try {
-        await navigator.clipboard.writeText(effectiveShareUrl);
-      } catch {
-        // Fallback for headless / restricted contexts
-        try {
-          const textarea = document.createElement("textarea");
-          textarea.value = effectiveShareUrl;
-          textarea.style.position = "fixed";
-          textarea.style.opacity = "0";
-          document.body.appendChild(textarea);
-          textarea.select();
-          document.execCommand("copy");
-          document.body.removeChild(textarea);
-        } catch {
-          // Ignore fallback errors
-        }
+    if (!effectiveShareUrl) return;
+    try {
+      await navigator.clipboard.writeText(effectiveShareUrl);
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = effectiveShareUrl;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      const copied = document.execCommand("copy");
+      textarea.remove();
+      if (!copied) {
+        setCanvasActionError("Could not copy the link. Select and copy the URL instead.");
+        return;
       }
-    }
-    if (onCopyShareUrl) {
-      onCopyShareUrl();
     }
     setCopiedShare(true);
     setTimeout(() => setCopiedShare(false), 2000);
@@ -418,7 +420,12 @@ export default function ExtensionsPanel({
             <span className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? "text-zinc-400" : "text-zinc-600"}`}>
               Open Canvases
             </span>
-            <div className="space-y-1 max-h-[160px] overflow-y-auto pr-0.5">
+            {canvasError && <div role="alert" className={`rounded-lg border p-2 text-xs ${isDark ? "border-amber-500/40 bg-amber-500/10 text-amber-300" : "border-amber-500/40 bg-amber-500/10 text-amber-800"}`}>
+              <p>{canvasError}</p>
+              {onRetryCanvases && <button type="button" onClick={onRetryCanvases} className="mt-2 rounded bg-indigo-600 px-2 py-1 text-white">Retry loading canvases</button>}
+            </div>}
+            {canvasActionError && <p role="alert" className={`text-xs ${isDark ? "text-amber-300" : "text-amber-800"}`}>{canvasActionError}</p>}
+            <div className="space-y-1 pr-0.5">
               {tabs.map((tab) => {
                 const isActive = tab.id === activeTabId;
                 const isEditing = editingTabId === tab.id;
@@ -465,7 +472,7 @@ export default function ExtensionsPanel({
                           onClick={() => onSelectTab?.(tab.id)}
                           onDoubleClick={(e) => handleStartRename(tab, e)}
                           title={`${tab.name} (Double-click to rename)`}
-                          className="flex-1 min-w-0 min-h-8 truncate text-left font-medium rounded focus-visible:outline-2 focus-visible:outline-indigo-500"
+                          className="flex-1 min-w-0 min-h-8 whitespace-normal break-words text-left font-medium rounded focus-visible:outline-2 focus-visible:outline-indigo-500"
                         >
                           {tab.name}
                         </button>
@@ -551,19 +558,25 @@ export default function ExtensionsPanel({
               })}
             </div>
             {onNewTab && (
-              <button
-                type="button"
-                data-new-canvas-btn="true"
-                onClick={() => onNewTab()}
-                className={`w-full flex items-center justify-center gap-1.5 p-1.5 rounded-lg border border-dashed text-xs font-medium transition-colors ${
-                  isDark
-                    ? "border-zinc-750 text-zinc-400 hover:text-white hover:border-zinc-600 hover:bg-zinc-800/40"
-                    : "border-zinc-300 text-zinc-600 hover:text-zinc-900 hover:border-zinc-400 hover:bg-zinc-100"
-                }`}
-              >
-                <Plus size={13} />
-                <span>New Canvas</span>
-              </button>
+              <form className="flex gap-2" onSubmit={async (event) => {
+                event.preventDefault();
+                const name = newCanvasName.trim();
+                if (!name || creatingCanvas) return;
+                setCanvasActionError(null);
+                setCreatingCanvas(true);
+                try {
+                  const created = await onNewTab(name);
+                  if (created === null) setCanvasActionError("Could not create the canvas. Check the canvas storage connection.");
+                  else setNewCanvasName("");
+                } catch (error) {
+                  setCanvasActionError(error instanceof Error ? error.message : "Could not create the canvas.");
+                } finally {
+                  setCreatingCanvas(false);
+                }
+              }}>
+                <input type="text" aria-label="New canvas name" placeholder="Name your new canvas" maxLength={80} value={newCanvasName} onChange={(event) => setNewCanvasName(event.target.value)} className={`min-w-0 flex-1 rounded-lg border px-2 py-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${isDark ? "border-zinc-700 bg-zinc-900 text-zinc-100" : "border-zinc-300 bg-white text-zinc-900"}`} />
+                <button type="submit" data-new-canvas-btn="true" disabled={!newCanvasName.trim() || creatingCanvas || Boolean(canvasError)} className="inline-flex min-h-8 items-center gap-1 rounded-lg bg-indigo-600 px-2.5 text-xs font-semibold text-white disabled:opacity-50"><Plus size={13} />Create</button>
+              </form>
             )}
           </div>
           {/* Read-Only Mode Toggle Switch */}
@@ -652,7 +665,7 @@ export default function ExtensionsPanel({
                 readOnly
                 data-share-url-input="true"
                 value={effectiveShareUrl}
-                placeholder="Share link generating…"
+                placeholder={canvasError ? "Canvas storage unavailable" : "Create or select a canvas to share"}
                 aria-label="Student Share URL"
                 onFocus={(e) => e.target.select()}
                 className={`flex-1 min-w-0 px-2 py-1 rounded text-[11px] font-mono outline-none border transition-colors select-all ${
@@ -665,9 +678,10 @@ export default function ExtensionsPanel({
                 type="button"
                 data-copy-share-link="true"
                 onClick={handleCopyShare}
+                disabled={!effectiveShareUrl}
                 title="Copy Student Share Link"
                 aria-label="Copy Student Share Link"
-                className={`px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1 shrink-0 transition-colors cursor-pointer ${
+                className={`px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1 shrink-0 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
                   copiedShare
                     ? "bg-emerald-600 text-white"
                     : "bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white"

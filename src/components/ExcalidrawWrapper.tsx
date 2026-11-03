@@ -3478,6 +3478,8 @@ export default function ExcalidrawWrapper({
         onToggleReadOnly={() => canvasTabs.toggleReadOnly(excalidrawAPI.current)}
         shareUrl={canvasTabs.shareUrl}
         onCopyShareUrl={canvasTabs.copyShareUrl}
+        canvasError={canvasTabs.loadError}
+        onRetryCanvases={canvasTabs.retryLoad}
       />
 
       {/* Text to Diagram / Mermaid Modal */}

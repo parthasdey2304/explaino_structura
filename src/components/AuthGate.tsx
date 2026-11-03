@@ -14,30 +14,11 @@ import {
 } from "lucide-react";
 
 export const EXPLAINO_AUTH_STORAGE_KEY = "explaino_auth_user";
-export const AUTHORIZED_EMAIL = "parthasdeyofficial@gmail.com";
-export const AUTHORIZED_PASSWORD = "Vastavik1234Parth@Hacker";
-
-export function checkIsAuthenticated(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    const raw = localStorage.getItem(EXPLAINO_AUTH_STORAGE_KEY);
-    if (!raw) return false;
-    const session = JSON.parse(raw);
-    return (
-      session &&
-      typeof session.email === "string" &&
-      session.email.toLowerCase().trim() === AUTHORIZED_EMAIL.toLowerCase().trim() &&
-      session.authenticated === true
-    );
-  } catch {
-    return false;
-  }
-}
 
 export function performClientLogout(): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.removeItem(EXPLAINO_AUTH_STORAGE_KEY);
+    try { localStorage.removeItem(EXPLAINO_AUTH_STORAGE_KEY); } catch {}
     fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     window.dispatchEvent(new CustomEvent("explaino:logout"));
   } catch {}
@@ -53,25 +34,16 @@ export default function AuthGate({ children, initialCheckingAuth = true }: { chi
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Check initial authentication on mount
+  // The server validates the signed, HttpOnly session. Old localStorage
+  // values are discarded because they cannot prove teacher access.
   useEffect(() => {
-    // Zero-barrier public read-only fallback check (/?view=[id]&readonly=true)
-    if (typeof window !== "undefined") {
-      try {
-        const url = new URL(window.location.href);
-        const isReadOnlyView = url.searchParams.get("readonly") === "true";
-        const hasView = url.searchParams.has("view");
-        if (isReadOnlyView && hasView) {
-          setIsAuthenticated(true);
-          setIsCheckingAuth(false);
-          return;
-        }
-      } catch {}
-    }
-
-    const isAuth = checkIsAuthenticated();
-    setIsAuthenticated(isAuth);
-    setIsCheckingAuth(false);
+    localStorage.removeItem(EXPLAINO_AUTH_STORAGE_KEY);
+    let cancelled = false;
+    fetch("/api/auth/session", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((session) => { if (!cancelled) setIsAuthenticated(session.authenticated === true); })
+      .catch(() => { if (!cancelled) setIsAuthenticated(false); })
+      .finally(() => { if (!cancelled) setIsCheckingAuth(false); });
 
     const handleLogout = () => {
       setIsAuthenticated(false);
@@ -81,7 +53,7 @@ export default function AuthGate({ children, initialCheckingAuth = true }: { chi
     };
 
     window.addEventListener("explaino:logout", handleLogout);
-    return () => window.removeEventListener("explaino:logout", handleLogout);
+    return () => { cancelled = true; window.removeEventListener("explaino:logout", handleLogout); };
   }, []);
 
   const handleLogin = useCallback(
@@ -109,53 +81,12 @@ export default function AuthGate({ children, initialCheckingAuth = true }: { chi
         const data = await res.json().catch(() => null);
 
         if (res.ok && data?.success) {
-          localStorage.setItem(
-            EXPLAINO_AUTH_STORAGE_KEY,
-            JSON.stringify({
-              email: AUTHORIZED_EMAIL,
-              authenticated: true,
-              authenticatedAt: Date.now(),
-            })
-          );
-          setIsAuthenticated(true);
-          return;
-        }
-
-        // Fallback validation for direct matching
-        if (
-          trimmedEmail === AUTHORIZED_EMAIL.toLowerCase().trim() &&
-          rawPassword === AUTHORIZED_PASSWORD
-        ) {
-          localStorage.setItem(
-            EXPLAINO_AUTH_STORAGE_KEY,
-            JSON.stringify({
-              email: AUTHORIZED_EMAIL,
-              authenticated: true,
-              authenticatedAt: Date.now(),
-            })
-          );
           setIsAuthenticated(true);
           return;
         }
 
         setErrorMessage(data?.error || "Incorrect email or password. Access is restricted.");
       } catch {
-        // If network request failed, allow client fallback check
-        if (
-          trimmedEmail === AUTHORIZED_EMAIL.toLowerCase().trim() &&
-          rawPassword === AUTHORIZED_PASSWORD
-        ) {
-          localStorage.setItem(
-            EXPLAINO_AUTH_STORAGE_KEY,
-            JSON.stringify({
-              email: AUTHORIZED_EMAIL,
-              authenticated: true,
-              authenticatedAt: Date.now(),
-            })
-          );
-          setIsAuthenticated(true);
-          return;
-        }
         setErrorMessage("Authentication failed. Please verify your connection.");
       } finally {
         setIsSubmitting(false);
