@@ -5,6 +5,12 @@ const REMOTE_VPS_TOKEN = "explaino_sec_8b41915d25547e2edd553bab03ea4cbd";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@excalidraw/excalidraw"],
+  // The libSQL Node client imports ws through a conditional ESM entry point.
+  // Bun's build trace can miss it even though Vercel's Node runtime needs it.
+  outputFileTracingIncludes: {
+    "/api/canvases": ["./node_modules/ws/**/*"],
+    "/api/canvases/**": ["./node_modules/ws/**/*"],
+  },
   skipTrailingSlashRedirect: true,
   experimental: {
     optimizePackageImports: ["lucide-react"],

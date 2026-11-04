@@ -77,7 +77,15 @@ export function useCanvasTabs(options?: UseCanvasTabsOptions) {
         const query = new URLSearchParams(window.location.search);
         const requested = options?.initialCanvasId || query.get("view") || query.get("canvas") || query.get("doc") || localStorage.getItem("explaino_active_canvas_id") || "";
         const res = await fetch(`/api/canvases?include_data=true&initial_only=true&initial_canvas=${encodeURIComponent(requested)}`);
-        const json = await res.json();
+        const body = await res.text();
+        let json: { error?: string; canvases?: Array<CanvasDetail & { data_loaded?: boolean }> };
+        try {
+          json = JSON.parse(body);
+        } catch {
+          throw new Error(res.ok
+            ? "Canvas storage returned an invalid response. Please retry."
+            : `Canvas storage is temporarily unavailable (HTTP ${res.status}). Please retry.`);
+        }
         if (!res.ok) throw new Error(json.error || "Could not load canvases.");
 
         if (cancelled) return;
