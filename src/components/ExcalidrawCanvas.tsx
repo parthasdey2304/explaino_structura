@@ -51,5 +51,7 @@ export default function ExcalidrawCanvas(props: ComponentProps<typeof Excalidraw
       if (pendingFrame !== null) cancelAnimationFrame(pendingFrame);
     };
   }, []);
-  return <div ref={container} style={{ width: "100%", height: "100%" }}><Excalidraw {...props} /></div>;
+  // The workspace fills a fixed viewport; document/ancestor scrolling cannot
+  // move it. Skip Excalidraw's synchronous scroll-parent layout discovery.
+  return <div ref={container} style={{ width: "100%", height: "100%" }}><Excalidraw detectScroll={false} {...props} /></div>;
 }

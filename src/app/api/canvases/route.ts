@@ -9,15 +9,19 @@ export async function GET(req: NextRequest) {
     const db = await ensureDb();
     const { searchParams } = new URL(req.url);
     const includeData = searchParams.get("include_data") === "true";
+    const initialOnly = searchParams.get("initial_only") === "true";
+    const initialCanvas = searchParams.get("initial_canvas") || "";
 
     if (includeData) {
       const result = await db.execute({
         sql: `SELECT c.id, c.name, c.description, c.is_readonly, c.share_slug, c.sort_order, c.thumbnail, c.created_at, c.updated_at,
                      d.elements, d.app_state, d.files, d.todos, d.notes, d.extensions_data, d.version
               FROM canvases c
-              LEFT JOIN canvas_data d ON c.id = d.canvas_id
+              LEFT JOIN canvas_data d ON c.id = d.canvas_id ${initialOnly ? `AND c.id = COALESCE(
+                (SELECT id FROM canvases WHERE id = ? OR share_slug = ? LIMIT 1),
+                (SELECT id FROM canvases ORDER BY sort_order ASC, updated_at DESC LIMIT 1))` : ""}
               ORDER BY c.sort_order ASC, c.updated_at DESC`,
-        args: [],
+        args: initialOnly ? [initialCanvas, initialCanvas] : [],
       });
 
       const canvases = result.rows.map((row) => ({
@@ -30,6 +34,7 @@ export async function GET(req: NextRequest) {
         thumbnail: row.thumbnail || "",
         created_at: row.created_at,
         updated_at: row.updated_at,
+        data_loaded: !initialOnly || row.elements !== null,
         elements: JSON.parse((row.elements as string) || "[]"),
         appState: JSON.parse((row.app_state as string) || "{}"),
         files: JSON.parse((row.files as string) || "{}"),

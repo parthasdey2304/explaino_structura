@@ -4,17 +4,19 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { sceneCoordsToViewportCoords, viewportCoordsToSceneCoords } from "@excalidraw/excalidraw";
 import type { Zoom } from "@excalidraw/excalidraw/types";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { Pencil, Minus, Square } from "lucide-react";
+import { Pencil, Minus, Square, ChevronDown, Undo2, Redo2 } from "lucide-react";
+import { savePdfWindow } from "@/lib/pdfWindowStore";
 
-export interface PdfWindowItem { id: string; canvasId: string; file: File; x: number; y: number }
+export interface PdfWindowItem { id: string; canvasId: string; file: File; x: number; y: number; width?: number; height?: number; history?: History }
 interface Viewport { zoom: Zoom; offsetLeft: number; offsetTop: number; scrollX: number; scrollY: number }
 interface Position { x: number; y: number; width: number; height: number }
-interface Props { item: PdfWindowItem; viewport: Viewport; onClose: () => void; zIndex: number; onFocusWindow: () => void; visible: boolean }
+interface Props { item: PdfWindowItem; viewport: Viewport; onClose: () => void; zIndex: number; onFocusWindow: () => void; visible: boolean; focused: boolean }
 type DrawingTool = "pen" | "line" | "rectangle";
 interface Point { x: number; y: number }
 interface Annotation { tool: DrawingTool; points: Point[] }
+interface History { entries: { page: number; annotation: Annotation }[]; index: number }
 
-function PdfPage({ document, number, tool, annotations, onAdd }: { document: PDFDocumentProxy; number: number; tool: DrawingTool | null; annotations: Annotation[]; onAdd: (number: number, annotation: Annotation) => void }) {
+function PdfPage({ document, number, tool, annotations, onAdd, zoom }: { document: PDFDocumentProxy; number: number; tool: DrawingTool | null; annotations: Annotation[]; onAdd: (number: number, annotation: Annotation) => void; zoom: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [visible, setVisible] = useState(false);
@@ -48,7 +50,10 @@ function PdfPage({ document, number, tool, annotations, onAdd }: { document: PDF
       const context = canvas.getContext("2d");
       if (!context) return;
       const viewport = page.getViewport({ scale: width / page.getViewport({ scale: 1 }).width });
-      const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+      // The canvas itself is scaled with the whiteboard, so account for that
+      // scale when choosing the backing resolution to keep PDF text sharp.
+      const desiredRatio = Math.max(1, (window.devicePixelRatio || 1) * zoom);
+      const pixelRatio = Math.min(desiredRatio, 4, Math.sqrt(16000000 / (viewport.width * viewport.height)));
       canvas.width = Math.ceil(viewport.width * pixelRatio);
       canvas.height = Math.ceil(viewport.height * pixelRatio);
       canvas.style.width = `${viewport.width}px`;
@@ -58,7 +63,7 @@ function PdfPage({ document, number, tool, annotations, onAdd }: { document: PDF
       renderQueue.current = task.promise.catch((error: Error) => { if (error.name !== "RenderingCancelledException") console.error("PDF page rendering failed", error); });
     }).catch((error: Error) => { if (!disposed) console.error("PDF page loading failed", error); });
     return () => { disposed = true; cancelRender?.(); };
-  }, [document, number, visible, width]);
+  }, [document, number, visible, width, zoom]);
 
   const pointFromEvent = (event: React.PointerEvent<SVGSVGElement>): Point => {
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -77,7 +82,15 @@ function PdfPage({ document, number, tool, annotations, onAdd }: { document: PDF
     const current = draftRef.current;
     if (!current) return;
     event.preventDefault();
-    const point = pointFromEvent(event);
+    let point = pointFromEvent(event);
+    if (current.tool === "line" && event.shiftKey) {
+      const bounds = event.currentTarget.getBoundingClientRect();
+      const dx = (point.x - current.points[0].x) * bounds.width;
+      const dy = (point.y - current.points[0].y) * bounds.height;
+      const angle = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4);
+      const length = Math.hypot(dx, dy);
+      point = { x: current.points[0].x + Math.cos(angle) * length / bounds.width, y: current.points[0].y + Math.sin(angle) * length / bounds.height };
+    }
     const next = { ...current, points: current.tool === "pen" ? [...current.points, point] : [current.points[0], point] };
     draftRef.current = next;
     setDraft(next);
@@ -103,15 +116,44 @@ function PdfPage({ document, number, tool, annotations, onAdd }: { document: PDF
   </div>;
 }
 
-export default function PdfCanvasWindow({ item, viewport, onClose, zIndex, onFocusWindow, visible }: Props) {
-  const [position, setPosition] = useState<Position>({ x: item.x, y: item.y, width: 760, height: 600 });
+export default function PdfCanvasWindow({ item, viewport, onClose, zIndex, onFocusWindow, visible, focused }: Props) {
+  const [position, setPosition] = useState<Position>({ x: item.x, y: item.y, width: item.width ?? 760, height: item.height ?? 600 });
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hoverGroup, setHoverGroup] = useState(false);
   const [hoverButton, setHoverButton] = useState<"close" | "recenter" | "maximize" | null>(null);
   const [restorePosition, setRestorePosition] = useState<Position | null>(null);
   const [drawingTool, setDrawingTool] = useState<DrawingTool | null>(null);
-  const [annotations, setAnnotations] = useState<Record<number, Annotation[]>>({});
+  const [history, setHistory] = useState<History>(item.history ?? { entries: [], index: 0 });
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [storageError, setStorageError] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void savePdfWindow({ ...item, ...position, history }).then(() => setStorageError(false)).catch(() => setStorageError(true));
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [item, position, history]);
+  const annotations = useMemo(() => {
+    const result: Record<number, Annotation[]> = {};
+    for (const entry of history.entries.slice(0, history.index)) (result[entry.page] ||= []).push(entry.annotation);
+    return result;
+  }, [history]);
+  const undo = () => setHistory((current) => ({ ...current, index: Math.max(0, current.index - 1) }));
+  const redo = () => setHistory((current) => ({ ...current, index: Math.min(current.entries.length, current.index + 1) }));
+  useEffect(() => {
+    if (!visible || !focused) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('input, textarea, [contenteditable="true"]')) return;
+      const key = event.key.toLowerCase();
+      if (key !== "z" && key !== "y") return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (key === "y" || event.shiftKey) redo(); else undo();
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [visible, focused]);
   const gesture = useRef<{ mode: "move" | "resize"; x: number; y: number; position: Position } | null>(null);
 
   useEffect(() => {
@@ -173,11 +215,19 @@ export default function PdfCanvasWindow({ item, viewport, onClose, zIndex, onFoc
         </div>
         <span title={item.file.name} style={{ marginLeft: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#d5d5dc", fontSize: 12 }}>{item.file.name}</span>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 3 }}>
-          {([{ id: "pen", label: "Draw on PDF", icon: Pencil }, { id: "line", label: "Draw straight line on PDF", icon: Minus }, { id: "rectangle", label: "Draw rectangle on PDF", icon: Square }] as const).map(({ id, label, icon: Icon }) => <button key={id} type="button" title={label} aria-label={label} aria-pressed={drawingTool === id} onClick={() => setDrawingTool((current) => current === id ? null : id)} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 27, height: 27, borderRadius: 5, border: 0, background: drawingTool === id ? "#514e83" : "transparent", color: "#e4e4e7", cursor: "pointer" }}><Icon size={15} /></button>)}
+          <button type="button" title="PDF drawing tools" aria-label="PDF drawing tools" aria-expanded={toolsOpen} onClick={() => setToolsOpen((open) => !open)} style={{ display: "flex", alignItems: "center", gap: 3, border: 0, borderRadius: 5, padding: 5, background: toolsOpen || drawingTool ? "#514e83" : "transparent", color: "#e4e4e7", cursor: "pointer" }}><Pencil size={15} /><ChevronDown size={13} /></button>
         </div>
       </div>
+      {toolsOpen && <div role="group" aria-label="PDF drawing tools" onPointerDown={(event) => event.stopPropagation()} style={{ position: "absolute", top: 39, right: 8, zIndex: 2, padding: 7, background: "#25252c", border: "1px solid #45454d", borderRadius: 8, boxShadow: "0 8px 24px #0008" }}>
+        <div style={{ display: "flex", gap: 4, borderBottom: "1px solid #45454d", paddingBottom: 5, marginBottom: 5 }}>
+          <button type="button" title="Undo (Ctrl+Z)" aria-label="Undo PDF annotation" disabled={history.index === 0} onClick={undo} style={{ color: "#e4e4e7", background: "transparent", border: 0, opacity: history.index === 0 ? .35 : 1, cursor: history.index === 0 ? "default" : "pointer", padding: 5 }}><Undo2 size={16} /></button>
+          <button type="button" title="Redo (Ctrl+Y)" aria-label="Redo PDF annotation" disabled={history.index === history.entries.length} onClick={redo} style={{ color: "#e4e4e7", background: "transparent", border: 0, opacity: history.index === history.entries.length ? .35 : 1, cursor: history.index === history.entries.length ? "default" : "pointer", padding: 5 }}><Redo2 size={16} /></button>
+        </div>
+        <div style={{ display: "flex", gap: 4 }}>{([{ id: "pen", label: "Draw on PDF", icon: Pencil }, { id: "line", label: "Draw straight line on PDF (hold Shift to snap)", icon: Minus }, { id: "rectangle", label: "Draw rectangle on PDF", icon: Square }] as const).map(({ id, label, icon: Icon }) => <button key={id} type="button" title={label} aria-label={label} aria-pressed={drawingTool === id} onClick={() => setDrawingTool((current) => current === id ? null : id)} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 27, height: 27, borderRadius: 5, border: 0, background: drawingTool === id ? "#514e83" : "transparent", color: "#e4e4e7", cursor: "pointer" }}><Icon size={15} /></button>)}</div>
+      </div>}
+      {storageError && <div role="alert" style={{ color: "#fecaca", padding: "4px 12px", fontSize: 12 }}>Could not save this PDF on this device. Check browser storage space.</div>}
       <div data-testid="pdf-pages" style={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", padding: 8, background: "#292a2d" }}>
-        {error ? <p role="alert" style={{ color: "#fecaca", padding: 16 }}>{error}</p> : document ? <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{Array.from({ length: document.numPages }, (_, index) => <PdfPage key={index} document={document} number={index + 1} tool={drawingTool} annotations={annotations[index + 1] || []} onAdd={(number, annotation) => setAnnotations((previous) => ({ ...previous, [number]: [...(previous[number] || []), annotation] }))} />)}</div> : <p style={{ color: "#d4d4d8", padding: 16 }}>Loading PDF…</p>}
+        {error ? <p role="alert" style={{ color: "#fecaca", padding: 16 }}>{error}</p> : document ? <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{Array.from({ length: document.numPages }, (_, index) => <PdfPage key={index} document={document} number={index + 1} tool={drawingTool} zoom={viewport.zoom.value} annotations={annotations[index + 1] || []} onAdd={(page, annotation) => setHistory((current) => ({ entries: [...current.entries.slice(0, current.index), { page, annotation }], index: current.index + 1 }))} />)}</div> : <p style={{ color: "#d4d4d8", padding: 16 }}>Loading PDF…</p>}
       </div>
       <div role="separator" aria-label="Resize PDF window" onPointerDown={(event) => start(event, "resize")} onPointerMove={move} onPointerUp={() => { gesture.current = null; }} onPointerCancel={() => { gesture.current = null; }} style={{ position: "absolute", right: 0, bottom: 0, width: 25, height: 25, cursor: "nwse-resize", touchAction: "none", background: "linear-gradient(135deg, transparent 55%, #777 57%, transparent 62%, #777 65%, transparent 70%)" }} />
     </div>
