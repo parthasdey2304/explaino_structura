@@ -7,7 +7,7 @@
     "predev": "bun scripts/prepare-canvas-fonts.mjs",
     "dev": "bun run --bun next dev --webpack --hostname 127.0.0.1",
     "prebuild": "bun scripts/prepare-canvas-fonts.mjs",
-    "build": "bun run --bun next build --webpack",
+    "build": "bun scripts/build.mjs",
     "start": "bun run --bun next start --hostname 127.0.0.1",
     "lint": "bun run --bun eslint",
     "audit:mobile": "bun --env-file=.env.local scripts/audit-performance.mjs / canvas mobile",
