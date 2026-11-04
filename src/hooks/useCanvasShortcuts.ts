@@ -2,8 +2,6 @@
  * @file useCanvasShortcuts.ts
  * @description Custom hook that registers global keyboard shortcuts for the canvas:
  * - Ctrl+Shift+P / Cmd+Shift+P / Ctrl+K / Cmd+K: toggles Command Palette
- * - Ctrl+` / Cmd+`: opens Terminal
- * - Ctrl+C / Cmd+C: opens Code editor (when no text input is focused)
  * - Escape: exits Laser pointer mode
  *
  * When `isScreenActive` is true (user is working inside Code Server), global canvas
@@ -18,22 +16,9 @@ import { useEffect } from "react";
 
 export interface CanvasShortcutHandlers {
   onTogglePalette: () => void;
-  onOpenTerminal: () => void;
-  onOpenCodeEditor: () => void;
   onExitLaser: () => void;
-  isCodePanelOpen: boolean;
   isLaserActive: boolean;
   isScreenActive?: boolean;
-}
-
-/**
- * Checks if a keyboard event target is currently an editable text field.
- */
-function isEditableElement(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  return !!target.closest(
-    "input, textarea, [contenteditable='true'], .cm-content, select"
-  );
 }
 
 /**
@@ -41,10 +26,7 @@ function isEditableElement(target: EventTarget | null): boolean {
  */
 export function useCanvasShortcuts({
   onTogglePalette,
-  onOpenTerminal,
-  onOpenCodeEditor,
   onExitLaser,
-  isCodePanelOpen,
   isLaserActive,
   isScreenActive = false,
 }: CanvasShortcutHandlers): void {
@@ -72,31 +54,6 @@ export function useCanvasShortcuts({
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [onTogglePalette, isScreenActive]);
-
-  // Terminal & Code editor hotkeys (Ctrl+` and Ctrl+C)
-  useEffect(() => {
-    if (isScreenActive) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return;
-
-      if (e.key === "`") {
-        e.preventDefault();
-        onOpenTerminal();
-        return;
-      }
-
-      if (e.key.toLowerCase() === "c") {
-        if (isCodePanelOpen) return;
-        if (isEditableElement(e.target)) return;
-        e.preventDefault();
-        onOpenCodeEditor();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isCodePanelOpen, onOpenCodeEditor, onOpenTerminal, isScreenActive]);
 
   // Escape to exit laser pointer
   useEffect(() => {

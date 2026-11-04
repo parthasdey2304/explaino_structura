@@ -74,7 +74,9 @@ export function useCanvasTabs(options?: UseCanvasTabsOptions) {
       try {
         setIsLoading(true);
         setLoadError(null);
-        const res = await fetch("/api/canvases?include_data=true");
+        const query = new URLSearchParams(window.location.search);
+        const requested = options?.initialCanvasId || query.get("view") || query.get("canvas") || query.get("doc") || localStorage.getItem("explaino_active_canvas_id") || "";
+        const res = await fetch(`/api/canvases?include_data=true&initial_only=true&initial_canvas=${encodeURIComponent(requested)}`);
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Could not load canvases.");
 
@@ -82,7 +84,7 @@ export function useCanvasTabs(options?: UseCanvasTabsOptions) {
 
         if (res.ok && Array.isArray(json.canvases) && json.canvases.length > 0) {
           // Pre-populate in-memory cache for all loaded tabs
-          json.canvases.forEach((c: CanvasDetail) => {
+          json.canvases.filter((c: CanvasDetail & { data_loaded?: boolean }) => c.data_loaded !== false).forEach((c: CanvasDetail) => {
             cacheRef.current.set(c.id, {
               name: c.name || "Untitled Canvas",
               elements: c.elements || [],
@@ -106,7 +108,7 @@ export function useCanvasTabs(options?: UseCanvasTabsOptions) {
           const urlParams = new URLSearchParams(window.location.search);
           const urlCanvasId = options?.initialCanvasId || urlParams.get("view") || urlParams.get("canvas") || urlParams.get("doc");
           const savedActiveTabId = typeof window !== "undefined" ? localStorage.getItem("explaino_active_canvas_id") : null;
-          const targetId =
+          const targetId = json.canvases.find((c: CanvasDetail & { data_loaded?: boolean }) => c.data_loaded === true)?.id ||
             (urlCanvasId && loadedTabs.find((t) => t.id === urlCanvasId)?.id) ||
             (savedActiveTabId && loadedTabs.find((t) => t.id === savedActiveTabId)?.id) ||
             loadedTabs[0].id;

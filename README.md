@@ -165,7 +165,7 @@ Designed to run smoothly on large school interactive touchscreens (including low
 | **Styling** | [Tailwind CSS v4](https://tailwindcss.com/) with `@layer base` reset isolation |
 | **Whiteboard Engine** | [@excalidraw/excalidraw](https://github.com/excalidraw/excalidraw) + [@excalidraw/mermaid-to-excalidraw](https://github.com/excalidraw/mermaid-to-excalidraw) |
 | **Database & Auth** | [Google Cloud Firestore](https://firebase.google.com/docs/firestore) + Session Cookies |
-| **Execution Engines** | WebAssembly (Pyodide, Clang WASM), E2B Sandboxed Terminal, Judge0 Cloud API |
+| **Code workspace** | Embedded Code Server |
 | **Deployment** | [Vercel Edge Platform](https://vercel.com/) |
 
 ---
@@ -174,13 +174,13 @@ Designed to run smoothly on large school interactive touchscreens (including low
 
 ### Prerequisites
 - **Node.js**: `v20.x` or higher
-- **npm**: `v10.x` or higher
+- **Bun**: `v1.4.4` or higher
 
 ### 1. Clone & Install
 ```bash
 git clone https://github.com/parthasdey2304/explaino_structura.git
 cd explaino_structura
-npm install
+bun install
 ```
 
 ### 2. Configure Environment Variables
@@ -194,9 +194,6 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
 NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
 
-# Cloud Execution Sandboxes (Optional)
-E2B_API_KEY=your_e2b_api_key
-
 # Teacher login (server-only, required)
 EXPLAINO_ADMIN_PASSWORD=your_new_private_password
 EXPLAINO_SESSION_SECRET=your_long_random_signing_secret
@@ -208,7 +205,7 @@ EXPLAINO_SESSION_SECRET=your_long_random_signing_secret
 
 ### 3. Run Development Server
 ```bash
-npm run dev
+bun run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
@@ -227,8 +224,8 @@ environment. The migration leaves existing remote canvas IDs untouched.
 
 ### 4. Build for Production
 ```bash
-npm run build
-npm run start
+bun run build
+bun run start
 ```
 
 ---

@@ -37,18 +37,21 @@ import RightCanvasToolbar from "./RightCanvasToolbar";
 import { useCanvasTabs } from "@/hooks/useCanvasTabs";
 import WebPreviewPanel, { loadSavedPreviewState, savePreviewState, DEFAULT_PREVIEW_PORT, DEFAULT_PREVIEW_PATH } from "./WebPreviewPanel";
 import type { PdfWindowItem } from "./PdfCanvasWindow";
+import { deletePdfWindow, loadPdfWindows } from "@/lib/pdfWindowStore";
+import { deleteOfficeWindow, loadOfficeWindows } from "@/lib/officeWindowStore";
+import type { OfficeKind, OfficeWindowItem } from "@/lib/officeFiles";
 import { buildExternalTabUrl } from "@/lib/vpsProxy";
 import { getOptimalSaveDebounceMs, getDeviceProfile } from "@/lib/deviceOptimization";
 
 const TextToDiagramModal = dynamic(() => import("./TextToDiagramModal"), {
   ssr: false,
 });
-const CodeEditorPanel = dynamic(() => import("./CodeEditorPanel"), { ssr: false });
 const DataStructuresPanel = dynamic(() => import("./DataStructuresPanel"), { ssr: false });
 const AITextSidebar = dynamic(() => import("./AITextSidebar"), { ssr: false });
 const ExplainoPanel = dynamic(() => import("./ExplainoPanel"), { ssr: false });
 const TodoPanel = dynamic(() => import("./TodoOverlay"), { ssr: false });
 const PdfCanvasWindow = dynamic(() => import("./PdfCanvasWindow"), { ssr: false });
+const OfficeCanvasWindow = dynamic(() => import("./OfficeCanvasWindow"), { ssr: false });
 const CommandPalette = dynamic(() => import("./CommandPalette"), { ssr: false });
 const ExtensionsPanel = dynamic(() => import("./ExtensionsPanel"), { ssr: false });
 const Stopwatch = dynamic(() => import("./Stopwatch"), { ssr: false });
@@ -66,7 +69,7 @@ import {
   type DataStructureDef,
   type StructureId,
 } from "@/lib/dataStructures";
-import { Blocks, Moon, Sun, Code, Check, Clock, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic, ListTodo, Monitor, LogOut, Terminal, MessageSquare, Layers, GitBranch, MousePointer, Square, Circle, Diamond, ArrowRight, Minus, PenTool, Type, Eraser, ZoomIn, ZoomOut, Maximize2, RotateCcw, Trash2, Download, RefreshCw, Hand, Sliders, FolderOpen, Image as ImageIcon, HelpCircle, Palette, Search, Globe, ExternalLink, Lock } from "lucide-react";
+import { Blocks, Moon, Sun, Check, Clock, Menu, X, LayoutDashboard, Save, ChevronDown, Boxes, Grid3x3, Sparkles, Zap, ListOrdered, List, Send, Loader2, Mic, ListTodo, Monitor, LogOut, Terminal, MessageSquare, Layers, GitBranch, MousePointer, Square, Circle, Diamond, ArrowRight, Minus, PenTool, Type, Eraser, ZoomIn, ZoomOut, Maximize2, RotateCcw, Trash2, Download, RefreshCw, Hand, Sliders, FolderOpen, Image as ImageIcon, HelpCircle, Palette, Search, Globe, ExternalLink, Lock } from "lucide-react";
 import { performClientLogout } from "./AuthGate";
 
 /**
@@ -396,8 +399,6 @@ export default function ExcalidrawWrapper({
 }: ExcalidrawWrapperProps = {}) {
   const excalidrawAPI = useRef<ExcalidrawImperativeAPI | null>(null);
   const [apiReady, setApiReady] = useState(false);
-  const [showCodePanel, setShowCodePanel] = useState(false);
-  const showCodePanelRef = useRef(false);
   const [isUrlReadOnly] = useState<boolean>(() => {
     if (propReadOnly) return true;
     if (typeof window === "undefined") return false;
@@ -509,7 +510,9 @@ export default function ExcalidrawWrapper({
   const showWebPreviewPanel = previewWindowIds.length > 0;
   const [activePreviewId, setActivePreviewId] = useState<number | null>(null);
   const [canvasWindowOrder, setCanvasWindowOrder] = useState<string[]>([]);
+  const [activeCanvasWindow, setActiveCanvasWindow] = useState<string | null>(null);
   const focusCanvasWindow = useCallback((id: string) => {
+    setActiveCanvasWindow(id);
     setCanvasWindowOrder((previous) => previous[previous.length - 1] === id ? previous : [...previous.filter((entry) => entry !== id), id]);
   }, []);
   const canvasWindowZIndex = (id: string) => {
@@ -700,10 +703,48 @@ export default function ExcalidrawWrapper({
   });
   const viewportRef = useRef(viewport);
   const [pdfWindows, setPdfWindows] = useState<PdfWindowItem[]>([]);
+  const [officeWindows, setOfficeWindows] = useState<OfficeWindowItem[]>([]);
+  const documentInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void loadOfficeWindows().then((windows) => {
+      if (!cancelled) {
+        setOfficeWindows((current) => [...windows.filter((saved) => !current.some((item) => item.id === saved.id)), ...current]);
+        setCanvasWindowOrder((current) => [...windows.map((item) => `office-${item.id}`).filter((id) => !current.includes(id)), ...current]);
+      }
+    }).catch((error) => console.error("Unable to restore document windows", error));
+    return () => { cancelled = true; };
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    void loadPdfWindows().then((windows) => {
+      if (!cancelled) {
+        setPdfWindows((current) => [...windows.filter((saved) => !current.some((item) => item.id === saved.id)), ...current]);
+        setCanvasWindowOrder((current) => [...windows.map((item) => `pdf-${item.id}`).filter((id) => !current.includes(id)), ...current]);
+      }
+    }).catch((error) => console.error("Unable to restore PDF windows", error));
+    return () => { cancelled = true; };
+  }, []);
+  useEffect(() => {
+    const openExtensions = (event: KeyboardEvent) => {
+      if (!event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || event.code !== "Space" || isUrlReadOnly) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest('input, textarea, [contenteditable="true"]')) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!showExtensionsPanelRef.current && excalidrawAPI.current) {
+        excalidrawAPI.current.updateScene({ appState: { showLibrary: false, openSidebar: null } as unknown as AppState });
+      }
+      setShowExtensionsPanel((open) => !open);
+    };
+    window.addEventListener("keydown", openExtensions, true);
+    return () => window.removeEventListener("keydown", openExtensions, true);
+  }, [isUrlReadOnly]);
   useEffect(() => {
     const rememberCell = (event: PointerEvent) => {
       const api = excalidrawAPI.current;
       if (!api || !(event.target instanceof Element) || !event.target.closest(".excalidraw__canvas")) return;
+      setActiveCanvasWindow(null);
       const state = api.getAppState();
       const point = viewportCoordsToSceneCoords({ clientX: event.clientX, clientY: event.clientY }, state);
       const cell = [...api.getSceneElements()].reverse().find((el) =>
@@ -1241,10 +1282,6 @@ export default function ExcalidrawWrapper({
           setShowExtensionsPanel(false);
           showExtensionsPanelRef.current = false;
         }
-        if (showCodePanelRef.current) {
-          setShowCodePanel(false);
-          showCodePanelRef.current = false;
-        }
         if (showDataStructuresPanelRef.current) {
           setShowDataStructuresPanel(false);
           showDataStructuresPanelRef.current = false;
@@ -1567,11 +1604,6 @@ export default function ExcalidrawWrapper({
 
   // Mobile responsive listener removed (handled by CSS now)
 
-  // Keep ref in sync with showCodePanel state
-  useEffect(() => {
-    showCodePanelRef.current = showCodePanel;
-  }, [showCodePanel]);
-
   // Keep ref in sync with showDataStructuresPanel state
   useEffect(() => {
     showDataStructuresPanelRef.current = showDataStructuresPanel;
@@ -1582,10 +1614,6 @@ export default function ExcalidrawWrapper({
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (target.getAttribute("aria-label") === "Library") {
-        if (showCodePanelRef.current) {
-          setShowCodePanel(false);
-          showCodePanelRef.current = false;
-        }
         if (showDataStructuresPanelRef.current) {
           setShowDataStructuresPanel(false);
           showDataStructuresPanelRef.current = false;
@@ -2147,25 +2175,36 @@ export default function ExcalidrawWrapper({
   }, []);
 
   const handlePdfDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    if (!isUrlReadOnly && !canvasTabs.isReadOnly && Array.from(e.dataTransfer.items).some((item) => item.kind === "file" && (item.type === "application/pdf" || item.type === ""))) {
+    if (!isUrlReadOnly && !canvasTabs.isReadOnly && e.dataTransfer.types.includes("Files")) {
       e.preventDefault();
       e.dataTransfer.dropEffect = "copy";
     }
   }, [isUrlReadOnly, canvasTabs.isReadOnly]);
 
-  const handlePdfDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+  const openCanvasFiles = useCallback((files: File[], clientX: number, clientY: number) => {
     if (isUrlReadOnly || canvasTabs.isReadOnly || !canvasTabs.activeCanvas) return;
-    const files = Array.from(e.dataTransfer.files).filter((file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"));
     const api = excalidrawAPI.current;
     if (!files.length || !api) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const point = viewportCoordsToSceneCoords({ clientX: e.clientX, clientY: e.clientY }, api.getAppState());
+    const point = viewportCoordsToSceneCoords({ clientX, clientY }, api.getAppState());
     const canvasId = canvasTabs.activeCanvas.id;
-    const nextWindows = files.map((file, index) => ({ id: crypto.randomUUID(), canvasId, file, x: point.x + index * 30, y: point.y + index * 30 }));
-    setPdfWindows((previous) => [...previous, ...nextWindows]);
-    focusCanvasWindow(`pdf-${nextWindows[nextWindows.length - 1].id}`);
+    const pdfs: PdfWindowItem[] = []; const offices: OfficeWindowItem[] = []; let focus = "";
+    files.forEach((file, index) => {
+      const extension = file.name.split(".").pop()?.toLowerCase();
+      const item = { id: crypto.randomUUID(), canvasId, file, x: point.x + index * 30, y: point.y + index * 30 };
+      if (extension === "pdf" || file.type === "application/pdf") { pdfs.push(item); focus = `pdf-${item.id}`; }
+      else if (extension === "docx" || extension === "xlsx" || extension === "pptx") { offices.push({ ...item, kind: extension as OfficeKind }); focus = `office-${item.id}`; }
+      else if (["doc", "xls", "ppt"].includes(extension ?? "")) alert("Please save this file as DOCX, XLSX, or PPTX in Office first. Legacy DOC, XLS, and PPT files are not supported.");
+    });
+    if (pdfs.length) setPdfWindows((previous) => [...previous, ...pdfs]);
+    if (offices.length) setOfficeWindows((previous) => [...previous, ...offices]);
+    if (focus) focusCanvasWindow(focus);
   }, [isUrlReadOnly, canvasTabs.isReadOnly, canvasTabs.activeCanvas, focusCanvasWindow]);
+
+  const handlePdfDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    const files = Array.from(e.dataTransfer.files).filter((file) => /\.(pdf|docx|xlsx|pptx|doc|xls|ppt)$/i.test(file.name) || file.type === "application/pdf");
+    if (!files.length || isUrlReadOnly || canvasTabs.isReadOnly) return;
+    e.preventDefault(); e.stopPropagation(); openCanvasFiles(files, e.clientX, e.clientY);
+  }, [isUrlReadOnly, canvasTabs.isReadOnly, openCanvasFiles]);
 
   const handleCanvasDrop = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
@@ -2287,22 +2326,7 @@ export default function ExcalidrawWrapper({
   // Global shortcuts handled via useCanvasShortcuts hook
   useCanvasShortcuts({
     onTogglePalette: () => setShowPalette((v) => !v),
-    onOpenTerminal: () => {
-      setShowCodePanel(true);
-      showCodePanelRef.current = true;
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent("explaino:open-terminal"));
-      }, 60);
-    },
-    onOpenCodeEditor: () => {
-      setShowCodePanel(true);
-      showCodePanelRef.current = true;
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent("explaino:focus-editor"));
-      }, 60);
-    },
     onExitLaser: () => setLaserActive(false),
-    isCodePanelOpen: showCodePanel,
     isLaserActive: laserActive,
     isScreenActive: isScreenActive && showIframePanel,
   });
@@ -2311,7 +2335,6 @@ export default function ExcalidrawWrapper({
     () => {
       const api = () => excalidrawAPI.current;
       const closePanels = () => {
-        setShowCodePanel(false);
         setShowAiTextPanel(false);
         setShowDataStructuresPanel(false);
         setShowExplaino(false);
@@ -2325,6 +2348,11 @@ export default function ExcalidrawWrapper({
       };
 
       return [
+        {
+          id: "open-office-document", label: "Open PDF, Word, Excel or PowerPoint File", category: "Canvas",
+          keywords: ["file", "document", "docx", "xlsx", "pptx", "pdf", "import", "spreadsheet", "presentation"],
+          icon: <FolderOpen size={15} />, run: () => documentInputRef.current?.click(),
+        },
         // â”€â”€â”€ Screen & Code Server (Workspace) â”€â”€â”€
         {
           id: "toggle-screen",
@@ -2388,32 +2416,6 @@ export default function ExcalidrawWrapper({
             container?.focus();
           },
         },
-        {
-          id: "toggle-terminal",
-          label: "Open Integrated Terminal",
-          category: "Code",
-          shortcut: "Ctrl+`",
-          icon: <Terminal size={15} />,
-          run: () => {
-            setShowCodePanel(true);
-            showCodePanelRef.current = true;
-            setTimeout(() => {
-              window.dispatchEvent(new CustomEvent("explaino:open-terminal"));
-            }, 60);
-          },
-        },
-        {
-          id: "toggle-code",
-          label: "Toggle Code Editor & Runner",
-          category: "Code",
-          shortcut: "Ctrl+C",
-          icon: <Code size={15} />,
-          run: () => {
-            if (!showCodePanel) closePanels();
-            setShowCodePanel(!showCodePanel);
-          },
-        },
-
         // â”€â”€â”€ Drawing & Canvas Tools â”€â”€â”€
         {
           id: "tool-selection",
@@ -2927,7 +2929,6 @@ export default function ExcalidrawWrapper({
     [
       theme,
       laserActive,
-      showCodePanel,
       showAiTextPanel,
       showDataStructuresPanel,
       showExplaino,
@@ -3196,7 +3197,6 @@ export default function ExcalidrawWrapper({
             const api = excalidrawAPI.current;
             if (!showDataStructuresPanel && api) {
               api.updateScene({ appState: { showLibrary: false } as unknown as AppState });
-              if (showCodePanel) setShowCodePanel(false);
             }
             setShowDataStructuresPanel(!showDataStructuresPanel);
           }}
@@ -3309,14 +3309,11 @@ export default function ExcalidrawWrapper({
         </div>
       )}
 
-      {/* Code Editor Panel */}
-      {showCodePanel && !isUrlReadOnly && (
-        <CodeEditorPanel onClose={() => setShowCodePanel(false)} />
-      )}
-
       {/* Iframe / Screen Panel */}
+      <input ref={documentInputRef} type="file" aria-label="Open document files" multiple accept=".pdf,.docx,.xlsx,.pptx" style={{ display: "none" }} onChange={(event) => { openCanvasFiles(Array.from(event.target.files ?? []), window.innerWidth / 2 - 300, window.innerHeight / 2 - 200); event.target.value = ""; }} />
+      {!isUrlReadOnly && officeWindows.map((item) => <OfficeCanvasWindow key={item.id} item={item} viewport={viewport} visible={item.canvasId === canvasTabs.activeCanvas?.id} zIndex={canvasWindowZIndex(`office-${item.id}`)} onFocusWindow={() => focusCanvasWindow(`office-${item.id}`)} onClose={() => { void deleteOfficeWindow(item.id).catch((error) => console.error("Unable to remove document window", error)); setOfficeWindows((previous) => previous.filter((window) => window.id !== item.id)); setCanvasWindowOrder((previous) => previous.filter((id) => id !== `office-${item.id}`)); setActiveCanvasWindow((active) => active === `office-${item.id}` ? null : active); }} />)}
       {!isUrlReadOnly && pdfWindows.map((item) => (
-        <PdfCanvasWindow key={item.id} item={item} viewport={viewport} visible={item.canvasId === canvasTabs.activeCanvas?.id} zIndex={canvasWindowZIndex(`pdf-${item.id}`)} onFocusWindow={() => focusCanvasWindow(`pdf-${item.id}`)} onClose={() => { setPdfWindows((previous) => previous.filter((window) => window.id !== item.id)); setCanvasWindowOrder((previous) => previous.filter((entry) => entry !== `pdf-${item.id}`)); }} />
+        <PdfCanvasWindow key={item.id} item={item} viewport={viewport} visible={item.canvasId === canvasTabs.activeCanvas?.id} focused={activeCanvasWindow === `pdf-${item.id}`} zIndex={canvasWindowZIndex(`pdf-${item.id}`)} onFocusWindow={() => focusCanvasWindow(`pdf-${item.id}`)} onClose={() => { void deletePdfWindow(item.id).catch((error) => console.error("Unable to remove saved PDF window", error)); setPdfWindows((previous) => previous.filter((window) => window.id !== item.id)); setCanvasWindowOrder((previous) => previous.filter((entry) => entry !== `pdf-${item.id}`)); setActiveCanvasWindow((active) => active === `pdf-${item.id}` ? null : active); }} />
       ))}
       {showIframePanel && !isUrlReadOnly && (
         <IframePanel
@@ -3498,7 +3495,7 @@ export default function ExcalidrawWrapper({
       )}
 
       {/* Extensions Side Panel */}
-      <ExtensionsPanel
+      {showExtensionsPanel && <ExtensionsPanel
         isOpen={showExtensionsPanel && !isUrlReadOnly}
         onClose={() => setShowExtensionsPanel(false)}
         theme={theme}
@@ -3539,7 +3536,7 @@ export default function ExcalidrawWrapper({
         onCopyShareUrl={canvasTabs.copyShareUrl}
         canvasError={canvasTabs.loadError}
         onRetryCanvases={canvasTabs.retryLoad}
-      />
+      />}
 
       {/* Text to Diagram / Mermaid Modal */}
       {showTextToDiagramModal && (
