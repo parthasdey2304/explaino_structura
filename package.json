@@ -41,6 +41,7 @@
     "react": "19.2.8",
     "react-colorful": "^5.8.0",
     "react-dom": "19.2.8",
+    "ws": "^8.18.0",
     "zustand": "^5.0.14"
   },
   "optionalDependencies": {
